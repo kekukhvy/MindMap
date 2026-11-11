@@ -79,3 +79,4 @@ Final report: what works, what to test manually on real iPad, known gaps.
   - Smoke: macOS app launches and stays running (window content not inspected: no accessibility permission); rendering verified via snapshot.
   - REPORT.md: Write of the report file was blocked for the subagent by the harness; full Russian report text returned to the orchestrator to place in the repo root.
   - Remaining gaps: single-line topic editor; boundaries only around one subtree; no UI tests; device-only checks (hardware keyboard Tab/Esc, Pencil, trackpad pan, iCloud, multitasking) listed in REPORT.md.
+- 2026-11-12 App icon DONE: green LifePay-style gradient + mind-map fragment; generator `Tools/icon/make_icon.swift` (usage in header) -> `MindMap/Assets.xcassets/AppIcon.appiconset` (iOS 1024 + full mac set), `ASSETCATALOG_COMPILER_APPICON_NAME=AppIcon` set; 0 errors/0 warnings macOS + iOS sim.
