@@ -10,7 +10,6 @@ struct NodeView: View {
     /// Inline editor shown instead of the text (nil = not editing).
     let editor: EditorController?
     let nodeID: UUID
-    var onBadgeTap: () -> Void = {}
 
     private var appearance: NodeAppearance { info.appearance }
     private var color: Color { Color(hex: appearance.colorHex) }
@@ -22,7 +21,6 @@ struct NodeView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background { background }
             .overlay { highlight }
-            .overlay(alignment: badgeAlignment) { badgeAnchor }
     }
 
     private var font: Font {
@@ -96,43 +94,6 @@ struct NodeView: View {
         } else if isSelected {
             outline.stroke(Color.accentColor, lineWidth: 2)
                 .padding(-4 * scale)
-        }
-    }
-
-    private var badgeAlignment: Alignment {
-        switch info.badgeEdge {
-        case .leading: return .leading
-        case .trailing: return .trailing
-        case .bottom: return .bottom
-        }
-    }
-
-    /// Zero-size anchor on the node edge; the badge hangs outside it.
-    @ViewBuilder private var badgeAnchor: some View {
-        let gap = 5 * scale
-        switch info.badgeEdge {
-        case .leading:
-            Color.clear.frame(width: 0).overlay(alignment: .trailing) { badge.padding(.trailing, gap).fixedSize() }
-        case .trailing:
-            Color.clear.frame(width: 0).overlay(alignment: .leading) { badge.padding(.leading, gap).fixedSize() }
-        case .bottom:
-            Color.clear.frame(height: 0).overlay(alignment: .top) { badge.padding(.top, gap).fixedSize() }
-        }
-    }
-
-    @ViewBuilder private var badge: some View {
-        if info.hiddenCount > 0 {
-            Text("\(info.hiddenCount)")
-                .font(.system(size: 10 * scale, weight: .semibold))
-                .foregroundStyle(color)
-                .padding(.horizontal, 5 * scale)
-                .frame(minWidth: 18 * scale, minHeight: 18 * scale)
-                .background(Capsule().fill(Color.canvasBackground))
-                .overlay(Capsule().stroke(color, lineWidth: 1.5 * scale))
-                .fixedSize()
-                .contentShape(Capsule())
-                .onTapGesture(perform: onBadgeTap)
-                .accessibilityLabel("\(info.hiddenCount) hidden topics")
         }
     }
 }

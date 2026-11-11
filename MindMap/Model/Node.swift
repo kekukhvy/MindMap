@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// A single topic in the mind map. Value type: the whole tree is a nested
@@ -22,6 +23,10 @@ struct Node: Identifiable, Equatable, Codable {
     var lineWidth: Double?
     /// Branch line dash (inherited); nil = inherit / solid.
     var lineDash: LineDash?
+    /// Free position set by dragging: offset of this node's center from its
+    /// parent's center (map points). nil = placed by the parent's layout.
+    /// Ignored on tree roots (floating topics use `FloatingTopic.position`).
+    var manualPosition: CGPoint?
     var children: [Node]
     var attachments: [Attachment]
 
@@ -37,6 +42,7 @@ struct Node: Identifiable, Equatable, Codable {
         connectorStyle: ConnectorStyle? = nil,
         lineWidth: Double? = nil,
         lineDash: LineDash? = nil,
+        manualPosition: CGPoint? = nil,
         children: [Node] = [],
         attachments: [Attachment] = []
     ) {
@@ -51,13 +57,14 @@ struct Node: Identifiable, Equatable, Codable {
         self.connectorStyle = connectorStyle
         self.lineWidth = lineWidth
         self.lineDash = lineDash
+        self.manualPosition = manualPosition
         self.children = children
         self.attachments = attachments
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, text, isCollapsed, colorTag, customColor, layoutStyle, shape, borderStyle
-        case connectorStyle, lineWidth, lineDash, children, attachments
+        case connectorStyle, lineWidth, lineDash, manualPosition, children, attachments
     }
 
     /// Tolerant decoding: every field except `id` is optional in the file;
@@ -75,6 +82,7 @@ struct Node: Identifiable, Equatable, Codable {
         connectorStyle = (try? c.decodeIfPresent(ConnectorStyle.self, forKey: .connectorStyle)) ?? nil
         lineWidth = try c.decodeIfPresent(Double.self, forKey: .lineWidth)
         lineDash = (try? c.decodeIfPresent(LineDash.self, forKey: .lineDash)) ?? nil
+        manualPosition = (try? c.decodeIfPresent(CGPoint.self, forKey: .manualPosition)) ?? nil
         children = try c.decodeIfPresent([Node].self, forKey: .children) ?? []
         attachments = try c.decodeIfPresent([Attachment].self, forKey: .attachments) ?? []
     }

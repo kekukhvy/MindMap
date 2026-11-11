@@ -19,8 +19,9 @@ struct SubtreeLayout {
         bounds = frame
     }
 
-    /// Adds `child` translated by (dx, dy).
-    mutating func merge(_ child: SubtreeLayout, dx: CGFloat, dy: CGFloat) {
+    /// Adds `child` translated by (dx, dy); `unionBounds: false` keeps it
+    /// out of `bounds` (freely positioned subtrees).
+    mutating func merge(_ child: SubtreeLayout, dx: CGFloat, dy: CGFloat, unionBounds: Bool = true) {
         for (id, frame) in child.frames {
             frames[id] = frame.offsetBy(dx: dx, dy: dy)
         }
@@ -28,7 +29,7 @@ struct SubtreeLayout {
             boundaryRects[id] = rect.offsetBy(dx: dx, dy: dy)
         }
         connectors += child.connectors.map { $0.offsetBy(dx: dx, dy: dy) }
-        bounds = bounds.union(child.bounds.offsetBy(dx: dx, dy: dy))
+        if unionBounds { bounds = bounds.union(child.bounds.offsetBy(dx: dx, dy: dy)) }
     }
 
     func offsetBy(dx: CGFloat, dy: CGFloat) -> SubtreeLayout {

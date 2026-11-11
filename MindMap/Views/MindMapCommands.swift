@@ -41,7 +41,7 @@ struct MindMapCommands: Commands {
             Button("Add Sibling Topic") { editor?.perform(.addSibling) }
                 .plainKeyShortcut(.return)
                 .disabled(!canAct)
-            Button("Edit Text") { editor?.perform(.edit) }
+            Button("Rename") { editor?.perform(.edit) }
                 .plainKeyShortcut(.space)
                 .disabled(!hasSelection)
             Button(state?.selectionIsCollapsed == true ? "Expand" : "Collapse") {
@@ -49,6 +49,12 @@ struct MindMapCommands: Commands {
             }
             .keyboardShortcut("/", modifiers: .command)
             .disabled(!hasNodeSelection || state?.selectionHasChildren != true)
+            Button("Expand Branch") { editor?.expandBranch() }
+                .disabled(!hasNodeSelection || state?.selectionHasChildren != true)
+            Button("Collapse Branch") { editor?.collapseBranch() }
+                .disabled(!hasNodeSelection || state?.selectionHasChildren != true)
+            Button("Reset Position") { editor?.resetPositions(in: editor?.selectedID) }
+                .disabled(!hasNodeSelection || state?.selectionIsFreelyPositioned != true)
             Divider()
             Button("Floating Topic") { editor?.addFloatingTopic() }
                 .disabled(!canAct)
@@ -73,6 +79,17 @@ struct MindMapCommands: Commands {
             Button("Zoom to Fit") { editor?.zoomToFit() }
                 .keyboardShortcut("0", modifiers: .command)
                 .disabled(editor == nil)
+            Divider()
+            ForEach(1...4, id: \.self) { level in
+                Button("Collapse to Level \(level)") { editor?.collapseToLevel(level) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(level)")), modifiers: [.command, .option])
+                    .disabled(!canAct)
+            }
+            Button("Expand All") { editor?.expandAll() }
+                .keyboardShortcut("0", modifiers: [.command, .option])
+                .disabled(!canAct)
+            Button("Reset All Positions") { editor?.resetPositions() }
+                .disabled(!canAct)
         }
     }
 }

@@ -160,6 +160,41 @@ final class MindMapModel {
         perform("Detach Topic", undoManager) { try map.detachEdits(id, to: position) }
     }
 
+    // MARK: Free position / outline (one undo step each; false = no change)
+
+    @discardableResult
+    func setManualPosition(_ id: UUID, to position: CGPoint?, undoManager: UndoManager?) -> Bool {
+        guard let edits = try? map.setManualPositionEdits(id, to: position), !edits.isEmpty else { return false }
+        return perform(edits, actionName: position == nil ? "Reset Position" : "Move Topic", undoManager: undoManager)
+    }
+
+    /// Clears free positions in `id`'s branch (nil = whole map).
+    @discardableResult
+    func resetPositions(in id: UUID? = nil, undoManager: UndoManager?) -> Bool {
+        performIfAny(map.resetPositionEdits(in: id), id == nil ? "Reset All Positions" : "Reset Position", undoManager)
+    }
+
+    @discardableResult
+    func collapseToLevel(_ level: Int, undoManager: UndoManager?) -> Bool {
+        performIfAny(map.collapseToLevelEdits(level), "Collapse to Level \(level)", undoManager)
+    }
+
+    /// Expands `id`'s branch (nil = whole map).
+    @discardableResult
+    func expandAll(in id: UUID? = nil, undoManager: UndoManager?) -> Bool {
+        performIfAny(map.expandAllEdits(in: id), id == nil ? "Expand All" : "Expand Branch", undoManager)
+    }
+
+    @discardableResult
+    func collapseBranch(_ id: UUID, undoManager: UndoManager?) -> Bool {
+        performIfAny(map.collapseBranchEdits(id), "Collapse Branch", undoManager)
+    }
+
+    private func performIfAny(_ edits: [MapEdit], _ actionName: String, _ undoManager: UndoManager?) -> Bool {
+        guard !edits.isEmpty else { return false }
+        return perform(edits, actionName: actionName, undoManager: undoManager)
+    }
+
     // MARK: Styles (single node or whole branch = one undo step)
 
     @discardableResult

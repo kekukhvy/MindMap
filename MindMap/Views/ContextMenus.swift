@@ -15,6 +15,7 @@ struct NodeContextMenu: View {
         let info = editor.scene.nodes[id]
         let isMainRoot = id == editor.model.root.id
         let isFloatingRoot = editor.model.map.isFloatingRoot(id)
+        Button("Rename", systemImage: "pencil") { editor.beginEditing(id) }
         Button("Add Child Topic", systemImage: "arrow.turn.down.right") {
             editor.select(id)
             editor.addChild()
@@ -24,12 +25,20 @@ struct NodeContextMenu: View {
             editor.addSibling()
         }
         .disabled(info?.isTreeRoot ?? true)
-        Button("Edit Text", systemImage: "pencil") { editor.beginEditing(id) }
         if info?.hasChildren == true {
             Button(info?.isCollapsed == true ? "Expand" : "Collapse",
                    systemImage: info?.isCollapsed == true ? "plus.circle" : "minus.circle") {
                 editor.toggleCollapse(id)
             }
+            Button("Expand Branch", systemImage: "plus.square.on.square") { editor.expandBranch(id) }
+            Button("Collapse Branch", systemImage: "minus.square") { editor.collapseBranch(id) }
+        }
+        if editor.isFreelyPositioned(id) {
+            Button("Reset Position", systemImage: "arrow.uturn.backward.circle") { editor.resetPositions(in: id) }
+        }
+        if isMainRoot {
+            Divider()
+            OutlineMenuItems(editor: editor)
         }
         Divider()
         Button("Relationship", systemImage: "arrow.triangle.turn.up.right.diamond") {
@@ -63,5 +72,23 @@ struct CanvasBackgroundMenu: View {
         Button("Add Floating Topic Here", systemImage: "rectangle.dashed") {
             editor.addFloatingTopic(at: editor.contextPoint)
         }
+        Divider()
+        OutlineMenuItems(editor: editor)
+    }
+}
+
+/// Map-wide outline items: Collapse to Level 1-4, Expand All, Reset All
+/// Positions (context menus and the toolbar Outline menu; the menu bar
+/// View menu has the same items with Cmd+Option+1...4 / 0).
+struct OutlineMenuItems: View {
+    let editor: EditorController
+
+    var body: some View {
+        ForEach(1...4, id: \.self) { level in
+            Button("Collapse to Level \(level)") { editor.collapseToLevel(level) }
+        }
+        Button("Expand All", systemImage: "arrow.down.right.and.arrow.up.left") { editor.expandAll() }
+        Button("Reset All Positions", systemImage: "arrow.uturn.backward.circle") { editor.resetPositions() }
+            .disabled(!editor.hasManualPosition())
     }
 }

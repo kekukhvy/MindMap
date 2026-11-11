@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// One settable node property with its value. Used by `TreeEdit.set` so
@@ -13,6 +14,7 @@ enum NodeAttribute: Equatable {
     case connectorStyle(ConnectorStyle?)
     case lineWidth(Double?)
     case lineDash(LineDash?)
+    case manualPosition(CGPoint?)
 
     /// The same attribute kind, holding `node`'s current value.
     func current(in node: Node) -> NodeAttribute {
@@ -27,6 +29,7 @@ enum NodeAttribute: Equatable {
         case .connectorStyle: return .connectorStyle(node.connectorStyle)
         case .lineWidth: return .lineWidth(node.lineWidth)
         case .lineDash: return .lineDash(node.lineDash)
+        case .manualPosition: return .manualPosition(node.manualPosition)
         }
     }
 
@@ -42,6 +45,7 @@ enum NodeAttribute: Equatable {
         case let .connectorStyle(v): node.connectorStyle = v
         case let .lineWidth(v): node.lineWidth = v
         case let .lineDash(v): node.lineDash = v
+        case let .manualPosition(v): node.manualPosition = v
         }
     }
 }

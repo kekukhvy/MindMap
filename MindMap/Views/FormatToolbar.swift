@@ -24,6 +24,7 @@ struct FormatToolbar: ToolbarContent {
                 }
             }
             Menu("Theme", systemImage: "paintpalette") { ThemeMenuItems(editor: editor) }
+            Menu("Outline", systemImage: "list.bullet.indent") { OutlineMenuItems(editor: editor) }
             Button("Zoom to Fit", systemImage: "arrow.up.left.and.down.right.magnifyingglass") {
                 editor.zoomToFit()
             }

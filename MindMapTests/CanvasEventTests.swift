@@ -147,7 +147,8 @@ final class CanvasEventHarness {
     }
 }
 
-/// Real-event gesture tests on macOS (see `CanvasEventHarness`).
+/// Real-event gesture tests on macOS (see `CanvasEventHarness`); each runs
+/// on a bare canvas and inside a real document window.
 @MainActor
 @Suite(.serialized)
 struct CanvasEventTests {
@@ -180,7 +181,7 @@ struct CanvasEventTests {
         let (map, root, a, b, c) = makeMap()
         let harness = try await harness(map, real)
         defer { harness.close() }
-        let frame = harness.editor.viewport.toScreen(harness.editor.scene.layout.frames[c]!)
+        let frame = harness.screenFrame(of: c)
         var placement: DropPlacement?
         try await harness.drag(from: harness.center(of: a), to: CGPoint(x: frame.midX, y: frame.maxY - 2)) {
             placement = harness.editor.drag?.placement
@@ -189,14 +190,36 @@ struct CanvasEventTests {
         #expect(harness.editor.model.map.node(withID: root)?.children.map(\.id) == [b, c, a])
     }
 
-    @Test(arguments: [false, true]) func dragTopicToEmptySpaceSnapsBack(real: Bool) async throws {
+    @Test(arguments: [false, true]) func dragTopicToEmptySpaceMovesItFreely(real: Bool) async throws {
         let (map, root, a, b, c) = makeMap()
         let harness = try await harness(map, real)
         defer { harness.close() }
         let start = harness.center(of: a)
-        try await harness.drag(from: start, to: CGPoint(x: start.x + 150, y: start.y + 200))
-        #expect(harness.editor.model.map.node(withID: root)?.children.map(\.id) == [a, b, c])
+        let rootCenter = harness.center(of: root)
+        let target = CGPoint(x: start.x + 150, y: start.y + 200)
+        try await harness.drag(from: start, to: target)
+        let editor = harness.editor
+        #expect(editor.model.map.node(withID: root)?.children.map(\.id) == [a, b, c])
+        let position = try #require(editor.model.map.node(withID: a)?.manualPosition)
+        let scale = editor.viewport.scale
+        #expect(abs(position.x - (target.x - rootCenter.x) / scale) < 2)
+        #expect(abs(position.y - (target.y - rootCenter.y) / scale) < 2)
+        // The topic is drawn where it was dropped; one undo step restores it.
+        let dropped = harness.center(of: a)
+        #expect(abs(dropped.x - target.x) < 2 && abs(dropped.y - target.y) < 2)
+        harness.undo.undo()
+        #expect(editor.model.map.node(withID: a)?.manualPosition == nil)
         #expect(!harness.undo.canUndo)
+    }
+
+    /// Real window only: the Option state comes from the app's event monitor.
+    @Test(arguments: [true]) func optionDragOverTopicMovesFreely(real: Bool) async throws {
+        let (map, root, a, b, _) = makeMap()
+        let harness = try await harness(map, real)
+        defer { harness.close() }
+        try await harness.drag(from: harness.center(of: a), to: harness.center(of: b), modifiers: .option)
+        #expect(harness.editor.model.map.parentID(of: a) == root)
+        #expect(harness.editor.model.map.node(withID: a)?.manualPosition != nil)
     }
 
     @Test(arguments: [false, true]) func dragFloatingTopicMovesIt(real: Bool) async throws {
@@ -223,16 +246,19 @@ struct CanvasEventTests {
         #expect(harness.editor.model.map.node(withID: root)?.children.count == 3)
     }
 
-    @Test(arguments: [false, true]) func clickSelectsAndDoubleClickEditsTopic(real: Bool) async throws {
+    @Test(arguments: [false, true]) func clickSelectsAndDoubleClickAddsChild(real: Bool) async throws {
         let (map, _, a, b, _) = makeMap()
         let harness = try await harness(map, real)
         defer { harness.close() }
+        let editor = harness.editor
         try await harness.click(harness.center(of: b))
-        #expect(harness.editor.selectedID == b)
-        #expect(harness.editor.editingID == nil)
+        #expect(editor.selectedID == b)
+        #expect(editor.editingID == nil)
         try await harness.click(harness.center(of: a), count: 2)
-        #expect(harness.editor.selectedID == a)
-        #expect(harness.editor.editingID == a)
+        let child = try #require(editor.model.map.node(withID: a)?.children.first?.id)
+        #expect(editor.model.map.node(withID: a)?.children.count == 1)
+        #expect(editor.selectedID == child)
+        #expect(editor.editingID == child)
     }
 
     @Test(arguments: [false, true]) func doubleClickEmptyCanvasAddsFloatingTopic(real: Bool) async throws {
@@ -242,6 +268,55 @@ struct CanvasEventTests {
         try await harness.click(CGPoint(x: 80, y: 500), count: 2)
         #expect(harness.editor.model.map.floatingTopics.count == 1)
         #expect(harness.editor.editingID == harness.editor.model.map.floatingTopics.first?.node.id)
+    }
+
+    /// New topics start in edit mode: grabbing the topic outside its text
+    /// field still drags it (and commits the text).
+    @Test(arguments: [false, true]) func dragTopicBeingEdited(real: Bool) async throws {
+        let (map, _, a, b, _) = makeMap()
+        let harness = try await harness(map, real)
+        defer { harness.close() }
+        harness.editor.beginEditing(a)
+        try await harness.wait(300)
+        let frame = harness.screenFrame(of: a)
+        var sawDrag = false
+        try await harness.drag(from: CGPoint(x: frame.minX + 3, y: frame.midY), to: harness.center(of: b)) {
+            sawDrag = harness.editor.drag?.id == a
+        }
+        #expect(sawDrag)
+        #expect(harness.editor.editingID == nil)
+        #expect(harness.editor.model.map.parentID(of: a) == b)
+    }
+
+    @Test(arguments: [false, true]) func dragOtherTopicWhileEditing(real: Bool) async throws {
+        let (map, _, a, b, c) = makeMap()
+        let harness = try await harness(map, real)
+        defer { harness.close() }
+        harness.editor.beginEditing(c)
+        try await harness.wait(300)
+        try await harness.drag(from: harness.center(of: a), to: harness.center(of: b))
+        #expect(harness.editor.model.map.parentID(of: a) == b)
+    }
+
+    @Test(arguments: [false, true]) func collapseToggleClickTogglesWithoutDragOrReselect(real: Bool) async throws {
+        var (map, root, a, _, _) = makeMap()
+        try map.root.addChild(Node(text: "kid"), to: a)
+        let harness = try await harness(map, real)
+        defer { harness.close() }
+        let editor = harness.editor
+        editor.select(a)
+        try await harness.wait(300)
+        let frame = harness.screenFrame(of: a)
+        // Right-map topic: toggle hangs off the trailing edge.
+        let toggle = CGPoint(x: frame.maxX + 4 * editor.viewport.scale + 8 * editor.viewport.scale, y: frame.midY)
+        try await harness.click(toggle)
+        #expect(editor.model.map.node(withID: a)?.isCollapsed == true)
+        #expect(editor.selectedID == a)
+        try await harness.click(toggle)
+        #expect(editor.model.map.node(withID: a)?.isCollapsed == false)
+        harness.undo.undo()
+        #expect(editor.model.map.node(withID: a)?.isCollapsed == true)
+        _ = root
     }
 }
 #endif

@@ -116,13 +116,17 @@ extension EditorController {
 
     // MARK: Drag to reparent / reorder / move floating
 
-    func updateDrag(_ id: UUID, translation: CGSize, location: CGPoint) {
+    /// Live drag of `id`: drop target + placement under the pointer
+    /// (`freeMove` = no target, the drop moves the topic freely).
+    func updateDrag(_ id: UUID, translation: CGSize, location: CGPoint, freeMove: Bool = false) {
         if editingID != nil { commitEditing() }
         cancelPick()
         let point = viewport.toMap(location)
         let excluded = Set(model.map.node(withID: id)?.allIDs ?? [id])
-        let target = DropTargetFinder.target(at: point, frames: scene.layout.frames, excluding: excluded)
+        let target = freeMove ? nil
+            : DropTargetFinder.target(at: point, frames: scene.layout.frames, excluding: excluded)
         var drag = NodeDrag(id: id, translation: translation, targetID: target)
+        drag.freeMove = freeMove
         if let target, let frame = scene.layout.frames[target], scene.nodes[target]?.isTreeRoot == false {
             drag.siblingAxis = scene.siblingAxis(of: target)
             drag.placement = DropTargetFinder.placement(at: point, in: frame, siblingAxis: drag.siblingAxis)
@@ -148,7 +152,19 @@ extension EditorController {
             let position = CGPoint(x: topic.position.x + drag.translation.width / viewport.scale,
                                    y: topic.position.y + drag.translation.height / viewport.scale)
             model.moveFloating(drag.id, to: position, undoManager: undoManager)
+        } else if drag.translation != .zero, let position = freePosition(for: drag) {
+            // Empty space: the topic stays where it was dropped (free position).
+            model.setManualPosition(drag.id, to: position, undoManager: undoManager)
         }
+    }
+
+    /// Offset of the dropped topic's center from its parent's center (map points).
+    func freePosition(for drag: NodeDrag) -> CGPoint? {
+        guard let parent = model.map.parentID(of: drag.id),
+              let frame = scene.layout.frames[drag.id], let parentFrame = scene.layout.frames[parent] else { return nil }
+        let x = frame.midX + drag.translation.width / viewport.scale - parentFrame.midX
+        let y = frame.midY + drag.translation.height / viewport.scale - parentFrame.midY
+        return CGPoint(x: (x * 2).rounded() / 2, y: (y * 2).rounded() / 2)
     }
 
     private func dropAsSibling(_ id: UUID, of target: UUID, placement: DropPlacement) {
@@ -243,6 +259,8 @@ extension EditorController {
         case .addBoundary:
             guard let id = selectedID else { return false }
             addBoundary(around: id)
+        case let .collapseToLevel(level): collapseToLevel(level)
+        case .expandAll: expandAll()
         case .cancel:
             guard pickMode != nil || selectedItem != nil else { return false }
             if pickMode != nil { cancelPick() } else { selectItem(nil) }

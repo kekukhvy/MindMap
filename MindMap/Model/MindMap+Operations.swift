@@ -63,13 +63,18 @@ extension MindMap {
         let sourceTree = try treeOrThrow(containing: id)
         let leavesParent = parentID(of: id) != newParentID
         let cleanup = leavesParent ? boundaryEditsForMoving(id) : []
+        // A dropped topic rejoins the automatic layout of its (new) parent.
+        let resetPosition: [MapEdit] = moving.manualPosition != nil ? [.tree(.set(id: id, .manualPosition(nil)))] : []
         if !isFloatingRoot(id), sourceTree.contains(newParentID) {
             return try sourceTree.reparentEdits(id, to: newParentID, at: index).map(MapEdit.tree) + cleanup
+                + resetPosition
         }
         var edits: [MapEdit] = cleanup
         if target.isCollapsed { edits.append(.tree(.setCollapsed(id: newParentID, false))) }
         edits.append(isFloatingRoot(id) ? .removeFloating(id: id) : .tree(.remove(id: id)))
-        edits.append(.tree(.insert(moving, parentID: newParentID, index: index ?? target.children.count)))
+        var inserted = moving
+        inserted.manualPosition = nil
+        edits.append(.tree(.insert(inserted, parentID: newParentID, index: index ?? target.children.count)))
         return edits
     }
 

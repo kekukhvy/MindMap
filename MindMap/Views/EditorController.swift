@@ -12,6 +12,8 @@ struct NodeDrag: Equatable {
 
     /// Target highlighted as new parent (not a sibling insertion).
     var parentTargetID: UUID? { placement == .child ? targetID : nil }
+    /// Option held: drop moves freely even over a topic.
+    var freeMove = false
 }
 
 /// Waiting for the user to click a target topic.
@@ -84,6 +86,8 @@ final class EditorController {
     var viewport = Viewport()
     var viewSize: CGSize = .zero
     var drag: NodeDrag?
+    /// Topic (or its collapse toggle) under the pointer (macOS hover).
+    private(set) var hoveredID: UUID?
     var colorSheet: ColorSheetRequest?
     private(set) var canUndo = false
     private(set) var canRedo = false
@@ -125,7 +129,8 @@ final class EditorController {
                                   hasNodeSelection: selected != nil,
                                   selectionIsMainRoot: selectedID == model.root.id,
                                   selectionHasChildren: selected?.hasChildren ?? false,
-                                  selectionIsCollapsed: selected?.isCollapsed ?? false)
+                                  selectionIsCollapsed: selected?.isCollapsed ?? false,
+                                  selectionIsFreelyPositioned: selectedID.map(isFreelyPositioned) ?? false)
     }
 
     // MARK: Editing state
@@ -139,6 +144,14 @@ final class EditorController {
         draftText = text
         editSelectsAll = selectAll
         editingID = id
+    }
+
+    func setHovered(_ id: UUID, _ inside: Bool) {
+        if inside {
+            if hoveredID != id { hoveredID = id }
+        } else if hoveredID == id {
+            hoveredID = nil
+        }
     }
 
     // MARK: Viewport
@@ -196,4 +209,5 @@ struct EditorCommandState: Equatable {
     var selectionIsMainRoot: Bool
     var selectionHasChildren: Bool
     var selectionIsCollapsed: Bool
+    var selectionIsFreelyPositioned: Bool
 }

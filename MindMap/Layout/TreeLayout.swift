@@ -68,7 +68,9 @@ struct TreeLayout {
             relationshipPaths[relationship.id] = RelationshipGeometry.path(from: from, to: to, relationship: relationship)
         }
 
-        let bounds = boundaryRects.values.reduce(all.bounds) { $0.union($1) }
+        // Freely positioned subtrees are not in the stacking bounds.
+        let frameBounds = all.frames.values.reduce(all.bounds) { $0.union($1) }
+        let bounds = boundaryRects.values.reduce(frameBounds) { $0.union($1) }
         return Result(frames: all.frames, connectors: all.connectors, boundaries: boundaryRects,
                       relationships: relationshipPaths, bounds: bounds)
     }
@@ -108,12 +110,15 @@ struct TreeLayout {
         func layoutSubtree(_ node: Node, inherited: LayoutContext) -> SubtreeLayout {
             let nodeSize = size(node.id)
             var layout: SubtreeLayout
-            if node.isCollapsed || node.children.isEmpty {
+            // Freely positioned children leave the automatic stacking.
+            var stacked = node
+            stacked.children = node.children.filter { $0.manualPosition == nil }
+            if node.isCollapsed || stacked.children.isEmpty {
                 layout = SubtreeLayout(id: node.id, size: nodeSize)
             } else {
                 let context = inherited.resolved(for: node)
                 layout = Arrangers.arranger(for: context.style).arrange(
-                    node,
+                    stacked,
                     nodeSize: nodeSize,
                     context: context,
                     spacing: spacing,
@@ -122,12 +127,56 @@ struct TreeLayout {
                     }
                 )
             }
+            if !node.isCollapsed {
+                let context = inherited.resolved(for: node)
+                for child in node.children {
+                    if let offset = child.manualPosition {
+                        placeManual(child, offset: offset, parentID: node.id, parentSize: nodeSize,
+                                    context: context, into: &layout)
+                    }
+                }
+            }
             for boundary in boundaries[node.id] ?? [] {
                 let rect = TreeLayout(spacing: spacing).padded(layout.bounds, hasLabel: boundary.hasLabel)
                 layout.boundaryRects[boundary.id] = rect
                 layout.bounds = layout.bounds.union(rect)
             }
             return layout
+        }
+
+        /// Places a freely positioned child subtree with its node centered at
+        /// `offset` from the parent's center. Its own subtree is laid out
+        /// automatically, growing away from the parent (left of the parent =
+        /// left-growing). It does not count in the parent's stacking bounds,
+        /// so siblings re-flow without it and ancestors ignore it.
+        private func placeManual(_ child: Node, offset: CGPoint, parentID: UUID, parentSize: CGSize,
+                                 context: LayoutContext, into layout: inout SubtreeLayout) {
+            let side: HorizontalDirection = offset.x < 0 ? .left : .right
+            let childContext: LayoutContext
+            switch context.style {
+            case .balancedMap, .rightMap, .leftMap: childContext = context.horizontal(side)
+            case .treeDown, .orgChartDown: childContext = context.passingDown(style: context.style, direction: side)
+            }
+            let sub = layoutSubtree(child, inherited: childContext)
+            let childSize = size(child.id)
+            let dx = parentSize.width / 2 + offset.x - childSize.width / 2
+            let dy = parentSize.height / 2 + offset.y - childSize.height / 2
+            layout.merge(sub, dx: dx, dy: dy, unionBounds: false)
+            let frame = CGRect(origin: CGPoint(x: dx, y: dy), size: childSize)
+            let parent = CGRect(origin: .zero, size: parentSize)
+            let start: CGPoint, end: CGPoint, axis: ConnectorAxis
+            if frame.minX >= parent.maxX || frame.maxX <= parent.minX {
+                axis = .horizontal
+                start = CGPoint(x: side == .right ? parent.maxX : parent.minX, y: parent.midY)
+                end = CGPoint(x: side == .right ? frame.minX : frame.maxX, y: frame.midY)
+            } else {
+                axis = .vertical
+                let below = frame.midY > parent.midY
+                start = CGPoint(x: parent.midX, y: below ? parent.maxY : parent.minY)
+                end = CGPoint(x: frame.midX, y: below ? frame.minY : frame.maxY)
+            }
+            layout.connectors.append(context.connector(from: parentID, to: child.id, start: start, end: end,
+                                                       axes: (axis, axis), defaultStyle: .curved))
         }
     }
 }

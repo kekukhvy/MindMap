@@ -11,6 +11,8 @@ struct ScrollWheelHandler: NSViewRepresentable {
     var onScroll: (CGSize, CGPoint, Bool) -> Void
     /// Location in view coordinates of a secondary click.
     var onSecondaryClick: (CGPoint) -> Void = { _ in }
+    /// Modifier keys of the latest left-mouse event in the window (Option-drag).
+    @MainActor static var lastMouseModifiers: NSEvent.ModifierFlags = []
 
     func makeNSView(context: Context) -> CatcherView {
         let view = CatcherView()
@@ -41,9 +43,12 @@ struct ScrollWheelHandler: NSViewRepresentable {
             super.viewDidMoveToWindow()
             removeMonitor()
             guard window != nil else { return }
-            monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .rightMouseDown, .leftMouseDown]) {
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .rightMouseDown, .leftMouseDown, .leftMouseDragged]) {
                 [weak self] event in
                 guard let self, let window = self.window, event.window === window else { return event }
+                if event.type == .leftMouseDown || event.type == .leftMouseDragged {
+                    ScrollWheelHandler.lastMouseModifiers = event.modifierFlags
+                }
                 let location = self.convert(event.locationInWindow, from: nil)
                 guard self.bounds.contains(location) else { return event }
                 switch event.type {

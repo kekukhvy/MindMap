@@ -78,6 +78,19 @@ struct MapScene {
             default: break
             }
         }
+        // Expanded topics: the toggle sits where their branch lines leave.
+        var firstOutgoing: [UUID: Connector] = [:]
+        for connector in layout.connectors where firstOutgoing[connector.parentID] == nil {
+            firstOutgoing[connector.parentID] = connector
+        }
+        for (id, connector) in firstOutgoing {
+            guard let frame = layout.frames[id] else { continue }
+            if connector.startAxis == .vertical {
+                infos[id]?.badgeEdge = .bottom
+            } else {
+                infos[id]?.badgeEdge = connector.start.x <= frame.midX ? .leading : .trailing
+            }
+        }
         var scene = MapScene(nodes: infos, order: order, layout: layout, navigator: navigator, colors: colors)
         scene.connectors = layout.connectors.map { scene.styled($0) }
         for connector in layout.connectors { scene.incomingAxis[connector.childID] = connector.endAxis }
