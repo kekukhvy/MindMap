@@ -96,8 +96,9 @@ final class EditorController {
         didSet {
             if let selectedID {
                 if !selectedIDs.contains(selectedID) { selectedIDs = [selectedID] }
-            } else if !selectedIDs.isEmpty {
-                selectedIDs = []
+            } else {
+                if !selectedIDs.isEmpty { selectedIDs = [] }
+                if palette.isRequested || palette.pendingToken != nil { palette.selectionCleared() }
             }
         }
     }
@@ -106,6 +107,21 @@ final class EditorController {
     var selectedIDs: Set<UUID> = []
     /// iPad "Select" mode: taps toggle topics, background drags draw a marquee.
     var isSelectMode = false
+    /// iPad floating action palette (WP11, `EditorController+Touch`).
+    var palette = ActionPaletteState()
+    @ObservationIgnored var tapSequence = TapSequence()
+    /// Runs the deferred palette show after a tap (replaced by tests).
+    @ObservationIgnored var paletteScheduler: (TimeInterval, @escaping () -> Void) -> Void = { delay, work in
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+    /// Last Apple Pencil location over the canvas (hover / touch), screen.
+    @ObservationIgnored var lastPencilPoint: CGPoint?
+    /// Pencil hovering over the canvas now (screen), for squeeze.
+    @ObservationIgnored var pencilHoverPoint: CGPoint?
+    /// Topic under the hovering Apple Pencil (highlight + "+" handle).
+    var pencilHoveredID: UUID?
+    /// "Gestures & Apple Pencil" help sheet (iPad).
+    var isGestureHelpPresented = false
     /// Rubber-band selection in progress (screen coordinates).
     var marquee: MarqueeDrag?
     /// Boundary whose members are being edited (= the topic selection).

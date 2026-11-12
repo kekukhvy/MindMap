@@ -68,6 +68,10 @@ struct FormatToolbar: ToolbarContent {
                 Button("Zoom to Fit", systemImage: "arrow.up.left.and.down.right.magnifyingglass") {
                     editor.zoomToFit()
                 }
+                #if os(iOS)
+                Divider()
+                Button("Gestures & Apple Pencil", systemImage: "hand.tap") { editor.isGestureHelpPresented = true }
+                #endif
             }
         }
     }

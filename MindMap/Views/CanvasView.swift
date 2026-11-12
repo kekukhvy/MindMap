@@ -29,6 +29,11 @@ struct CanvasView: View {
                     ForEach(scene.order, id: \.self) { id in
                         collapseToggle(id, scene: scene, viewport: viewport)
                     }
+                    #if os(iOS)
+                    ForEach(scene.order, id: \.self) { id in
+                        addChildHandle(id)
+                    }
+                    #endif
                     editingDragHandle(scene: scene, viewport: viewport)
                     RelationshipsLayer(editor: editor, viewport: viewport)
                     // Virtual Tasks card (not a topic / not in the layout).
@@ -39,6 +44,9 @@ struct CanvasView: View {
                 }
                 .animation(.snappy(duration: 0.25), value: editor.model.map)
                 CanvasOverlays(editor: editor, viewport: viewport)
+                #if os(iOS)
+                ActionPaletteLayer(editor: editor, viewport: viewport)
+                #endif
             }
             // White XMind paper in dark mode too: topic colors assume it.
             .environment(\.colorScheme, .light)
@@ -74,7 +82,21 @@ struct CanvasView: View {
         // plain-key menu shortcuts never steal keys from other text inputs.
         .focusedValue(\.mindMapCommandState, editor.commandState)
         .mindMapKeyboard(editor)
-        .onAppear { isFocused = true }
+        .onAppear {
+            isFocused = true
+            #if os(iOS)
+            presentGestureHelpOnFirstLaunch()
+            #if DEBUG
+            DebugTouchActions.run(editor)
+            #endif
+            #endif
+        }
+        #if os(iOS)
+        .sheet(isPresented: $editor.isGestureHelpPresented) {
+            GestureHelpSheet()
+                .gestureHelpSizing()
+        }
+        #endif
         .onChange(of: editor.editingID) { _, id in
             if id == nil { isFocused = true }
         }
@@ -93,6 +115,9 @@ struct CanvasView: View {
                 editor.addFloatingTopic(at: $0.location)
             })
             .simultaneousGesture(TapGesture().onEnded {
+                #if os(iOS)
+                editor.touchTapBackground()
+                #endif
                 editor.cancelPick()
                 // Editing boundary members: only topic clicks count.
                 if editor.boundaryMemberEditing == nil { editor.select(nil) }
@@ -103,7 +128,9 @@ struct CanvasView: View {
             .contextMenu { CanvasBackgroundMenu(editor: editor) }
             #endif
             #if os(iOS)
+            .background(PencilBridge(editor: editor))
             .background(TabKeyBridge {
+                editor.keyboardDidAct()
                 if editor.editingID != nil {
                     editor.commitEditing()
                     editor.addChild()
@@ -138,6 +165,7 @@ struct CanvasView: View {
                     editor.updateMarquee(from: value.startLocation, to: value.location)
                     return
                 }
+                editor.beginCanvasGesture(.pan)
                 let start = panStart ?? editor.viewport
                 if panStart == nil { panStart = start }
                 var viewport = start
@@ -145,7 +173,13 @@ struct CanvasView: View {
                 editor.viewport = viewport
             }
             .onEnded { _ in
-                if backgroundDrag == .marquee { editor.endMarquee() }
+                if backgroundDrag == .marquee {
+                    editor.endMarquee()
+                    #if os(iOS)
+                    editor.touchMarqueeEnded()
+                    #endif
+                }
+                editor.endCanvasGesture(.pan)
                 backgroundDrag = nil
                 panStart = nil
                 isFocused = true
@@ -188,13 +222,17 @@ struct CanvasView: View {
     private var magnify: some Gesture {
         MagnifyGesture()
             .onChanged { value in
+                editor.beginCanvasGesture(.zoom)
                 let start = pinchStart ?? editor.viewport
                 if pinchStart == nil { pinchStart = start }
                 var viewport = start
                 viewport.zoom(to: start.scale * value.magnification, around: value.startLocation)
                 editor.viewport = viewport
             }
-            .onEnded { _ in pinchStart = nil }
+            .onEnded { _ in
+                pinchStart = nil
+                editor.endCanvasGesture(.zoom)
+            }
     }
 
     // MARK: Topics
@@ -206,7 +244,7 @@ struct CanvasView: View {
             // Dragged topics (the whole selection) follow the pointer as ghosts.
             let drag = editor.drag.flatMap { $0.id == id || $0.ghostIDs.contains(id) ? $0 : nil }
             NodeView(info: info, scale: viewport.scale, isSelected: editor.isSelected(id),
-                     isPrimarySelection: editor.selectedID == id,
+                     isPrimarySelection: editor.selectedID == id, isHovered: isHoverHighlighted(id),
                      isDropTarget: editor.drag?.parentTargetID == id || editor.pickHoverID == id
                          || editor.fileDropTargetID == id,
                      editor: editor.editingID == id ? editor : nil, nodeID: id,
@@ -230,8 +268,9 @@ struct CanvasView: View {
                 .zIndex(drag == nil ? 0 : 1)
                 .position(x: screen.midX, y: screen.midY)
                 .gesture(reparentDrag(id), including: id == editor.model.root.id ? .subviews : .all)
-                // Double-click / double-tap = new child (being named); rename via
-                // the context menu, Space, F2 or typing.
+                #if os(macOS)
+                // Double-click = new child (being named); rename via the
+                // context menu, Space, F2 or typing.
                 .onTapGesture(count: 2) {
                     guard editor.pickMode == nil, editor.editingID != id, !editor.tapsToggleSelection,
                           !Self.isSelectionModifierPressed, !editor.isRecentCheckboxClick(on: id) else { return }
@@ -252,9 +291,18 @@ struct CanvasView: View {
                     editor.clickTopic(id, command: Self.isCommandClick, shift: Self.isShiftClick)
                     if editor.editingID == nil { isFocused = true }
                 })
-                #if os(iOS)
+                #else
+                .onHover { inside in editor.setHovered(id, inside) }
+                .help(info.link?.tooltip ?? "")
+                // iPad: tap = select + action palette, double-tap = rename
+                // (`EditorController.touchTapTopic`; one tap recognizer, so
+                // the first tap is never delayed).
+                .simultaneousGesture(SpatialTapGesture(coordinateSpace: .named(CanvasView.space)).onEnded { value in
+                    editor.touchTapTopic(id, at: value.location)
+                    if editor.editingID == nil { isFocused = true }
+                })
                 .simultaneousGesture(LongPressGesture(minimumDuration: 0.3).onEnded { _ in
-                    if !editor.isSelected(id), editor.editingID != id { editor.select(id) }
+                    editor.touchLongPress(id)
                 })
                 #endif
                 .contextMenu {
@@ -265,6 +313,38 @@ struct CanvasView: View {
                 }
         }
     }
+
+    /// Pencil / pointer hover highlight (iPad only: macOS shows hover by
+    /// the collapse toggle alone, unchanged).
+    private func isHoverHighlighted(_ id: UUID) -> Bool {
+        #if os(iOS)
+        editor.isHoverHighlighted(id)
+        #else
+        false
+        #endif
+    }
+
+    #if os(iOS)
+    /// "+" on the child side of the selected / Pencil-hovered topic.
+    @ViewBuilder
+    private func addChildHandle(_ id: UUID) -> some View {
+        if editor.showsAddChildHandle(id), let center = editor.addChildHandleCenter(for: id) {
+            AddChildHandleView(center: center, onTap: {
+                editor.tapAddChildHandle(id)
+            }, onHover: { inside in editor.setHovered(id, inside) })
+            .transition(.opacity)
+        }
+    }
+
+    /// The compact Gestures sheet once, on the first launch.
+    private func presentGestureHelpOnFirstLaunch() {
+        let defaults = UserDefaults.standard
+        guard GestureHelp.shouldShowOnLaunch(defaults: defaults, environment: ProcessInfo.processInfo.environment,
+                                             isTesting: LaunchEnvironment.isTesting) else { return }
+        defaults.set(true, forKey: GestureHelp.shownKey)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { editor.isGestureHelpPresented = true }
+    }
+    #endif
 
     private func dueDatePickerBinding(_ id: UUID) -> Binding<Bool> {
         Binding(get: { editor.dueDatePickerID == id },

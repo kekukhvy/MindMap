@@ -1,0 +1,71 @@
+#if DEBUG && os(iOS)
+import Foundation
+
+/// DEBUG-only screenshot hooks for the iPad touch UX (WP11), no UI automation:
+/// `MINDMAP_DEBUG_TOUCH=palette` selects topic "Design" and shows its action
+/// palette; `=multi` selects three topics (multi palette); `=insert` shows
+/// the Insert palette (Pencil squeeze over empty canvas); `=hover` fakes a
+/// Pencil hover over "Launch" (highlight + "+" handle) next to the selected
+/// "Design"; `=help` opens the Gestures sheet; `=root` palette on the
+/// central topic. Seeds a small map when the open one has no such topics.
+/// (simctl: `SIMCTL_CHILD_MINDMAP_DEBUG_TOUCH=palette xcrun simctl launch ...`.)
+enum DebugTouchActions {
+    nonisolated(unsafe) private static var didRun = false
+
+    static func run(_ editor: EditorController) {
+        guard !didRun, !LaunchEnvironment.isTesting,
+              let mode = ProcessInfo.processInfo.environment["MINDMAP_DEBUG_TOUCH"] else { return }
+        didRun = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { perform(mode, editor) }
+    }
+
+    private static func perform(_ mode: String, _ editor: EditorController) {
+        let ids = seed(editor)
+        editor.zoomToFit()
+        switch mode {
+        case "multi":
+            editor.setSelection([ids.research, ids.survey, ids.launch], primary: ids.launch)
+            editor.palette.showForSelection()
+        case "insert":
+            editor.select(ids.design)
+            editor.palette.showInsert(at: CGPoint(x: editor.viewSize.width * 0.5, y: editor.viewSize.height * 0.82))
+        case "hover":
+            editor.select(ids.design)
+            editor.pencilHoveredID = ids.launch
+        case "help":
+            editor.isGestureHelpPresented = true
+        case "root":
+            editor.select(editor.model.root.id)
+            editor.palette.showForSelection()
+        default:
+            editor.select(ids.design)
+            editor.palette.showForSelection()
+        }
+    }
+
+    private struct Seeded {
+        var research: UUID, survey: UUID, design: UUID, launch: UUID
+    }
+
+    private static func seed(_ editor: EditorController) -> Seeded {
+        let model = editor.model
+        let undo = editor.undoManager
+        func child(_ text: String, of parent: UUID) -> UUID {
+            if let existing = model.map.node(withID: parent)?.children.first(where: { $0.text == text }) {
+                return existing.id
+            }
+            return model.addChild(to: parent, text: text, undoManager: undo) ?? parent
+        }
+        let root = model.root.id
+        let research = child("Research", of: root)
+        _ = child("Interviews", of: research)
+        let survey = child("Survey", of: research)
+        let design = child("Design", of: root)
+        _ = child("Wireframes", of: design)
+        _ = child("Visual style", of: design)
+        let launch = child("Launch", of: root)
+        _ = child("Budget", of: root)
+        return Seeded(research: research, survey: survey, design: design, launch: launch)
+    }
+}
+#endif

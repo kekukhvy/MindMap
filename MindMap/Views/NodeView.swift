@@ -8,6 +8,8 @@ struct NodeView: View {
     let isSelected: Bool
     /// The keyboard-focus topic of a (multi-)selection: stronger ring.
     var isPrimarySelection = true
+    /// Apple Pencil / pointer hover (iPad): faint ring.
+    var isHovered = false
     let isDropTarget: Bool
     /// Inline editor shown instead of the text (nil = not editing).
     let editor: EditorController?
@@ -139,6 +141,11 @@ struct NodeView: View {
             outline.stroke(NodeView.selectionBlue.opacity(isPrimarySelection ? 1 : 0.7),
                            lineWidth: isPrimarySelection ? 2.5 : 1.5)
                 .padding(-3 * scale)
+        } else if isHovered {
+            outline.fill(NodeView.selectionBlue.opacity(0.06))
+                .overlay { outline.stroke(NodeView.selectionBlue.opacity(0.45), lineWidth: 1.5) }
+                .padding(-3 * scale)
+                .allowsHitTesting(false)
         }
     }
 }

@@ -13,7 +13,14 @@ struct KeyboardHandling: ViewModifier {
                 return .ignored
             }
             if press.phase == .repeat, !command.isRepeatable { return .ignored }
-            return editor.perform(command) ? .handled : .ignored
+            if command == .cancel, editor.palette.isRequested {
+                editor.keyboardDidAct()
+                return .handled
+            }
+            guard editor.perform(command) else { return .ignored }
+            // The touch action palette goes away while the keyboard is used.
+            editor.keyboardDidAct()
+            return .handled
         }
     }
 }

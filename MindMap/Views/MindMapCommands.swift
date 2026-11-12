@@ -122,6 +122,12 @@ struct MindMapCommands: Commands {
             .plainKeyShortcut(.delete)
             .disabled(!hasSelection || onlyMainRoot)
         }
+        #if os(iOS)
+        CommandGroup(replacing: .help) {
+            Button("Gestures & Apple Pencil") { editor?.isGestureHelpPresented = true }
+                .disabled(editor == nil)
+        }
+        #endif
         CommandGroup(after: .toolbar) {
             Button("Zoom In") { editor?.zoom(by: 1.25) }
                 .keyboardShortcut("=", modifiers: .command)
