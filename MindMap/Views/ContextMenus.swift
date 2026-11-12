@@ -41,6 +41,8 @@ struct NodeContextMenu: View {
             OutlineMenuItems(editor: editor)
         }
         Divider()
+        AttachmentMenuItems(editor: editor, id: id)
+        Divider()
         Button("Relationship", systemImage: "arrow.triangle.turn.up.right.diamond") {
             editor.beginRelationship(from: id)
         }
@@ -90,5 +92,34 @@ struct OutlineMenuItems: View {
         Button("Expand All", systemImage: "arrow.down.right.and.arrow.up.left") { editor.expandAll() }
         Button("Reset All Positions", systemImage: "arrow.uturn.backward.circle") { editor.resetPositions() }
             .disabled(!editor.hasManualPosition())
+    }
+}
+
+/// Notes / attachments of a topic: Add Note, then each attachment with
+/// Open, Move and Remove (icons on the topic open them directly).
+struct AttachmentMenuItems: View {
+    let editor: EditorController
+    let id: UUID
+
+    var body: some View {
+        let attachments = editor.attachments(of: id)
+        Button("Add Note", systemImage: "note.text.badge.plus") { editor.addNote(to: id) }
+        ForEach(Array(attachments.enumerated()), id: \.element.id) { index, attachment in
+            Menu(attachment.title.isEmpty ? attachment.kind.displayName : attachment.title,
+                 systemImage: attachment.kind.systemImage) {
+                Button("Open", systemImage: "arrow.up.forward.square") {
+                    editor.select(id)
+                    editor.openAttachment(attachment.id)
+                }
+                if attachments.count > 1 {
+                    Button("Move Left", systemImage: "arrow.left") { editor.moveAttachment(attachment.id, by: -1) }
+                        .disabled(index == 0)
+                    Button("Move Right", systemImage: "arrow.right") { editor.moveAttachment(attachment.id, by: 1) }
+                        .disabled(index == attachments.count - 1)
+                }
+                Divider()
+                Button("Remove", systemImage: "trash", role: .destructive) { editor.removeAttachment(attachment.id) }
+            }
+        }
     }
 }

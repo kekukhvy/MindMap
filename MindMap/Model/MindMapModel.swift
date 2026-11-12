@@ -9,17 +9,29 @@ import Observation
 @Observable
 final class MindMapModel {
     private(set) var map: MindMap
+    /// Files of the package's `attachments/` folder (content of notes etc.).
+    let attachmentStore: AttachmentStore
+    /// Identity of this open document for this process (attachment windows
+    /// find their document by it, see `OpenDocumentRegistry`). Not persisted.
+    let documentID = UUID()
 
     var root: Node { map.root }
 
-    init(map: MindMap = MindMap()) {
+    init(map: MindMap = MindMap(), attachmentStore: AttachmentStore = AttachmentStore()) {
         self.map = map
+        self.attachmentStore = attachmentStore
     }
 
     /// Replaces the whole map without undo (document reverted to the file's
     /// contents, e.g. changed on another device). Callers clear the undo stack.
     func replaceMap(_ map: MindMap) {
         lastStep = nil
+        lastContentStep = nil
+        self.map = map
+    }
+
+    /// Map change whose undo is registered by the caller (content steps).
+    func replaceMapKeepingUndo(_ map: MindMap) {
         self.map = map
     }
 
@@ -39,6 +51,8 @@ final class MindMapModel {
 
     /// The most recently registered step and the key it may be extended with.
     @ObservationIgnored private var lastStep: (key: UUID?, step: UndoStep, manager: ObjectIdentifier)?
+    /// Last attachment content step, extended while typing continues.
+    @ObservationIgnored var lastContentStep: ContentStepKey?
 
     /// Applies `edits` as one undo step. `coalesceKey` marks the step as
     /// extendable by `perform(_:coalescingWith:...)` with the same key.
@@ -48,6 +62,7 @@ final class MindMapModel {
         var newMap = map
         guard let inverses = try? newMap.apply(edits) else { return false }
         map = newMap
+        lastContentStep = nil
         guard let undoManager else {
             lastStep = nil
             return true
@@ -86,6 +101,12 @@ final class MindMapModel {
     /// autosave still registers (and marks the document dirty) instead of
     /// silently joining an already-saved "Add Topic" step.
     func breakCoalescing() {
+        lastStep = nil
+        lastContentStep = nil
+    }
+
+    /// Ends add+rename coalescing only (another kind of step was registered).
+    func endMapCoalescing() {
         lastStep = nil
     }
 

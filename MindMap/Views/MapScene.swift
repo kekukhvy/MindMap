@@ -20,6 +20,8 @@ struct MapScene {
         /// Root of the main tree or of a floating topic.
         var isTreeRoot: Bool
         var badgeEdge: BadgeEdge
+        /// Icons at the trailing edge (content opens in a sheet / window).
+        var attachments: [AttachmentSummary] = []
     }
 
     struct StyledConnector: Identifiable {
@@ -58,7 +60,8 @@ struct MapScene {
             infos[node.id] = NodeInfo(text: text, appearance: appearance, level: level,
                                       hiddenCount: node.isCollapsed ? node.subtreeCount - 1 : 0,
                                       hasChildren: !node.children.isEmpty, isCollapsed: node.isCollapsed,
-                                      isTreeRoot: isTreeRoot, badgeEdge: .trailing)
+                                      isTreeRoot: isTreeRoot, badgeEdge: .trailing,
+                                      attachments: node.attachments.map(AttachmentSummary.init))
             order.append(node.id)
             guard !node.isCollapsed else { return }
             for child in node.children { visit(child, level: level + 1, isTreeRoot: false) }
@@ -68,7 +71,7 @@ struct MapScene {
 
         let layout = TreeLayout().layout(map) { id in
             guard let info = infos[id] else { return CGSize(width: 40, height: 20) }
-            return measurer.nodeSize(text: info.text, appearance: info.appearance)
+            return measurer.nodeSize(text: info.text, appearance: info.appearance, attachments: info.attachments)
         }
         let navigator = SelectionNavigator(layout: layout)
         for id in order {

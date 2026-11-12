@@ -259,6 +259,9 @@ extension EditorController {
         case .addBoundary:
             guard let id = selectedID else { return false }
             addBoundary(around: id)
+        case .note:
+            guard let id = selectedID, scene.nodes[id] != nil else { return false }
+            openOrAddNote(id)
         case let .collapseToLevel(level): collapseToLevel(level)
         case .expandAll: expandAll()
         case .cancel:

@@ -10,6 +10,8 @@ struct NodeView: View {
     /// Inline editor shown instead of the text (nil = not editing).
     let editor: EditorController?
     let nodeID: UUID
+    /// Tap on an attachment icon.
+    var onOpenAttachment: (UUID) -> Void = { _ in }
 
     /// XMind-like selection ring color (fixed: the canvas is always light).
     static let selectionBlue = Color(hex: "#2E7CF6")
@@ -32,10 +34,19 @@ struct NodeView: View {
 
     private var textColor: Color { Color(hex: appearance.textColorHex) }
 
-    /// Stage 2 hook: attachment indicators (e.g. a notes "≡" icon in the
-    /// branch color) go after the text here; the measurer must then add
-    /// their width to the node size.
-    @ViewBuilder private var content: some View {
+    /// Text (or the inline editor) followed by the attachment icons; the
+    /// measurer reserves their width (`AttachmentIconRow`).
+    private var content: some View {
+        HStack(spacing: 0) {
+            text
+            if !info.attachments.isEmpty {
+                AttachmentIconsView(attachments: info.attachments, fontSize: appearance.fontSize, scale: scale,
+                                    color: textColor.opacity(0.75), onOpen: onOpenAttachment)
+            }
+        }
+    }
+
+    @ViewBuilder private var text: some View {
         if let editor {
             NodeEditorField(editor: editor, nodeID: nodeID, font: font, textColor: textColor)
         } else {

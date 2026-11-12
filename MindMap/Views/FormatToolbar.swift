@@ -2,7 +2,7 @@ import SwiftUI
 
 /// XMind-like toolbar groups. iPad (editor role): undo/redo capsule on the
 /// leading side next to the title, tools capsule in the center (relationship,
-/// add subtopic, boundary, insert "+"), Format (paintbrush) and More ("…")
+/// add subtopic, boundary, note, insert "+"), Format (paintbrush) and More ("…")
 /// trailing. macOS: the same groups in a native toolbar (undo/redo at the
 /// navigation edge, tools centered, Format/More trailing).
 struct FormatToolbar: ToolbarContent {
@@ -38,6 +38,11 @@ struct FormatToolbar: ToolbarContent {
                 if let id = selectedTopic { editor.addBoundary(around: id) }
             }
             .disabled(selectedTopic == nil || selectedTopic == editor.model.root.id)
+            Button("Note", systemImage: "note.text") {
+                if let id = selectedTopic { editor.openOrAddNote(id) }
+            }
+            .help("Add or open the note of the selected topic (⇧⌘N)")
+            .disabled(selectedTopic == nil)
             Menu("Insert", systemImage: "plus") { InsertMenuItems(editor: editor) }
         }
         ToolbarItemGroup(placement: .primaryAction) {

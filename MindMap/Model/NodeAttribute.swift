@@ -15,6 +15,8 @@ enum NodeAttribute: Equatable {
     case lineWidth(Double?)
     case lineDash(LineDash?)
     case manualPosition(CGPoint?)
+    /// The whole attachment list (add/remove/rename/reorder = one set).
+    case attachments([Attachment])
 
     /// The same attribute kind, holding `node`'s current value.
     func current(in node: Node) -> NodeAttribute {
@@ -30,6 +32,7 @@ enum NodeAttribute: Equatable {
         case .lineWidth: return .lineWidth(node.lineWidth)
         case .lineDash: return .lineDash(node.lineDash)
         case .manualPosition: return .manualPosition(node.manualPosition)
+        case .attachments: return .attachments(node.attachments)
         }
     }
 
@@ -46,6 +49,7 @@ enum NodeAttribute: Equatable {
         case let .lineWidth(v): node.lineWidth = v
         case let .lineDash(v): node.lineDash = v
         case let .manualPosition(v): node.manualPosition = v
+        case let .attachments(v): node.attachments = v
         }
     }
 }

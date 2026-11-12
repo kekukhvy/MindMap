@@ -8,6 +8,8 @@ enum EditorCommand: Equatable {
     case editReplacing(String)
     case zoomIn, zoomOut, zoomToFit
     case addRelationship, addBoundary
+    /// Cmd+Shift+N: open the selected topic's note, or add one (XMind).
+    case note
     /// Cmd+Option+1...4: show topics down to that level; Cmd+Option+0: expand all.
     case collapseToLevel(Int), expandAll
     /// Esc: cancel relationship/attach picking, or deselect a relationship/boundary.
@@ -54,6 +56,7 @@ enum KeyCommandMap {
             case "0": return .zoomToFit
             case "b" where !modifiers.contains(.shift): return .addBoundary
             case "l" where !modifiers.contains(.shift): return .addRelationship
+            case "n" where modifiers.contains(.shift): return .note
             default: return nil
             }
         }

@@ -9,8 +9,9 @@ import UniformTypeIdentifiers
 /// Edit menu use), so every model change marks the document edited.
 final class MindMapUIDocument: UIDocument {
     let model = MindMapModel()
-    /// Package as last read/written: attachments and unknown entries are
-    /// reused on save instead of being rewritten.
+    /// Package as last read/written: unknown entries are reused on save;
+    /// `attachments/` comes from the model's `AttachmentStore` (unchanged
+    /// files reused, pending writes merged, orphans dropped).
     private var package: FileWrapper?
     private var hasLoaded = false
 
@@ -18,7 +19,7 @@ final class MindMapUIDocument: UIDocument {
         // Main thread. A rename after an autosave must register its own
         // step (marks the document dirty again), as on macOS.
         model.breakCoalescing()
-        let wrapper = try MindMapPackage.fileWrapper(for: model.map, existing: package)
+        let wrapper = try MindMapPackage.fileWrapper(for: model.map, store: model.attachmentStore, existing: package)
         package = wrapper
         return wrapper
     }
@@ -33,6 +34,7 @@ final class MindMapUIDocument: UIDocument {
         }
         hasLoaded = true
         model.replaceMap(map)
+        model.attachmentStore.reset(package: wrapper, referenced: map.referencedAttachmentFileNames)
     }
 
     /// Keeps the version being edited when iCloud reports a conflict.

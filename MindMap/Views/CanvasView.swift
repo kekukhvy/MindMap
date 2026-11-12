@@ -147,7 +147,11 @@ struct CanvasView: View {
             let drag = editor.drag?.id == id ? editor.drag : nil
             NodeView(info: info, scale: viewport.scale, isSelected: editor.selectedID == id,
                      isDropTarget: editor.drag?.parentTargetID == id || editor.pickHoverID == id,
-                     editor: editor.editingID == id ? editor : nil, nodeID: id)
+                     editor: editor.editingID == id ? editor : nil, nodeID: id,
+                     onOpenAttachment: { attachmentID in
+                         editor.select(id)
+                         editor.openAttachment(attachmentID)
+                     })
                 .frame(width: screen.width, height: screen.height)
                 .contentShape(Rectangle())
                 .opacity(drag == nil ? 1 : 0.75)

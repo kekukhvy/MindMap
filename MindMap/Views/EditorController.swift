@@ -56,6 +56,12 @@ struct ColorSheetRequest: Identifiable {
     var initialHex: String
 }
 
+/// Request to show an attachment: sheet (iPad) / own window (macOS).
+struct AttachmentRequest: Identifiable, Equatable {
+    let id = UUID()
+    var attachmentID: UUID
+}
+
 /// UI state of one open map: selection, inline editing, viewport, drag.
 /// All document changes go through `MindMapModel` with `undoManager`
 /// (actions live in `EditorController+Actions.swift`).
@@ -89,6 +95,8 @@ final class EditorController {
     /// Topic (or its collapse toggle) under the pointer (macOS hover).
     private(set) var hoveredID: UUID?
     var colorSheet: ColorSheetRequest?
+    /// Attachment to open now (ContentView presents it, then clears on macOS).
+    var presentedAttachment: AttachmentRequest?
     private(set) var canUndo = false
     private(set) var canRedo = false
 
@@ -130,7 +138,8 @@ final class EditorController {
                                   selectionIsMainRoot: selectedID == model.root.id,
                                   selectionHasChildren: selected?.hasChildren ?? false,
                                   selectionIsCollapsed: selected?.isCollapsed ?? false,
-                                  selectionIsFreelyPositioned: selectedID.map(isFreelyPositioned) ?? false)
+                                  selectionIsFreelyPositioned: selectedID.map(isFreelyPositioned) ?? false,
+                                  selectionHasNote: selected?.attachments.contains { $0.kind == .markdown } ?? false)
     }
 
     // MARK: Editing state
@@ -210,4 +219,5 @@ struct EditorCommandState: Equatable {
     var selectionHasChildren: Bool
     var selectionIsCollapsed: Bool
     var selectionIsFreelyPositioned: Bool
+    var selectionHasNote: Bool = false
 }

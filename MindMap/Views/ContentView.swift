@@ -6,6 +6,9 @@ struct ContentView: View {
     let model: MindMapModel
     @State private var editor: EditorController
     @Environment(\.undoManager) private var undoManager
+    #if os(macOS)
+    @Environment(\.openWindow) private var openWindow
+    #endif
 
     init(model: MindMapModel) {
         self.model = model
@@ -37,13 +40,30 @@ struct ContentView: View {
             .sheet(item: $editor.colorSheet) { request in
                 ColorPickerSheet(request: request) { hex in editor.applyColorSheet(request, hex: hex) }
             }
+            #if os(iOS)
+            .sheet(item: $editor.presentedAttachment) { request in
+                AttachmentSheet(model: model, attachmentID: request.attachmentID, undoManager: undoManager)
+            }
+            #else
+            .onChange(of: editor.presentedAttachment) { _, request in
+                guard let request else { return }
+                editor.presentedAttachment = nil
+                openWindow(value: AttachmentWindowID(documentID: model.documentID, attachmentID: request.attachmentID))
+            }
+            #endif
             .onAppear {
                 editor.undoManager = undoManager
                 editor.refreshUndoState()
+                OpenDocumentRegistry.shared.register(model, undoManager: undoManager)
+                #if DEBUG
+                DebugLaunchActions.run(editor)
+                #endif
             }
+            .onDisappear { OpenDocumentRegistry.shared.unregister(model) }
             .onChange(of: undoManager) { _, manager in
                 editor.undoManager = manager
                 editor.refreshUndoState()
+                OpenDocumentRegistry.shared.register(model, undoManager: manager)
             }
             .onChange(of: model.map) { _, _ in editor.validateSelection() }
             .onReceive(undoChanges) { _ in editor.refreshUndoState() }

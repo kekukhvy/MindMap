@@ -19,11 +19,13 @@ enum MindMapPackage {
         return try decode(data)
     }
 
-    /// Builds the package. Reuses the existing `attachments/` folder and any
-    /// other entries of the saved package (e.g. written by a newer version)
-    /// as-is, so unchanged files are not rewritten (cheap in iCloud Drive).
-    /// Only relative names are stored; nothing references absolute paths.
-    static func fileWrapper(for map: MindMap, existing: FileWrapper? = nil) throws -> FileWrapper {
+    /// Builds the package. Reuses any other entries of the saved package
+    /// (e.g. written by a newer version) as-is, so unchanged files are not
+    /// rewritten (cheap in iCloud Drive). Only relative names are stored.
+    /// - Parameter attachments: children of `attachments/` (from
+    ///   `AttachmentStore.prepareSave`); nil keeps the existing folder as-is.
+    static func fileWrapper(for map: MindMap, existing: FileWrapper? = nil,
+                            attachments: [String: FileWrapper]? = nil) throws -> FileWrapper {
         let mapWrapper = FileWrapper(regularFileWithContents: try encode(map))
         mapWrapper.preferredFilename = mapFileName
 
@@ -33,7 +35,12 @@ enum MindMapPackage {
                 children[name] = child
             }
         }
-        if children[attachmentsFolderName]?.isDirectory != true {
+        if let attachments {
+            // New folder wrapper; the file wrappers inside may be reused ones.
+            let folder = FileWrapper(directoryWithFileWrappers: attachments)
+            folder.preferredFilename = attachmentsFolderName
+            children[attachmentsFolderName] = folder
+        } else if children[attachmentsFolderName]?.isDirectory != true {
             let folder = FileWrapper(directoryWithFileWrappers: [:])
             folder.preferredFilename = attachmentsFolderName
             children[attachmentsFolderName] = folder
@@ -43,6 +50,12 @@ enum MindMapPackage {
         // (NSGenericException "mutated while being enumerated").
         children[mapFileName] = mapWrapper
         return FileWrapper(directoryWithFileWrappers: children)
+    }
+
+    /// Package for a save of `map` with the store's pending/unchanged files.
+    static func fileWrapper(for map: MindMap, store: AttachmentStore, existing: FileWrapper?) throws -> FileWrapper {
+        try fileWrapper(for: map, existing: existing,
+                        attachments: store.prepareSave(referencing: map.referencedAttachmentFileNames))
     }
 
     static func encode(_ map: MindMap) throws -> Data {
