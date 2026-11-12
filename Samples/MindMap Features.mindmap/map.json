@@ -1,0 +1,1863 @@
+{
+  "boundaries" : [
+    {
+      "id" : "A7B602BE-888C-4394-A262-DC0CA31E0037",
+      "label" : "Format ▸ Shape",
+      "nodeID" : "E243D85C-0AE6-4C06-8468-3E977E5D2D4D",
+      "siblingIDs" : [
+
+      ]
+    },
+    {
+      "colorHex" : "#3D8FE0",
+      "id" : "8FA76B20-9217-4B4C-9FAC-D49F46936B48",
+      "label" : "Most used",
+      "nodeID" : "99742D0E-92CB-4223-8C95-8010A5DFC345",
+      "siblingIDs" : [
+
+      ]
+    }
+  ],
+  "floatingTopics" : [
+    {
+      "node" : {
+        "attachments" : [
+
+        ],
+        "children" : [
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "7CCE26D1-CC85-4C5B-BC60-C98D7EB71E99",
+            "isCollapsed" : false,
+            "text" : "…to add a floating topic"
+          }
+        ],
+        "colorTag" : "none",
+        "id" : "E58FBA13-7592-4838-B625-6BE3C2627C5E",
+        "isCollapsed" : false,
+        "shape" : "capsule",
+        "text" : "Tip: double-click empty canvas"
+      },
+      "position" : [
+        -260,
+        920
+      ]
+    }
+  ],
+  "formatVersion" : 1,
+  "relationships" : [
+    {
+      "fromNodeID" : "ED39EDEB-E359-4550-81FC-52343B935145",
+      "id" : "A76AC886-AA3F-4730-A661-E4A9A9958188",
+      "label" : "like this one",
+      "style" : {
+        "dash" : "dashed",
+        "endArrow" : "arrow",
+        "path" : "curved",
+        "startArrow" : "none",
+        "width" : 1.5
+      },
+      "toNodeID" : "E58FBA13-7592-4838-B625-6BE3C2627C5E"
+    },
+    {
+      "fromNodeID" : "502B8682-CE89-4FFF-A2B0-B5F579D39681",
+      "id" : "F857CD03-2102-4623-836C-6483B6B0716F",
+      "label" : "saved as .md",
+      "style" : {
+        "dash" : "dashed",
+        "endArrow" : "filledArrow",
+        "path" : "curved",
+        "startArrow" : "none",
+        "width" : 1.5
+      },
+      "toNodeID" : "F2BF4127-C043-4D84-AF4A-A06C0E00D6D1"
+    },
+    {
+      "fromControlOffset" : [
+        130,
+        30
+      ],
+      "fromNodeID" : "A384F991-9D2B-475C-97EE-C4AA6E8C1781",
+      "id" : "F8D55F5A-C07C-4253-A26F-731FF73085DA",
+      "label" : "see open tasks",
+      "style" : {
+        "colorHex" : "#8E62D9",
+        "dash" : "solid",
+        "endArrow" : "arrow",
+        "path" : "curved",
+        "startArrow" : "dot",
+        "width" : 2
+      },
+      "toControlOffset" : [
+        130,
+        -30
+      ],
+      "toNodeID" : "C7A6D14C-049F-45F1-8C67-D6D07459735C"
+    }
+  ],
+  "root" : {
+    "attachments" : [
+      {
+        "createdAt" : 816134400,
+        "fileName" : "3FD6B936-B6FB-4E8D-9D91-3BE15A41288A.md",
+        "id" : "3FD6B936-B6FB-4E8D-9D91-3BE15A41288A",
+        "kind" : "markdown",
+        "modifiedAt" : 816134400,
+        "title" : "About"
+      }
+    ],
+    "children" : [
+      {
+        "attachments" : [
+          {
+            "createdAt" : 816134400,
+            "fileName" : "D5146DF4-E50F-4EA7-9C85-E72587D58949.md",
+            "id" : "D5146DF4-E50F-4EA7-9C85-E72587D58949",
+            "kind" : "markdown",
+            "modifiedAt" : 816134400,
+            "title" : "How to edit"
+          }
+        ],
+        "children" : [
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "22D09CD7-46BA-4328-9FC0-3CFA9079D180",
+            "isCollapsed" : false,
+            "text" : "Tab — child, Return — sibling"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "8CDDD4C3-CEA7-4F99-BDF9-11B926B118A5",
+            "isCollapsed" : false,
+            "text" : "Just type to rename"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "EED05B4D-25B1-4E2C-A031-CBB6FC4FCDE7",
+            "isCollapsed" : false,
+            "text" : "One undo step per action"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "7C2D3A0F-7AC7-4348-B30F-B9F324AE64B3",
+                "isCollapsed" : false,
+                "text" : "Double-click topic — add child"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+                  {
+                    "attachments" : [
+
+                    ],
+                    "children" : [
+
+                    ],
+                    "colorTag" : "none",
+                    "id" : "E3F28A77-9202-40F2-AA04-4EAB3405FC87",
+                    "isCollapsed" : false,
+                    "text" : "Middle — make child"
+                  },
+                  {
+                    "attachments" : [
+
+                    ],
+                    "children" : [
+
+                    ],
+                    "colorTag" : "none",
+                    "id" : "475DF1D3-2C62-4FC2-8DD5-702995677DA1",
+                    "isCollapsed" : false,
+                    "text" : "Top \/ bottom edge — insert before \/ after"
+                  },
+                  {
+                    "attachments" : [
+
+                    ],
+                    "children" : [
+
+                    ],
+                    "colorTag" : "none",
+                    "id" : "0AD43DF9-2E71-4C87-8CCD-4B804C0A288B",
+                    "isCollapsed" : false,
+                    "text" : "Empty space — free position"
+                  }
+                ],
+                "colorTag" : "none",
+                "id" : "E18BF977-5E01-4124-A656-FD4FC3A609D5",
+                "isCollapsed" : false,
+                "text" : "Drag topic — reparent \/ reorder"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "1D540F75-2F5E-4F3D-A7A2-9C833ABCFB31",
+                "isCollapsed" : false,
+                "text" : "Right-click \/ long press — menu"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "4264626A-43BE-4A36-B0AF-D6D136C6B199",
+                "isCollapsed" : false,
+                "text" : "Pinch, ⌘-scroll — zoom; drag background — pan"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "18A003EE-DF31-425E-865E-9E3E3CC5650B",
+            "isCollapsed" : true,
+            "text" : "Mouse & touch"
+          }
+        ],
+        "colorTag" : "none",
+        "id" : "1BB7A829-02E0-43AB-B6BA-2C260D4EB227",
+        "isCollapsed" : false,
+        "layoutStyle" : "rightMap",
+        "text" : "Editing & Keyboard"
+      },
+      {
+        "attachments" : [
+          {
+            "createdAt" : 816134400,
+            "fileName" : "AC160635-E3BB-4E31-9B1E-77FD2413C877.md",
+            "id" : "AC160635-E3BB-4E31-9B1E-77FD2413C877",
+            "kind" : "markdown",
+            "modifiedAt" : 816134400,
+            "title" : "Layout styles"
+          }
+        ],
+        "children" : [
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "E0C5FBAF-F205-40B2-B946-FB09955917D6",
+            "isCollapsed" : false,
+            "text" : "Map — central topic (balanced)"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "58591489-E936-425E-BD02-1471B796F2C8",
+                "isCollapsed" : false,
+                "text" : "Step 1"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "8BF848C3-1DF5-4747-A4F4-004C6A22BAFB",
+                "isCollapsed" : false,
+                "text" : "Step 2"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "81B5FB9C-A886-4576-B73A-65D7DF7B0EF3",
+            "isCollapsed" : false,
+            "layoutStyle" : "rightMap",
+            "text" : "Logic Right"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "9000FB5B-AA06-4C7F-A07C-ACC6ADC3B1B3",
+                "isCollapsed" : false,
+                "text" : "Item A"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "E34B02B7-8703-402D-920B-DF21F1D11FBB",
+                "isCollapsed" : false,
+                "text" : "Item B"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "69FE1ADA-2CB7-4B44-9F0C-696829F7A90D",
+                "isCollapsed" : false,
+                "text" : "Item C"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "9C27325B-FCCE-4F5C-9E16-41555BFB7E69",
+            "isCollapsed" : false,
+            "layoutStyle" : "treeDown",
+            "text" : "Tree Down"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "AEB9FC35-B879-4704-ACC0-424737648CEF",
+                "isCollapsed" : false,
+                "text" : "Team A"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "24E6D85A-1D76-42C4-9B1D-C306A72A03FD",
+                "isCollapsed" : false,
+                "text" : "Team B"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "30CB4295-8F87-4A6A-B71E-87A2F3CEFEB8",
+                "isCollapsed" : false,
+                "text" : "Team C"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "334E35C8-F675-4076-926E-9D26430144A6",
+            "isCollapsed" : false,
+            "layoutStyle" : "orgChartDown",
+            "text" : "Org Chart"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "BC902620-57F5-404A-868B-29DBAC559E93",
+            "isCollapsed" : false,
+            "text" : "Logic Left — see Tasks"
+          }
+        ],
+        "colorTag" : "none",
+        "id" : "1D4B58E0-10BA-48B5-810F-AD3DDC313BBC",
+        "isCollapsed" : false,
+        "text" : "Layout Styles"
+      },
+      {
+        "attachments" : [
+          {
+            "createdAt" : 816134400,
+            "fileName" : "DED84552-EE9B-4D06-A771-3064FAEBA1DF.md",
+            "id" : "DED84552-EE9B-4D06-A771-3064FAEBA1DF",
+            "kind" : "markdown",
+            "modifiedAt" : 816134400,
+            "title" : "Hotkeys"
+          }
+        ],
+        "children" : [
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "160F2E77-871F-457A-9C52-95662023268D",
+                "isCollapsed" : false,
+                "text" : "Tab — Add Child Topic"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "8CDE8F88-4F22-4270-A83F-746B0D7F0015",
+                "isCollapsed" : false,
+                "text" : "Return — Add Sibling Topic"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "912C3D79-9F9D-4FB7-884D-077C96F4803C",
+                "isCollapsed" : false,
+                "text" : "Delete — Delete Topic \/ Item"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "01AB9AE7-6341-40C5-9A9B-66AB36934DA0",
+                "isCollapsed" : false,
+                "text" : "Space or F2 — Rename"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "DDE8741E-F853-4205-BE16-76F17378B240",
+                "isCollapsed" : false,
+                "text" : "Type a character — Rename with it"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "88AFB765-8405-4298-B84F-EBB7BB9D1478",
+                "isCollapsed" : false,
+                "text" : "Return \/ Esc — Finish Editing"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "FAD0CC87-C07D-4E1F-B469-F6304C84AABE",
+                "isCollapsed" : false,
+                "text" : "Tab while editing — Finish + Add Child"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "0CAF0631-210D-4FAC-84C3-A4A59879A87E",
+                "isCollapsed" : false,
+                "text" : "⌘Z \/ ⇧⌘Z — Undo \/ Redo"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "450FF6DA-F33F-4341-9288-88D7BC9B88F1",
+                "isCollapsed" : false,
+                "text" : "⌥-drag — Free Move (Mac)"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "99742D0E-92CB-4223-8C95-8010A5DFC345",
+            "isCollapsed" : false,
+            "text" : "Editing"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "D765AE09-4006-4D28-9210-B23A9887100A",
+                "isCollapsed" : false,
+                "text" : "Arrow keys — Select Neighbour Topic"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "7EFBDF25-E067-4662-9EDA-8C16C58F5E32",
+                "isCollapsed" : false,
+                "text" : "⌘= \/ ⌘- — Zoom In \/ Out"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "D9DBF809-989D-474F-A2DD-553CC4DDAEF7",
+                "isCollapsed" : false,
+                "text" : "⌘0 — Zoom to Fit"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "2D30D280-20BF-46A3-A910-29B6E66DB026",
+                "isCollapsed" : false,
+                "text" : "⌘-scroll \/ pinch — Zoom"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "E7215038-BEDE-47AA-BE49-DFBEA5F69000",
+                "isCollapsed" : false,
+                "text" : "Esc — Cancel Pick \/ Deselect"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "21C4F873-86F6-43A8-88D6-741EECF9274A",
+            "isCollapsed" : false,
+            "text" : "Navigation"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "5D4F780C-E73B-418D-A21A-F0AFF3B58E94",
+                "isCollapsed" : false,
+                "text" : "⌘\/ — Collapse \/ Expand Topic"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "69F6A664-BEEE-4188-BE72-00F38CD54AF3",
+                "isCollapsed" : false,
+                "text" : "⌥⌘1…4 — Collapse to Level 1–4"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "C1DB4325-FCA0-458E-8602-93BFD627534E",
+                "isCollapsed" : false,
+                "text" : "⌥⌘0 — Expand All"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "B1D98AE0-7616-41E8-B405-CA653C9B3113",
+            "isCollapsed" : false,
+            "text" : "View & Collapse"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "60926E17-583F-40BC-8BE8-647663F4C4B8",
+                "isCollapsed" : false,
+                "text" : "⌘K — Add\/Edit Link"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "08FEA4EB-8866-43F1-98B4-3BAF754F51C2",
+                "isCollapsed" : false,
+                "text" : "⌘-click topic — Go to Link"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "7AF63C16-1B79-4304-AFD3-A6053A8FD897",
+                "isCollapsed" : false,
+                "text" : "⌘[ — Back"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "C11A10A1-B0C0-4518-9A8B-FD4702C13734",
+                "isCollapsed" : false,
+                "text" : "Return \/ Esc — Save \/ Cancel Link"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "5E5A0BB1-6548-44A4-B53D-238CDEF94C81",
+            "isCollapsed" : false,
+            "text" : "Links"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "4CF75716-7F0E-4DB5-BF4F-6EBB21A0FFA0",
+                "isCollapsed" : false,
+                "text" : "⌘Return — Mark as Done \/ Not Done"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "2133CF5F-F6EF-46A8-BB37-FDCC3F8D7EF0",
+            "isCollapsed" : false,
+            "text" : "Tasks"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "5E3FC9B8-7C64-4EE1-A1FC-B0F04E353D71",
+                "isCollapsed" : false,
+                "text" : "⇧⌘N — Add\/Open Note"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "AB2C16CC-71FB-499F-BFE7-97746F2825CE",
+                "isCollapsed" : false,
+                "text" : "⇧⌘D — Add\/Open Handwritten Note"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "445F4694-9945-4683-BF95-2692172873BF",
+                "isCollapsed" : false,
+                "text" : "⇧⌘A — Attach File…"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "175CEE12-22DF-4893-B6F1-2826868F6E66",
+                "isCollapsed" : false,
+                "text" : "⌘V — Paste File (Mac)"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "EA05C218-A0E8-4612-8AE0-422F9390BDA3",
+                "isCollapsed" : false,
+                "text" : "Esc — Close Note Window (Done)"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "3285C1CE-FF21-4A2D-98FC-635C95D7C731",
+            "isCollapsed" : false,
+            "text" : "Attachments"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "D9F79DF9-FD8F-4115-A630-3F456828B766",
+                "isCollapsed" : false,
+                "text" : "⌘L — Relationship (then click target)"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "DF604337-B820-47E5-891A-C7C2B9219CBC",
+                "isCollapsed" : false,
+                "text" : "⌘B — Boundary"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "592DBA40-4999-4D7E-A878-76D53DE71603",
+                "isCollapsed" : false,
+                "text" : "Space — Edit Label"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "E3695E38-5E84-4A7D-AA29-B75BC52DDAB0",
+                "isCollapsed" : false,
+                "text" : "Delete — Remove Selected Item"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "6FDBE180-EB1B-40E3-9036-6102D79D206C",
+            "isCollapsed" : false,
+            "text" : "Relationships & Boundaries"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "0EA7DB9F-4160-4FFE-94C7-467CC8F9ED83",
+                "isCollapsed" : false,
+                "text" : "⌘N — New Map"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "B85DC044-F43C-4CF0-BEA2-E0FD6482ECE2",
+                "isCollapsed" : false,
+                "text" : "⌥⌘N — New Window (iPad)"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "3CF9EEBA-1081-4887-9118-6C1975E22DCF",
+                "isCollapsed" : false,
+                "text" : "⌘O — Open…"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "C9851D78-4074-4CC7-B1AD-4606579E29C7",
+            "isCollapsed" : false,
+            "text" : "Documents"
+          }
+        ],
+        "colorTag" : "none",
+        "id" : "FF482A21-7AC1-43B3-BED4-5F0F8B593D1A",
+        "isCollapsed" : false,
+        "layoutStyle" : "treeDown",
+        "text" : "Hotkeys"
+      },
+      {
+        "attachments" : [
+          {
+            "createdAt" : 816134400,
+            "fileName" : "26E7613D-814F-4065-92B2-5923E1D09584.md",
+            "id" : "26E7613D-814F-4065-92B2-5923E1D09584",
+            "kind" : "markdown",
+            "modifiedAt" : 816134400,
+            "title" : "Formatting"
+          }
+        ],
+        "children" : [
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "AF8DCBDF-FE44-4011-8812-8EFADFF83A35",
+                "isCollapsed" : false,
+                "text" : "XMind Pastel (default)"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "F246B400-A70C-4D6D-B397-791E207AE1DD",
+                "isCollapsed" : false,
+                "text" : "Classic Rainbow"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "A2900FBC-47E5-4532-AD76-104E817D7A65",
+                "isCollapsed" : false,
+                "text" : "Mono"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "FFBC6AB9-38EB-4347-9C2D-69AF503EEE27",
+            "isCollapsed" : false,
+            "text" : "Themes"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "0D0CEC1A-9FCA-4CF5-816E-B49B732DFBC8",
+                "isCollapsed" : false,
+                "shape" : "roundedRect",
+                "text" : "Rounded"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "D9CC4CD6-C89A-4CD8-97BC-B33A020F2F2B",
+                "isCollapsed" : false,
+                "shape" : "rectangle",
+                "text" : "Rectangle"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "945A9561-9E87-4B8E-89A7-33EE3EBBB973",
+                "isCollapsed" : false,
+                "shape" : "capsule",
+                "text" : "Capsule"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "5836D297-8E0C-4928-B7B3-59DABCDD5E05",
+                "isCollapsed" : false,
+                "shape" : "underline",
+                "text" : "Underline"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "E243D85C-0AE6-4C06-8468-3E977E5D2D4D",
+            "isCollapsed" : false,
+            "text" : "Shapes"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "borderStyle" : "solid",
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "1B2A3B2F-F933-487B-96A8-0B91103808B8",
+                "isCollapsed" : false,
+                "shape" : "rectangle",
+                "text" : "Solid border"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "borderStyle" : "dashed",
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "A8CB65AF-907B-41CA-BAB6-8CBEB7D9460C",
+                "isCollapsed" : false,
+                "shape" : "roundedRect",
+                "text" : "Dashed border"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "5A168141-0B91-4BA9-827D-F05FA18B4A22",
+            "isCollapsed" : false,
+            "text" : "Borders"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "CFBB6A56-BC25-468E-A121-4A83DC5A2EE0",
+                "isCollapsed" : false,
+                "text" : "Curved · Straight"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "66FFA129-FBC3-41F2-A84E-E43D9FDA6184",
+                "isCollapsed" : false,
+                "text" : "Elbow · Rounded elbow"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "1479EE90-D2EE-4155-BA57-7AA9467AF5D3",
+                "isCollapsed" : false,
+                "text" : "Dashed · Dotted · Width"
+              }
+            ],
+            "colorTag" : "none",
+            "connectorStyle" : "straight",
+            "id" : "891CF2A5-721E-4B31-B88D-8AA47B8F5089",
+            "isCollapsed" : false,
+            "lineWidth" : 2,
+            "text" : "Branch lines"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "red",
+                "id" : "CDFC25B7-5B36-4FCA-A213-DA41A2469DA4",
+                "isCollapsed" : false,
+                "text" : "Color tag"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "customColor" : "#3D8FE0",
+                "id" : "59CC2708-6DDB-4DAE-987C-D8C40A4B22AC",
+                "isCollapsed" : false,
+                "text" : "Custom color"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "2444569D-0AD7-4420-8961-185709198DF6",
+            "isCollapsed" : false,
+            "text" : "Colors"
+          }
+        ],
+        "colorTag" : "none",
+        "id" : "17FF73F8-4267-4A7B-9B64-FE128C006EBD",
+        "isCollapsed" : false,
+        "text" : "Look & Format"
+      },
+      {
+        "attachments" : [
+          {
+            "createdAt" : 816134400,
+            "fileName" : "C72E9A61-6C1F-4CBB-BD3C-C380BD0196D3.md",
+            "id" : "C72E9A61-6C1F-4CBB-BD3C-C380BD0196D3",
+            "kind" : "markdown",
+            "modifiedAt" : 816134400,
+            "title" : "Links"
+          }
+        ],
+        "children" : [
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "91E746EB-B3E6-4FEC-A6E1-635CC37416E3",
+            "isCollapsed" : false,
+            "link" : {
+              "kind" : "web",
+              "url" : "https:\/\/xmind.com"
+            },
+            "text" : "Inspired by XMind"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "6E1DB6FA-9545-437B-A504-4ADE1276DB41",
+            "isCollapsed" : false,
+            "link" : {
+              "kind" : "topic",
+              "topicID" : "FF482A21-7AC1-43B3-BED4-5F0F8B593D1A"
+            },
+            "text" : "Jump to Hotkeys"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "C8E7D00E-C679-473E-A63F-602CE37F95C2",
+            "isCollapsed" : false,
+            "link" : {
+              "kind" : "map",
+              "name" : "MindMap Roadmap",
+              "path" : "MindMap Roadmap.mindmap",
+              "topicID" : "9C159BEA-2FD9-42BA-B9E2-AE4C1AE4EB1B"
+            },
+            "text" : "MindMap Roadmap (other map)"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "3E841A5E-F097-48E1-8E2C-BCEE7CCF0F77",
+            "isCollapsed" : false,
+            "text" : "⌘-click or icon — Go to; ⌘[ — Back"
+          }
+        ],
+        "colorTag" : "none",
+        "id" : "A546B914-5BD9-43EE-A1FB-221C4D668D60",
+        "isCollapsed" : false,
+        "link" : {
+          "kind" : "topic",
+          "topicID" : "5E5A0BB1-6548-44A4-B53D-238CDEF94C81"
+        },
+        "text" : "Links"
+      },
+      {
+        "attachments" : [
+          {
+            "createdAt" : 816134400,
+            "fileName" : "213C6189-A533-47D2-AD18-7A7E48F108BF.md",
+            "id" : "213C6189-A533-47D2-AD18-7A7E48F108BF",
+            "kind" : "markdown",
+            "modifiedAt" : 816134400,
+            "title" : "Attachments"
+          }
+        ],
+        "children" : [
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "22259140-6E23-4437-B864-1A468D703B40",
+            "isCollapsed" : false,
+            "text" : "Icons stay small on the topic"
+          },
+          {
+            "attachments" : [
+              {
+                "createdAt" : 816134400,
+                "fileName" : "A62767BA-4587-403F-BE00-313FA1DBC597.png",
+                "id" : "A62767BA-4587-403F-BE00-313FA1DBC597",
+                "kind" : "file",
+                "modifiedAt" : 816134400,
+                "title" : "MindMap Icon.png"
+              }
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "4E689A90-56C2-4591-9C93-877E998495FB",
+            "isCollapsed" : false,
+            "text" : "Files (any type)"
+          },
+          {
+            "attachments" : [
+              {
+                "createdAt" : 816134400,
+                "fileName" : "9CAB551A-4380-439F-B56C-8EF28421E085.md",
+                "id" : "9CAB551A-4380-439F-B56C-8EF28421E085",
+                "kind" : "markdown",
+                "modifiedAt" : 816134400,
+                "title" : "Example note"
+              }
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "502B8682-CE89-4FFF-A2B0-B5F579D39681",
+            "isCollapsed" : false,
+            "text" : "Markdown notes"
+          },
+          {
+            "attachments" : [
+              {
+                "createdAt" : 816134400,
+                "fileName" : "5FD03958-8D64-492F-984A-C52DA81F283A.drawing",
+                "id" : "5FD03958-8D64-492F-984A-C52DA81F283A",
+                "kind" : "drawing",
+                "modifiedAt" : 816134400,
+                "title" : "Arrow sketch"
+              }
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "234AAD68-8760-4B71-ACBA-B77BAAFC33A6",
+            "isCollapsed" : false,
+            "link" : {
+              "kind" : "web",
+              "url" : "https:\/\/developer.apple.com\/documentation\/pencilkit"
+            },
+            "text" : "Handwriting (PencilKit)"
+          }
+        ],
+        "colorTag" : "none",
+        "id" : "5E794276-1D08-4C8C-9681-352ABC83D318",
+        "isCollapsed" : false,
+        "link" : {
+          "kind" : "topic",
+          "topicID" : "3285C1CE-FF21-4A2D-98FC-635C95D7C731"
+        },
+        "text" : "Attachments"
+      },
+      {
+        "attachments" : [
+          {
+            "createdAt" : 816134400,
+            "fileName" : "92704409-127B-435D-B4A6-E4FFB362319E.md",
+            "id" : "92704409-127B-435D-B4A6-E4FFB362319E",
+            "kind" : "markdown",
+            "modifiedAt" : 816134400,
+            "title" : "Documents"
+          }
+        ],
+        "children" : [
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "ACA10123-24A3-4DFC-B63B-A02E87A1C2D2",
+                "isCollapsed" : false,
+                "text" : "Reopens recent"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "5AB77767-31B1-40D7-98EE-B803D54EE199",
+                "isCollapsed" : false,
+                "text" : "Map tabs"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "A2F6AFC2-DB46-40A8-A37D-7F991FEC96B4",
+            "isCollapsed" : false,
+            "text" : "Mac"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "AD0CCFDB-4149-4929-BE2A-2349A35DEFD9",
+                "isCollapsed" : false,
+                "text" : "Opens last map"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "E7AC422F-AB26-4D8D-B5E3-D8903BB6A24A",
+                "isCollapsed" : false,
+                "text" : "Multi-window"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "86416AA9-BCBA-4270-8FC9-153C9DBA6E9F",
+            "isCollapsed" : false,
+            "text" : "iPad"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "018402B8-83D4-4E6E-8F5E-89972F54AF1F",
+                "isCollapsed" : false,
+                "text" : "map.json"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "7524B820-5766-4C0F-8753-BAA85B5E2DC7",
+                "isCollapsed" : false,
+                "text" : "attachments\/"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "F2BF4127-C043-4D84-AF4A-A06C0E00D6D1",
+            "isCollapsed" : false,
+            "text" : "Package"
+          }
+        ],
+        "colorTag" : "none",
+        "id" : "5991AC5F-3AF8-4C26-BDBE-65195BD2E71C",
+        "isCollapsed" : false,
+        "layoutStyle" : "orgChartDown",
+        "text" : "Documents & iCloud"
+      },
+      {
+        "attachments" : [
+          {
+            "createdAt" : 816134400,
+            "fileName" : "BE927A97-09C4-427A-8156-FD0BDAA5EDB8.md",
+            "id" : "BE927A97-09C4-427A-8156-FD0BDAA5EDB8",
+            "kind" : "markdown",
+            "modifiedAt" : 816134400,
+            "title" : "Tasks"
+          }
+        ],
+        "children" : [
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "479A002F-1C3B-440D-8E8D-DEE2B3A7E8B5",
+            "isCollapsed" : false,
+            "text" : "Convert to Task (Topic menu)"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "76ACC2FA-4E5E-4C94-9BA1-32C702297809",
+            "isCollapsed" : false,
+            "text" : "Priority !!! \/ !! \/ !"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "7C72B8FC-C030-4763-BB16-C5239A1FAA55",
+            "isCollapsed" : false,
+            "text" : "Due date: Today, Tomorrow, …"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "DF6DD297-3AF0-4AD8-8FFA-928A2FFFB89D",
+            "isCollapsed" : false,
+            "text" : "Tasks panel = all open tasks"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "1E9A4DA3-6F8B-4C65-B50B-84E856A054AC",
+            "isCollapsed" : false,
+            "text" : "Logic Left layout (this branch)"
+          }
+        ],
+        "colorTag" : "none",
+        "id" : "A384F991-9D2B-475C-97EE-C4AA6E8C1781",
+        "isCollapsed" : false,
+        "layoutStyle" : "leftMap",
+        "link" : {
+          "kind" : "topic",
+          "topicID" : "2133CF5F-F6EF-46A8-BB37-FDCC3F8D7EF0"
+        },
+        "shape" : "capsule",
+        "text" : "Tasks"
+      },
+      {
+        "attachments" : [
+          {
+            "createdAt" : 816134400,
+            "fileName" : "EC39156C-2C9B-4C83-89D6-551B2E94A93A.md",
+            "id" : "EC39156C-2C9B-4C83-89D6-551B2E94A93A",
+            "kind" : "markdown",
+            "modifiedAt" : 816134400,
+            "title" : "Known gaps"
+          }
+        ],
+        "borderStyle" : "dashed",
+        "children" : [
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "58BC621F-484D-4594-9C37-A8A9788AEAE4",
+            "isCollapsed" : false,
+            "task" : {
+              "dueDate" : 816390000,
+              "isDone" : false,
+              "priority" : 1
+            },
+            "text" : "Copy \/ paste & duplicate topics"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "AD986453-91DB-427E-960B-31AFE072BF3B",
+            "isCollapsed" : false,
+            "task" : {
+              "dueDate" : 816735600,
+              "isDone" : false,
+              "priority" : 1
+            },
+            "text" : "Multi-line topic editor"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "471F29C0-F5C5-4EB8-B7BB-BFC954F5313F",
+            "isCollapsed" : false,
+            "task" : {
+              "dueDate" : 817340400,
+              "isDone" : false,
+              "priority" : 2
+            },
+            "text" : "Boundaries around sibling ranges"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "1B21B964-1008-463C-A5D0-50B36EEE12EC",
+            "isCollapsed" : false,
+            "task" : {
+              "isDone" : false,
+              "priority" : 2
+            },
+            "text" : "iCloud container (needs a team)"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "4B13CB72-9238-4483-A56D-B534E1C2C81A",
+            "isCollapsed" : false,
+            "task" : {
+              "dueDate" : 817945200,
+              "isDone" : false,
+              "priority" : 3
+            },
+            "text" : "iPad: empty-canvas context menu"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "74E59076-524C-4188-B46E-D9419D8CAB85",
+            "isCollapsed" : false,
+            "task" : {
+              "isDone" : false,
+              "priority" : 3
+            },
+            "text" : "Drag-reorder attachment icons"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "50F336DD-20F9-4170-B972-76FEFB7875E2",
+            "isCollapsed" : false,
+            "task" : {
+              "completedAt" : 816044400,
+              "isDone" : true
+            },
+            "text" : "Inline relationship labels"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "F0C720AD-93F4-403A-B628-EC34D358F819",
+            "isCollapsed" : false,
+            "task" : {
+              "completedAt" : 816175991.319639,
+              "isDone" : true
+            },
+            "text" : "Keep unknown link kinds on save"
+          }
+        ],
+        "colorTag" : "none",
+        "id" : "C7A6D14C-049F-45F1-8C67-D6D07459735C",
+        "isCollapsed" : false,
+        "layoutStyle" : "treeDown",
+        "lineDash" : "dashed",
+        "text" : "Known gaps \/ Roadmap"
+      },
+      {
+        "attachments" : [
+          {
+            "createdAt" : 816134400,
+            "fileName" : "9CD56587-5544-4169-97B1-CD940108E9BC.md",
+            "id" : "9CD56587-5544-4169-97B1-CD940108E9BC",
+            "kind" : "markdown",
+            "modifiedAt" : 816134400,
+            "title" : "Structure"
+          }
+        ],
+        "children" : [
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "7C73A52A-404E-499E-BAFA-994E14C51927",
+            "isCollapsed" : false,
+            "text" : "Relationships (⌘L)"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "534CC3FB-3159-43FD-A268-68A50FABF318",
+            "isCollapsed" : false,
+            "text" : "Boundaries (⌘B)"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "175DFFDD-1BAD-47CE-BBCE-8996E0E3FB55",
+                "isCollapsed" : false,
+                "text" : "+N toggle on the topic"
+              },
+              {
+                "attachments" : [
+
+                ],
+                "children" : [
+
+                ],
+                "colorTag" : "none",
+                "id" : "773F555A-5C59-45C5-9DC5-7B880314872B",
+                "isCollapsed" : false,
+                "text" : "⌥⌘1…4 \/ ⌥⌘0"
+              }
+            ],
+            "colorTag" : "none",
+            "id" : "003FEB99-C203-4672-8C09-FB8B636B8F07",
+            "isCollapsed" : false,
+            "text" : "Collapse & levels"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "562F00EB-61D9-41A3-A794-F25DD4948EBF",
+            "isCollapsed" : false,
+            "manualPosition" : [
+              250,
+              70
+            ],
+            "text" : "Free position (dropped here)"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "ED39EDEB-E359-4550-81FC-52343B935145",
+            "isCollapsed" : false,
+            "text" : "Floating topics"
+          }
+        ],
+        "colorTag" : "none",
+        "connectorStyle" : "roundedElbow",
+        "id" : "BE79110E-2CA3-4C5C-BFB0-E806C0769FC1",
+        "isCollapsed" : false,
+        "text" : "Structure"
+      }
+    ],
+    "colorTag" : "none",
+    "id" : "8848E586-A46A-4336-8785-F32F25391D37",
+    "isCollapsed" : false,
+    "text" : "MindMap"
+  },
+  "theme" : {
+    "rainbow" : {
+
+    }
+  }
+}
