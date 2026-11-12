@@ -122,6 +122,8 @@ final class EditorController {
     var pencilHoveredID: UUID?
     /// "Gestures & Apple Pencil" help sheet (iPad).
     var isGestureHelpPresented = false
+    /// Settings sheet (iPad "…" menu; macOS uses the Settings window).
+    var isSettingsPresented = false
     /// Rubber-band selection in progress (screen coordinates).
     var marquee: MarqueeDrag?
     /// Boundary whose members are being edited (= the topic selection).
@@ -202,6 +204,14 @@ final class EditorController {
     /// Window showing this editor (linked maps open as tabs of it).
     @ObservationIgnored weak var hostWindow: NSWindow?
     #endif
+    /// Store actions of this map (WP14b: rename, import/move/export, duplicate).
+    @MainActor var storage: MapStorageController {
+        if let storageController { return storageController }
+        let created = MapStorageController(editor: self)
+        storageController = created
+        return created
+    }
+    @ObservationIgnored private var storageController: MapStorageController?
     /// Topic to reveal once the canvas has its size (opened at a topic).
     @ObservationIgnored var pendingRevealID: UUID?
     private(set) var canUndo = false

@@ -104,8 +104,10 @@ final class LibraryMapStore: MapStore {
                 isLocked = snapshot.isEncrypted
                 modified = snapshot.modified
             }
-            return MapSummary(location: .library(id), title: title ?? LibraryTitle.lockedMap, modified: modified,
-                              isLocked: isLocked)
+            // Locked maps carry no plaintext title: their package name here.
+            let packageName = cache.packageURL(for: id).map(MapPaths.displayName(of:))
+            return MapSummary(location: .library(id), title: title ?? packageName ?? LibraryTitle.lockedMap,
+                              modified: modified, isLocked: isLocked)
         }.sorted { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }
     }
 

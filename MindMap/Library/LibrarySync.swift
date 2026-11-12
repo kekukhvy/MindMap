@@ -25,6 +25,8 @@ final class LibrarySync {
     var debounceInterval: Duration = .seconds(2)
     /// Maps added / removed / replaced by sync (UI refresh hook).
     var onLibraryChanged: (() -> Void)?
+    /// Any bookkeeping change (pending uploads, sent, fetched): status UI.
+    var onStateChanged: (() -> Void)?
     private(set) var lastError: String?
     /// Merge results by map (for a "merged changes" notice, WP14b).
     private(set) var lastConflicts: [UUID: [MapMerge.Conflict]] = [:]
@@ -61,6 +63,22 @@ final class LibrarySync {
             self?.debounceTasks[id] = nil
             self?.checkForLocalChanges(id)
         }
+        onStateChanged?()
+    }
+
+    /// Local changes of map `id` not uploaded yet (waiting for the
+    /// debounce, queued in the engine, or never synced).
+    func isPending(_ id: UUID) -> Bool {
+        if debounceTasks[id] != nil { return true }
+        if let engine, engine.pendingChanges.contains(where: { LibraryRecordID.parse($0.recordID)?.mapID == id }) {
+            return true
+        }
+        return state.maps[id]?.isOnServer != true
+    }
+
+    /// Anything waiting to be uploaded / deleted.
+    var hasPendingChanges: Bool {
+        !debounceTasks.isEmpty || !(engine?.pendingChanges.isEmpty ?? true)
     }
 
     func scanForLocalChanges() {
@@ -418,6 +436,8 @@ final class LibrarySync {
                 try writeRemotePackage(remote, payload: remotePayload, files: remoteFiles, as: id)
             }
             adopt(remote, payload: remotePayload, missing: missing, attachmentSystemFields: incoming.systemFields, for: id)
+            // Renamed elsewhere: the package (window title) follows.
+            if let title = cache.plainTitle(of: id) { _ = try? cache.renamePackage(of: id, toTitle: title) }
             finishIncoming(id, missing: missing)
         } catch {
             lastError = "“\(remote.title ?? LibraryTitle.lockedMap)” could not be updated: \(error.localizedDescription)"
@@ -541,6 +561,7 @@ final class LibrarySync {
 
     private func persist() {
         cache.saveState(state)
+        onStateChanged?()
     }
 }
 

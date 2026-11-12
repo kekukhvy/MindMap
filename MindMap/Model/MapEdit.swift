@@ -19,6 +19,8 @@ enum MapEdit: Equatable {
     case updateBoundary(Boundary)
     /// Replaces the Tasks panel state (position / collapsed).
     case setTaskPanel(TaskPanelState?)
+    /// Replaces the map title (library maps, WP14b).
+    case setTitle(String?)
 }
 
 extension MindMap {
@@ -89,6 +91,11 @@ extension MindMap {
             let old = taskPanel
             taskPanel = state
             return .setTaskPanel(old)
+
+        case let .setTitle(title):
+            let old = self.title
+            self.title = title
+            return .setTitle(old)
         }
     }
 

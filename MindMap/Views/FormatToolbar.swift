@@ -71,6 +71,7 @@ struct FormatToolbar: ToolbarContent {
                 #if os(iOS)
                 Divider()
                 Button("Gestures & Apple Pencil", systemImage: "hand.tap") { editor.isGestureHelpPresented = true }
+                Button("Settings…", systemImage: "gearshape") { editor.isSettingsPresented = true }
                 #endif
             }
         }

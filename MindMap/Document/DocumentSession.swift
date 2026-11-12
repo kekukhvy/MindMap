@@ -16,6 +16,10 @@ final class DocumentSession {
     var message: String?
     /// Presents the document picker (toolbar or File › Open…).
     var isImporting = false
+    /// Library browser sheet (File › Open from Library…).
+    var isShowingLibrary = false
+    /// Settings sheet.
+    var isShowingSettings = false
     /// Maps this window showed before following map links in place (no
     /// multi-window support): Back returns to the last one.
     private(set) var backStack: [MapBackEntry] = []
@@ -55,71 +59,13 @@ final class DocumentSession {
     #if DEBUG
     /// Debug-only registry for in-app tests.
     static var debugInstances: [WeakSession] = []
-    
-/// A map this window showed before following a map link in place.
-struct MapBackEntry: Equatable {
-    var url: URL
-    var title: String
-}
-
-/// User activity that creates a new iPad window for a map link.
-@MainActor
-enum MapLinkActivity {
-    static let type = "com.kekukh.MindMap.openMap"
-
-    static func make(for url: URL) -> NSUserActivity {
-        let activity = NSUserActivity(activityType: type)
-        var info: [String: Any] = ["path": url.path]
-        if let bookmark = try? SystemBookmarkCoder().bookmark(for: url) { info["bookmark"] = bookmark }
-        activity.userInfo = info
-        activity.targetContentIdentifier = DocumentWindow.sceneID
-        return activity
-    }
-
-    static func url(from activity: NSUserActivity) -> URL? {
-        guard activity.activityType == type else { return nil }
-        if let data = activity.userInfo?["bookmark"] as? Data, let url = try? SystemBookmarkCoder().resolve(data).url {
-            return url
-        }
-        return (activity.userInfo?["path"] as? String).map { URL(fileURLWithPath: $0) }
-    }
-}
-#endif
+    #endif
 
     init() {
         Self.sessions[ObjectIdentifier(self)] = WeakSession(session: self)
         #if DEBUG
         Self.debugInstances.append(WeakSession(session: self))
-        
-/// A map this window showed before following a map link in place.
-struct MapBackEntry: Equatable {
-    var url: URL
-    var title: String
-}
-
-/// User activity that creates a new iPad window for a map link.
-@MainActor
-enum MapLinkActivity {
-    static let type = "com.kekukh.MindMap.openMap"
-
-    static func make(for url: URL) -> NSUserActivity {
-        let activity = NSUserActivity(activityType: type)
-        var info: [String: Any] = ["path": url.path]
-        if let bookmark = try? SystemBookmarkCoder().bookmark(for: url) { info["bookmark"] = bookmark }
-        activity.userInfo = info
-        activity.targetContentIdentifier = DocumentWindow.sceneID
-        return activity
-    }
-
-    static func url(from activity: NSUserActivity) -> URL? {
-        guard activity.activityType == type else { return nil }
-        if let data = activity.userInfo?["bookmark"] as? Data, let url = try? SystemBookmarkCoder().resolve(data).url {
-            return url
-        }
-        return (activity.userInfo?["path"] as? String).map { URL(fileURLWithPath: $0) }
-    }
-}
-#endif
+        #endif
     }
 
     // MARK: Requests
@@ -148,6 +94,36 @@ enum MapLinkActivity {
 
     func open(_ url: URL) {
         enqueue { _ = await self.openNow(url, reportErrors: true) }
+    }
+
+    /// Opens `url` in this window once the queue gets to it.
+    func openAndWait(_ url: URL) async -> Bool {
+        await withCheckedContinuation { continuation in
+            enqueue { continuation.resume(returning: await self.openNow(url, reportErrors: true)) }
+        }
+    }
+
+    /// Writes pending changes now (before copying the package).
+    func saveNow() async -> Bool {
+        guard let document, document.hasUnsavedChanges else { return true }
+        return await document.save(to: document.fileURL, for: .forOverwriting)
+    }
+
+    /// The window showing the document at `url`.
+    static func session(showing url: URL) -> DocumentSession? {
+        openDocuments[LaunchEnvironment.key(url)].flatMap { sessions[$0]?.session }
+    }
+
+    /// The library map at `url` is being deleted: a window showing it
+    /// switches to a new map first.
+    static func closeLibraryMap(_ url: URL) async {
+        guard let session = session(showing: url) else { return }
+        await withCheckedContinuation { continuation in
+            session.enqueue {
+                await session.createNow()
+                continuation.resume()
+            }
+        }
     }
 
     func newMap() {
@@ -237,7 +213,7 @@ enum MapLinkActivity {
         enqueue { _ = await self.openNow(entry.url, reportErrors: true) }
     }
 
-    private func enqueue(_ operation: @escaping @MainActor () async -> Void) {
+    fileprivate func enqueue(_ operation: @escaping @MainActor () async -> Void) {
         pending += 1
         let previous = queue
         queue = Task { @MainActor in
@@ -288,11 +264,18 @@ enum MapLinkActivity {
         return true
     }
 
+    /// New map per storage mode (WP14b): library map, else a new file.
     private func createNow() async {
         isWorking = true
         defer { isWorking = false }
         await closeCurrent()
         do {
+            if case let .library(url) = try MapCreation.prepareNewMap() {
+                let created = MindMapUIDocument(fileURL: url)
+                guard await created.open() else { throw CocoaError(.fileReadUnknown) }
+                await install(created, scopedURL: nil, blank: true)
+                return
+            }
             let url = try await DocumentLocations.newDocumentURL()
             let created = MindMapUIDocument(fileURL: url)
             guard await created.save(to: url, for: .forCreating) else { throw CocoaError(.fileWriteUnknown) }
@@ -343,7 +326,13 @@ enum MapLinkActivity {
         windowUndoManager?.removeAllActions()
         current.undoManager = UndoManager()
         _ = await current.close()
-        if discard { await Self.removeItem(at: url) }
+        if discard {
+            if let id = LibraryService.shared.libraryMapID(of: url) {
+                try? LibraryService.shared.store.deleteMap(.library(id))
+            } else {
+                await Self.removeItem(at: url)
+            }
+        }
         scopedURL?.stopAccessingSecurityScopedResource()
         scopedURL = nil
     }

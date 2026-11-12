@@ -3,7 +3,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// One iPad window: the editor of its `DocumentSession` document plus the
-/// Documents menu (New Map, Open…, Rename…). Lands directly in the editor.
+/// Documents menu (New Map, Open…, Open from Library…, Rename…, store
+/// actions, Settings…). Library maps open here like files. Lands directly
+/// in the editor.
 struct DocumentWindow: View {
     static let sceneID = "map"
 
@@ -11,14 +13,13 @@ struct DocumentWindow: View {
     @SceneStorage("MindMap.documentBookmark") private var sceneBookmark: Data?
     @Environment(\.undoManager) private var undoManager
     @Environment(\.scenePhase) private var scenePhase
-    @State private var isRenaming = false
-    @State private var newName = ""
 
     var body: some View {
         NavigationStack {
             content
                 .navigationTitle(session.title)
                 .navigationBarTitleDisplayMode(.inline)
+                .modifier(HiddenToolbarTitle())
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) { documentsMenu }
                     if let back = session.backStack.last {
@@ -43,15 +44,26 @@ struct DocumentWindow: View {
         )) {
             Button("OK", role: .cancel) {}
         }
-        .alert("Rename Map", isPresented: $isRenaming) {
-            TextField("Name", text: $newName)
-            Button("Rename") { session.rename(to: newName) }
-            Button("Cancel", role: .cancel) {}
+        .sheet(isPresented: $session.isShowingLibrary) {
+            LibraryBrowserView(onOpen: { url in
+                session.isShowingLibrary = false
+                session.open(url)
+            }, onNewMap: {
+                session.isShowingLibrary = false
+                session.newMap()
+            }, onCancel: { session.isShowingLibrary = false })
+        }
+        .sheet(isPresented: $session.isShowingSettings) {
+            SettingsView { session.isShowingSettings = false }
         }
         .onOpenURL { url in session.open(url) }
         #if DEBUG
         .onReceive(NotificationCenter.default.publisher(for: LibraryDebugHook.openRequest)) { note in
             if let url = note.object as? URL { session.open(url) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: LibraryDebugHook.presentRequest)) { note in
+            if note.object as? String == "settings" { session.isShowingSettings = true }
+            if note.object as? String == "browser" { session.isShowingLibrary = true }
         }
         #endif
         .task {
@@ -86,6 +98,7 @@ struct DocumentWindow: View {
             } actions: {
                 Button("New Map") { session.newMap() }
                 Button("Open…") { session.isImporting = true }
+                Button("Open from Library…") { session.isShowingLibrary = true }
             }
         }
     }
@@ -94,13 +107,28 @@ struct DocumentWindow: View {
         Menu("Documents", systemImage: "folder") {
             Button("New Map", systemImage: "doc.badge.plus") { session.newMap() }
             Button("Open…", systemImage: "folder") { session.isImporting = true }
-            Button("Rename…", systemImage: "pencil") {
-                newName = session.title
-                isRenaming = true
+            Button("Open from Library…", systemImage: "icloud") { session.isShowingLibrary = true }
+            Divider()
+            if let document = session.document {
+                // Library: Duplicate / Export as File…; file: Import / Move to Library, Duplicate.
+                MapStorageMenuItems(model: document.model, documentURL: document.fileURL)
             }
-            .disabled(session.document == nil)
             Divider()
             MapLockMenuItems(model: session.document?.model)
+            Divider()
+            Button("Settings…", systemImage: "gearshape") { session.isShowingSettings = true }
+        }
+    }
+}
+
+/// The store badge shows the map name in the toolbar (title menu); the
+/// navigation title only names the window (app switcher) on iPadOS 18+.
+private struct HiddenToolbarTitle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.toolbar(removing: .title)
+        } else {
+            content
         }
     }
 }
@@ -141,8 +169,9 @@ extension FocusedValues {
     }
 }
 
-/// File menu on the iPad menu bar / hardware keyboard: New Map (Cmd+N),
-/// New Window (Opt+Cmd+N), Open… (Cmd+O) for the focused window.
+/// File menu on the iPad menu bar / hardware keyboard: New Map (Cmd+N,
+/// library or file per Settings ▸ Storage), New Window (Opt+Cmd+N), Open…
+/// (Cmd+O), Open from Library… (Shift+Cmd+O) for the focused window.
 struct DocumentCommands: Commands {
     @FocusedValue(\.documentSession) private var session
 
@@ -154,6 +183,9 @@ struct DocumentCommands: Commands {
             NewWindowButton()
             Button("Open…") { session?.isImporting = true }
                 .keyboardShortcut("o", modifiers: .command)
+                .disabled(session == nil)
+            Button("Open from Library…") { session?.isShowingLibrary = true }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
                 .disabled(session == nil)
         }
     }

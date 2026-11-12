@@ -1,12 +1,11 @@
 import SwiftUI
 
 /// Map lock items (File menu on macOS / iPad menu bar, iPad documents
-/// menu): Lock Map… / Lock Now / Remove Map Lock… / Unlock Map, and the
-/// Auto-Lock interval. They only post a `LockRequest`; the document's
-/// `MapLockGate` performs it.
+/// menu): Lock Map… / Lock Now / Remove Map Lock… / Unlock Map (the
+/// Auto-Lock interval is in Settings ▸ Lock). They only post a
+/// `LockRequest`; the document's `MapLockGate` performs it.
 struct MapLockMenuItems: View {
     let model: MindMapModel?
-    @AppStorage(LockSettings.autoLockKey) private var autoLockMinutes = LockSettings.defaultMinutes
 
     var body: some View {
         if let lock = model?.lock, lock.isMapLocked {
@@ -20,15 +19,6 @@ struct MapLockMenuItems: View {
         } else {
             Button("Lock Map…", systemImage: "lock") { model?.lock.request = .lockMap }
                 .disabled(model == nil)
-        }
-        Menu("Auto-Lock", systemImage: "timer") {
-            Picker("Auto-Lock", selection: $autoLockMinutes) {
-                ForEach(LockSettings.choices, id: \.self) { minutes in
-                    Text(LockSettings.title(minutes: minutes)).tag(minutes)
-                }
-            }
-            .pickerStyle(.inline)
-            .labelsHidden()
         }
     }
 }

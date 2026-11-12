@@ -290,6 +290,15 @@ final class MindMapModel {
         return perform([.setTheme(theme)], actionName: "Change Theme", undoManager: undoManager)
     }
 
+    /// Renames a library map (WP14b): one "Rename Map" step; blank = unset.
+    @discardableResult
+    func setMapTitle(_ title: String?, undoManager: UndoManager?) -> Bool {
+        let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = trimmed?.isEmpty == false ? trimmed : nil
+        guard value != map.title else { return false }
+        return perform([.setTitle(value)], actionName: "Rename Map", undoManager: undoManager)
+    }
+
     // MARK: Relationships
 
     @discardableResult

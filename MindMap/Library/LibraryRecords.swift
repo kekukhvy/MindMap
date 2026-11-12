@@ -67,6 +67,12 @@ enum LibraryRecordID {
     enum Parsed: Equatable {
         case map(UUID)
         case attachment(map: UUID, fileName: String)
+
+        var mapID: UUID {
+            switch self {
+            case let .map(id), let .attachment(id, _): return id
+            }
+        }
     }
 
     static func parse(_ recordID: CKRecord.ID) -> Parsed? {
@@ -156,11 +162,17 @@ struct LibraryPackageSnapshot {
 enum LibraryTitle {
     static let lockedMap = "Locked Map"
 
-    /// First line of the central topic, trimmed, ≤ 100 characters.
+    /// The map's title (WP14b), else the first line of the central topic;
+    /// trimmed, ≤ 100 characters.
     static func title(of map: MindMap) -> String {
-        let line = map.root.text.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
-        let trimmed = String(line.trimmingCharacters(in: .whitespaces).prefix(100))
+        if let title = map.title.map(clean), !title.isEmpty { return title }
+        let trimmed = clean(map.root.text)
         return trimmed.isEmpty ? UntitledName.base : trimmed
+    }
+
+    private static func clean(_ text: String) -> String {
+        let line = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+        return String(line.trimmingCharacters(in: .whitespaces).prefix(100))
     }
 }
 

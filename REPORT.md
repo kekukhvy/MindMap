@@ -455,6 +455,25 @@ Stage 2 (вложения) завершён и ждёт вашей провер�
 
 **Проверить вручную (после подписи):** отладочный хук `MINDMAP_DEBUG_LIBRARY=create` создаёт карту «Library Test» и пишет отчёт в `<container>/tmp/library-report.txt`; на втором устройстве карта должна появиться в `Application Support/MindMap/Library/Maps`. Обязательно проверить синхронизацию ключей замков WP12 между Mac и iPad.
 
+## WP14b — режимы хранения: интерфейс (2026-11-12)
+- **Настройки** (Mac: MindMap ▸ Settings… ⌘, ; iPad: «…» ▸ Settings… или папка ▸ Settings…). Раздел «Storage»: «iCloud Sync (works without iCloud Drive)» / «Files», строка состояния (Synced · Syncing… · Offline · iCloud unavailable — причина) и кнопка «How to fix», «Move Maps…» (файлы → библиотека с отправкой файлов в Корзину по желанию; вся библиотека → папка `.mindmap` с удалением из библиотеки по желанию). Раздел «Mirror»: «Mirror library to folder» + выбор папки — каждая карта библиотеки пишется простой заметкой `.md` (заголовки, вложенные списки, задачи `- [ ]`, ссылки, текст заметок) для Obsidian, только в одну сторону; по желанию ещё копии `.mindmap`. Заблокированные карты и заметки никогда не пишутся открытым текстом. Свои файлы в папке программа не трогает. Раздел «Lock»: Auto-Lock (перенесён сюда из меню).
+- **New Map (⌘N)** создаёт карту там, где выбрано: в библиотеке («Untitled», «Untitled 2», …) или обычным файлом.
+- **У карт библиотеки есть название** (поле `title` в map.json, синхронизируется, сливается при конфликте). Переименование: Mac — стандартное File ▸ Rename… или клик по заголовку окна; iPad — меню-заголовок в панели (иконка облака + имя) ▸ Rename….
+- **Значок хранилища** в панели: облако для карты библиотеки (вид облака показывает состояние синхронизации), документ для файла. Его меню: где лежит карта и действия — Rename…, Duplicate, Export as File… (библиотека) или Import to Library, Move to Library…, Duplicate (файл). То же в меню File (Mac) и в меню папки (iPad).
+- **Move to Library…** сначала спрашивает: «Move and Trash File» / «Move and Keep File». Карта открывается из библиотеки, файл закрывается.
+- **File ▸ Open from Library… (⇧⌘O)**: список карт библиотеки — название, дата, замок; поиск, сортировка (дата / имя), удаление с подтверждением, New Map. На Mac это отдельное окно, на iPad — лист. WP13 сделает из него экран Welcome.
+- File ▸ Open… по-прежнему открывает любые `.mindmap` в обоих режимах. На iPad карты библиотеки открываются в том же окне, как файлы.
+- Тесты: 12 новых (StorageModeTests, LibraryListTests, LibraryMirrorTests, StorageEventTests — настоящее нажатие ⌘N в окне карты на Mac создаёт и открывает карту библиотеки). Всего macOS 406 и iPad 379, все зелёные, 0 ошибок и предупреждений. Снимки: `Tools/preview/settings-mac.png`, `library-mac.png`, `settings-ipad.png`, `library-ipad.png`, `library-map-ipad.png`.
+
+**Проверить вручную:**
+1. Mac: Settings → iCloud Sync; ⌘N — новая карта «Untitled» с облаком в панели. File ▸ Rename… → «План» — заголовок окна и список в ⇧⌘O показывают «План».
+2. Открыть обычный файл `.mindmap` → значок документа → Move to Library… → Move and Keep File: карта открылась из библиотеки, файл на месте.
+3. Карта библиотеки → Export as File… → сохранить и открыть файл через File ▸ Open….
+4. Settings → Mirror → выбрать папку хранилища Obsidian: через пару секунд там появятся `.md`. Заблокировать карту — её `.md` исчезнет.
+5. ⇧⌘O: поиск, удаление карты (подтверждение).
+6. iPad: меню-заголовок (облако + имя) и меню папки — те же действия; «…» ▸ Settings…; File ▸ Open from Library… (⇧⌘O с клавиатурой).
+7. После подписи (см. WP14a): состояние «Synced»/«Syncing…» в настройках и на значке; переименование на одном устройстве меняет имя на другом.
+
 ## Сборка и запуск
 Xcode установлен, но не выбран — всегда указывать `DEVELOPER_DIR`:
 ```sh
@@ -463,4 +482,4 @@ Tools/xcb/xcb.sh -project MindMap.xcodeproj -scheme MindMap -destination 'platfo
 Tools/xcb/xcb.sh -project MindMap.xcodeproj -scheme MindMap -destination 'generic/platform=iOS Simulator' build
 Tools/xcb/xcb.sh -project MindMap.xcodeproj -scheme MindMap -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5),OS=latest' test
 ```
-Запуск: открыть `MindMap.xcodeproj` в Xcode, схема `MindMap`, выбрать «My Mac» или iPad и нажать Run. Подпись — команда YS72WYPK4V (нужен Apple ID в Xcode → Settings → Accounts). На Mac новая карта создаётся через File → New, на iPad — через кнопку с папкой → New Map.
+Запуск: открыть `MindMap.xcodeproj` в Xcode, схема `MindMap`, выбрать «My Mac» или iPad и нажать Run. Подпись — команда YS72WYPK4V (нужен Apple ID в Xcode → Settings → Accounts). Новая карта — File ▸ New Map (⌘N) на Mac или кнопка с папкой ▸ New Map на iPad; она создаётся в библиотеке или файлом в зависимости от Settings ▸ Storage.

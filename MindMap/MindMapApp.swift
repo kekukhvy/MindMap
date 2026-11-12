@@ -21,10 +21,22 @@ struct MindMapApp: App {
             }
         }
         .commands {
+            StorageCommands()
             MindMapCommands()
             LockCommands()
         }
         // Attachments open in AppKit windows above their map (`AttachmentWindows`).
+
+        // File ▸ Open from Library… (WP13 turns it into the Welcome window).
+        Window("Map Library", id: LibraryWindow.id) {
+            LibraryWindow()
+        }
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 520, height: 480)
+
+        Settings {
+            SettingsView()
+        }
     }
     #else
     var body: some Scene {

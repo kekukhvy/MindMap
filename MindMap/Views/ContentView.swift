@@ -30,7 +30,11 @@ struct ContentView: View {
     var body: some View {
         CanvasView(editor: editor)
             .ignoresSafeArea(.container, edges: .bottom)
-            .toolbar { FormatToolbar(editor: editor) }
+            .toolbar {
+                ToolbarItem(placement: Self.badgePlacement) { StoreBadge(storage: editor.storage) }
+                FormatToolbar(editor: editor)
+            }
+            .modifier(MapStorageModifier(storage: editor.storage))
             #if os(iOS)
             .toolbarRole(.editor)
             .overlay(alignment: .bottomLeading) { OutlineCornerButton(editor: editor) }
@@ -59,7 +63,10 @@ struct ContentView: View {
                 Color.clear.fileImporter(isPresented: $editor.isMapLocatorPresented,
                                          allowedContentTypes: [.mindMap]) { result in editor.finishLocateMap(result) }
             }
-            .onChange(of: documentURL, initial: true) { _, url in editor.documentURL = url }
+            .onChange(of: documentURL, initial: true) { old, url in
+                editor.documentURL = url
+                if old != url { editor.storage.documentURLDidChange(to: url) }
+            }
             .onChange(of: MapRevealCenter.shared.pending(for: editor.documentURL), initial: true) { _, request in
                 guard request != nil, let url = editor.documentURL,
                       let topicID = MapRevealCenter.shared.take(for: url) else { return }
@@ -75,6 +82,9 @@ struct ContentView: View {
                 Text(editor.linkMessage ?? "")
             }
             #if os(iOS)
+            .sheet(isPresented: $editor.isSettingsPresented) {
+                SettingsView { editor.isSettingsPresented = false }
+            }
             .sheet(item: presentedAttachment(fullScreen: false)) { request in
                 AttachmentSheet(model: model, attachmentID: request.attachmentID, undoManager: undoManager)
             }
@@ -124,6 +134,12 @@ struct ContentView: View {
 }
 
 extension ContentView {
+    #if os(iOS)
+    private static let badgePlacement = ToolbarItemPlacement.topBarLeading
+    #else
+    private static let badgePlacement = ToolbarItemPlacement.navigation
+    #endif
+
     /// macOS: a new tab of this editor's window (or the open map's tab).
     private var defaultMapOpener: MapOpener? {
         #if os(macOS)

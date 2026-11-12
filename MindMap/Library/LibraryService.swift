@@ -1,5 +1,6 @@
 import CloudKit
 import Foundation
+import Network
 import Observation
 #if os(macOS)
 import AppKit
@@ -21,19 +22,82 @@ final class LibraryService {
     let store: LibraryMapStore
     let settings: StorageSettings
     private(set) var availability: LibraryAvailability = .checking
+    /// Network reachable (Offline status).
+    private(set) var isOnline = true
+    /// Bumped on every library / sync change (lists and badges observe it).
+    private(set) var revision = 0
+    /// Plain `.md` copies of the library for Obsidian (Settings).
+    let mirror: LibraryMirror
 
     @ObservationIgnored private let accounts: LibraryAccountProviding
     @ObservationIgnored private var engine: LibrarySyncEngine?
     @ObservationIgnored private var monitor: LibraryChangeMonitor?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var started = false
+    @ObservationIgnored private var pathMonitor: NWPathMonitor?
+    @ObservationIgnored private var revisionScheduled = false
 
     init(cache: LibraryCache = .shared, accounts: LibraryAccountProviding = CloudKitAccountProvider(),
-         settings: StorageSettings? = nil) {
+         settings: StorageSettings? = nil, mirrorSettings: LibraryMirrorSettings? = nil) {
         sync = LibrarySync(cache: cache)
         store = LibraryMapStore(sync: sync)
-        self.settings = settings ?? StorageSettings()
+        self.settings = settings ?? StorageSettings(defaults: Self.defaults)
         self.accounts = accounts
+        mirror = LibraryMirror(store: store, settings: mirrorSettings ?? LibraryMirrorSettings(defaults: Self.defaults))
+        sync.onStateChanged = { [weak self] in self?.libraryDidChange() }
+        sync.onLibraryChanged = { [weak self] in self?.libraryDidChange() }
+    }
+
+    /// The app's defaults; a separate suite in the unit-test host (the test
+    /// host shares the app's container with the real Debug app).
+    static let defaults: UserDefaults = LaunchEnvironment.isTesting
+        ? UserDefaults(suiteName: "com.kekukh.MindMap.tests") ?? .standard
+        : .standard
+
+    /// Library status (Settings line, badges).
+    var status: LibrarySyncStatus {
+        _ = revision
+        return LibrarySyncStatus.make(availability: availability, isOnline: isOnline,
+                                      hasPendingChanges: sync.hasPendingChanges)
+    }
+
+    /// Status of one library map (its window badge).
+    func status(of id: UUID) -> LibrarySyncStatus {
+        _ = revision
+        return LibrarySyncStatus.make(availability: availability, isOnline: isOnline,
+                                      hasPendingChanges: sync.isPending(id))
+    }
+
+    /// The library map whose package is `url` (nil = a file).
+    func libraryMapID(of url: URL?) -> UUID? {
+        url.flatMap { sync.cache.mapID(containing: $0) }
+    }
+
+    /// Coalesces change callbacks into one `revision` bump per run loop
+    /// turn; the mirror follows (debounced there).
+    private func libraryDidChange() {
+        guard !revisionScheduled else { return }
+        revisionScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            revisionScheduled = false
+            revision += 1
+            mirror.scheduleUpdate()
+        }
+    }
+
+    private func startNetworkMonitor() {
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            let online = path.status == .satisfied
+            Task { @MainActor in
+                guard let self, self.isOnline != online else { return }
+                self.isOnline = online
+                self.revision += 1
+            }
+        }
+        monitor.start(queue: DispatchQueue(label: "MindMap.network"))
+        pathMonitor = monitor
     }
 
     /// Launch: local bookkeeping always; CloudKit when available.
@@ -46,6 +110,8 @@ final class LibraryService {
         monitor.start()
         self.monitor = monitor
         observeActivation()
+        startNetworkMonitor()
+        mirror.scheduleUpdate()
         await refreshAvailability()
     }
 
@@ -53,6 +119,7 @@ final class LibraryService {
     func refreshAvailability() async {
         let availability = await accounts.availability()
         self.availability = availability
+        revision += 1
         settings.isLibraryAvailable = availability.isAvailable
         if availability.isAvailable, engine == nil, let container = accounts.makeContainer() {
             let engine = CloudKitSyncEngine(database: container.privateCloudDatabase, sync: sync)
@@ -157,10 +224,12 @@ final class LibraryChangeMonitor: NSObject, NSFilePresenter, @unchecked Sendable
 }
 
 #if DEBUG
-/// DEBUG launch hook (no UI before WP14b): `MINDMAP_DEBUG_LIBRARY=status`
-/// writes `<tmp>/library-report.txt` (availability, storage mode, maps,
-/// pending changes); `=create` also creates a library map "Library Test"
-/// and opens it in the normal editor (new tab / window).
+/// DEBUG launch hook: `MINDMAP_DEBUG_LIBRARY=status` writes
+/// `<tmp>/library-report.txt` (availability, storage mode, maps, pending
+/// changes); `=create` also creates a library map "Library Test" and opens
+/// it in the normal editor (new tab / window); `=settings` / `=browser`
+/// (iPad screenshots) seed sample library maps, open one and show the
+/// Settings sheet / library sheet.
 @MainActor
 enum LibraryDebugHook {
     static func runIfRequested(_ service: LibraryService) {
@@ -168,6 +237,16 @@ enum LibraryDebugHook {
         if mode == "create", let summary = try? service.store.createMap(titled: "Library Test"),
            let url = service.store.packageURL(for: summary.location) {
             open(url)
+        }
+        if mode == "settings" || mode == "browser" {
+            seedSamples(service)
+            if let first = service.store.maps().first(where: { $0.title == "Product Roadmap" }),
+               let url = service.store.packageURL(for: first.location) {
+                open(url)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                NotificationCenter.default.post(name: presentRequest, object: mode)
+            }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { writeReport(service) }
     }
@@ -182,6 +261,34 @@ enum LibraryDebugHook {
 
     /// iPad: the window's `DocumentSession` opens the URL (DocumentWindow).
     static let openRequest = Notification.Name("MindMapLibraryDebugOpen")
+    /// iPad: show the Settings ("settings") / library ("browser") sheet.
+    static let presentRequest = Notification.Name("MindMapLibraryDebugPresent")
+
+    /// Sample maps for screenshots (once per cache).
+    private static func seedSamples(_ service: LibraryService) {
+        guard !service.store.maps().contains(where: { $0.title == "Product Roadmap" }) else { return }
+        let samples: [(String, [String], Double)] = [
+            ("Product Roadmap", ["Research", "Design", "Launch"], -5),
+            ("Trip to Lisbon", ["Flights", "Hotel", "Food"], -90),
+            ("Reading List", ["Fiction", "Science"], -60 * 30),
+        ]
+        for (title, topics, minutes) in samples {
+            let map = MindMap(root: Node(text: title, children: topics.map { Node(text: $0) }), title: title)
+            guard let summary = try? service.store.importMap(map),
+                  let url = service.store.packageURL(for: summary.location) else { continue }
+            try? FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: minutes * 60)],
+                                                   ofItemAtPath: url.appendingPathComponent("map.json").path)
+            if case let .library(id) = summary.location { service.sync.checkForLocalChanges(id) }
+        }
+        // A locked map (random key: shows the lock icon only).
+        if let sealed = try? LockedPackage.seal(map: MindMap(root: Node(text: "Finances")), attachments: [:],
+                                                header: LockHeader(keyID: UUID()), key: LockCrypto.newKey(),
+                                                cache: nil) {
+            let id = UUID()
+            _ = try? service.sync.cache.writePackage(sealed, for: id, title: "Finances")
+            service.sync.checkForLocalChanges(id)
+        }
+    }
 
     static func writeReport(_ service: LibraryService) {
         var lines = [
