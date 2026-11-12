@@ -52,14 +52,17 @@ struct DrawingWindowEventTests {
         UserDefaults.standard.set(MacDrawingTool.pen.rawValue, forKey: "MindMap.macDrawingTool")
         var topic = Node(text: "Topic with sketch")
         let sketch = Attachment(kind: .drawing, title: "Whiteboard")
+        let plain = MindMap(root: Node(text: "Central", layoutStyle: .rightMap, children: [topic]))
         topic.attachments = [sketch]
         let map = MindMap(root: Node(text: "Central", layoutStyle: .rightMap, children: [topic]))
-        let harness = try await CanvasEventHarness(realDocumentWith: map)
+        let harness = try await CanvasEventHarness(realDocumentWith: plain)
         var closed = false
         defer { if !closed { harness.close() } }
         let model = harness.editor.model
         let sample = DebugDrawing.sample()
+        // Content first (topics show icons only for non-empty drawings), as when a file loads.
         model.attachmentStore.write(sample.dataRepresentation(), to: sketch.fileName)
+        model.debugReplaceMap(map)
         try await harness.wait(300)
 
         let frame = harness.screenFrame(of: topic.id)

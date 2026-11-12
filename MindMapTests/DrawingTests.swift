@@ -129,13 +129,18 @@ struct DrawingModelTests {
         let sketch = try #require(editor.firstDrawing(of: topic.id))
         #expect(editor.presentedAttachment?.attachmentID == sketch.id)
         #expect(editor.presentedAttachment?.fullScreen == true)
-        #expect(editor.commandState.selectionHasDrawing)
+        #expect(editor.model.isDraft(sketch.id))
         editor.presentedAttachment = nil
         #expect(editor.perform(.handwrittenNote))
         #expect(editor.presentedAttachment?.attachmentID == sketch.id)
+        #expect(editor.model.drafts(of: topic.id).count == 1)
+        #expect(editor.model.setAttachmentContent(DebugDrawing.sample().dataRepresentation(), for: sketch.id,
+                                                  actionName: "Draw", coalescing: false, undoManager: editor.undoManager))
+        #expect(editor.commandState.selectionHasDrawing)
         #expect(editor.attachments(of: topic.id).count == 1)
         editor.addDrawing(to: topic.id)
-        #expect(editor.attachments(of: topic.id).count == 2)
+        #expect(editor.attachments(of: topic.id).count == 1)
+        #expect(editor.model.drafts(of: topic.id).count == 1)
         // Markdown notes still open as a page sheet.
         editor.addNote(to: topic.id)
         #expect(editor.presentedAttachment?.fullScreen == false)

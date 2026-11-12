@@ -54,8 +54,9 @@ struct MapScene {
 
     /// - Parameter editing: node being edited and its draft text (sizes follow the draft).
     /// - Parameter now: "today" for due chips (overdue / Today / Tomorrow).
+    /// - Parameter hidesAttachment: attachments without an icon (empty notes).
     static func build(map: MindMap, measurer: NodeMeasurer, editing: (id: UUID, text: String)?,
-                      now: Date = Date()) -> MapScene {
+                      now: Date = Date(), hidesAttachment: (Attachment) -> Bool = { _ in false }) -> MapScene {
         let colors = ColorResolver.effectiveColors(in: map)
         var infos: [UUID: NodeInfo] = [:]
         var order: [UUID] = []
@@ -67,7 +68,8 @@ struct MapScene {
                                       hiddenCount: node.isCollapsed ? node.subtreeCount - 1 : 0,
                                       hasChildren: !node.children.isEmpty, isCollapsed: node.isCollapsed,
                                       isTreeRoot: isTreeRoot, badgeEdge: .trailing,
-                                      attachments: node.attachments.map(AttachmentSummary.init),
+                                      attachments: node.attachments.filter { !hidesAttachment($0) }
+                                          .map(AttachmentSummary.init),
                                       link: node.link == nil ? nil : LinkSummary(of: node, in: map),
                                       task: node.task.map {
                                           TaskSummary($0, now: now, measurer: measurer, fontSize: appearance.fontSize)

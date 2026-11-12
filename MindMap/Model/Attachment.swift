@@ -75,12 +75,6 @@ struct Attachment: Identifiable, Equatable, Codable {
 
 /// Text helpers for Markdown notes.
 enum MarkdownNote {
-    /// Content of a brand-new note: "# <topic text>" then free text.
-    static func initialContent(topicText: String) -> String {
-        let heading = topicText.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
-        return heading.isEmpty ? "" : "# \(heading)\n\n"
-    }
-
     static func data(_ text: String) -> Data { Data(text.utf8) }
 
     static func text(_ data: Data?) -> String {

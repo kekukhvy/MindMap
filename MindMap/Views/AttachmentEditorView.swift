@@ -35,9 +35,30 @@ struct AttachmentEditorView: View {
     }
 }
 
+/// Toolbar trash of an attachment editor: "Delete Note" / "Delete
+/// Handwritten Note" / "Delete File" (one undo step), then closes it.
+struct DeleteAttachmentButton: View {
+    let model: MindMapModel
+    let attachmentID: UUID
+    let undoManager: UndoManager?
+    let close: () -> Void
+
+    var body: some View {
+        let label = MindMapModel.deleteActionName(for: model.attachment(attachmentID)?.kind)
+        Button(label, systemImage: "trash", role: .destructive) {
+            model.deleteAttachment(attachmentID, undoManager: undoManager)
+            close()
+        }
+        .help(label)
+        .disabled(model.attachment(attachmentID) == nil)
+    }
+}
+
 #if os(iOS)
-/// iPad: resizable sheet (medium / large detents, drag indicator) with a
-/// Done button; handwriting is a full-screen cover with the same Done.
+/// iPad: resizable sheet (medium / large detents, drag indicator) with
+/// Delete + Done; handwriting is a full-screen cover with the same buttons.
+/// When it goes away, a note / drawing left empty is removed
+/// (`MindMapModel.discardIfEmpty`).
 struct AttachmentSheet: View {
     let model: MindMapModel
     let attachmentID: UUID
@@ -50,8 +71,15 @@ struct AttachmentSheet: View {
     var body: some View {
         NavigationStack {
             AttachmentEditorView(model: model, attachmentID: attachmentID, undoManager: undoManager)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(uiColor: .systemBackground))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        DeleteAttachmentButton(model: model, attachmentID: attachmentID, undoManager: undoManager) {
+                            dismiss()
+                        }
+                    }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") { dismiss() }
                     }
@@ -61,6 +89,11 @@ struct AttachmentSheet: View {
         .presentationDragIndicator(fullScreen ? .hidden : .visible)
         .presentationContentInteraction(.scrolls)
         .modifier(PageSizedSheet())
+        .onDisappear {
+            // After the editor flushed pending strokes / text.
+            let model = model, id = attachmentID, undoManager = undoManager
+            DispatchQueue.main.async { model.discardIfEmpty(id, undoManager: undoManager) }
+        }
     }
 }
 
@@ -77,56 +110,67 @@ private struct PageSizedSheet: ViewModifier {
 #endif
 
 #if os(macOS)
-/// macOS: one window per (document, attachment). The document is looked up
-/// in `OpenDocumentRegistry`; a window restored after relaunch (or whose
-/// map was closed) shows a placeholder, and closes once its map closes.
-struct AttachmentWindow: View {
-    let windowID: AttachmentWindowID?
+/// macOS: content of one attachment window (`AttachmentWindows`). The
+/// document is looked up in `OpenDocumentRegistry`; the editor fills the
+/// whole window. Toolbar: Delete (trash) and Done (Esc); the window closes
+/// itself once its map closes.
+struct AttachmentWindowContent: View {
+    let windowID: AttachmentWindowID
+    let close: () -> Void
+    /// Window title = attachment title (kept in sync on rename).
+    let setTitle: (String) -> Void
     @State private var registry = OpenDocumentRegistry.shared
     @State private var wasConnected = false
-    @Environment(\.dismiss) private var dismiss
 
     private var entry: OpenDocumentRegistry.Entry? {
-        windowID.flatMap { registry.entry(for: $0.documentID) }
+        registry.entry(for: windowID.documentID)
     }
 
-    private var kind: AttachmentKind? {
-        windowID.flatMap { entry?.model?.attachment($0.attachmentID)?.kind }
+    private var title: String {
+        guard let attachment = entry?.model?.attachment(windowID.attachmentID) else { return "Note" }
+        return attachment.title.isEmpty ? attachment.kind.displayName : attachment.title
     }
 
     var body: some View {
         Group {
-            if let windowID, let entry, let model = entry.model {
+            if let entry, let model = entry.model {
                 AttachmentEditorView(model: model, attachmentID: windowID.attachmentID,
                                      undoManager: entry.undoManager)
+                    .toolbar {
+                        ToolbarItem(placement: .navigation) {
+                            DeleteAttachmentButton(model: model, attachmentID: windowID.attachmentID,
+                                                   undoManager: entry.undoManager, close: close)
+                        }
+                    }
             } else {
                 ContentUnavailableView {
                     Label("Map Not Open", systemImage: "doc.questionmark")
                 } description: {
                     Text("Open its map and the note again to edit it.")
                 } actions: {
-                    Button("Close") { dismiss() }
+                    Button("Close", action: close)
                 }
                 .navigationTitle("Note")
             }
         }
-        .frame(minWidth: AttachmentWindowChrome.minSize.width, idealWidth: 640,
-               minHeight: AttachmentWindowChrome.minSize.height, idealHeight: 720)
+        .frame(minWidth: AttachmentWindowChrome.minSize.width, maxWidth: .infinity,
+               minHeight: AttachmentWindowChrome.minSize.height, maxHeight: .infinity)
+        .background(Color(nsColor: .textBackgroundColor))
         .toolbar {
             // Visible close button; Esc closes too.
             ToolbarItem(placement: .confirmationAction) {
-                Button("Done") { dismiss() }
+                Button("Done", action: close)
                     .keyboardShortcut(.cancelAction)
                     .help("Close this window (Esc)")
             }
         }
-        .background(AttachmentWindowConfigurator(kind: kind))
+        .onChange(of: title, initial: true) { _, title in setTitle(title) }
         .onAppear { wasConnected = entry != nil }
         .onChange(of: entry != nil) { _, connected in
             if connected {
                 wasConnected = true
             } else if wasConnected {
-                dismiss()
+                AttachmentWindows.shared.closeWindows(of: windowID.documentID)
             }
         }
     }

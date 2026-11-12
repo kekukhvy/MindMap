@@ -14,13 +14,7 @@ struct MindMapApp: App {
             ContentView(model: file.document.model, documentURL: file.fileURL)
         }
         .commands { MindMapCommands() }
-        // Attachments open in their own window, keyed by document + attachment.
-        WindowGroup("Note", for: AttachmentWindowID.self) { $windowID in
-            AttachmentWindow(windowID: windowID)
-        }
-        .defaultSize(width: 640, height: 720)
-        .windowResizability(.contentMinSize)
-        .commandsRemoved()
+        // Attachments open in AppKit windows above their map (`AttachmentWindows`).
     }
     #else
     var body: some Scene {

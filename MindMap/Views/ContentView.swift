@@ -11,9 +11,6 @@ struct ContentView: View {
     var mapOpener: MapOpener?
     @State private var editor: EditorController
     @Environment(\.undoManager) private var undoManager
-    #if os(macOS)
-    @Environment(\.openWindow) private var openWindow
-    #endif
 
     init(model: MindMapModel, documentURL: URL? = nil, mapOpener: MapOpener? = nil) {
         self.model = model
@@ -89,7 +86,10 @@ struct ContentView: View {
             .onChange(of: editor.presentedAttachment) { _, request in
                 guard let request else { return }
                 editor.presentedAttachment = nil
-                openWindow(value: AttachmentWindowID(documentID: model.documentID, attachmentID: request.attachmentID))
+                AttachmentWindows.shared.open(AttachmentWindowID(documentID: model.documentID,
+                                                                 attachmentID: request.attachmentID),
+                                              kind: model.attachment(request.attachmentID)?.kind,
+                                              over: editor.hostWindow)
             }
             #endif
             .fileImporter(isPresented: $editor.isFileImporterPresented, allowedContentTypes: [.item],

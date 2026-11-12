@@ -11,7 +11,8 @@ typealias DebugInkColor = UIColor
 
 /// DEBUG-only launch hooks for screenshots without UI automation:
 /// - `MINDMAP_DEBUG_NOTE=icon` adds a topic with a Markdown note to the open
-///   map; `=sheet` also opens the note (sheet on iPad, window on macOS).
+///   map; `=sheet` also opens the note (sheet on iPad, window on macOS);
+///   `=new` starts a new, empty note (draft, placeholder) on topic "Research".
 /// - `MINDMAP_DEBUG_DRAWING=icon|sheet`: the same with a handwritten note
 ///   pre-seeded with `DebugDrawing.sample()` (full-screen canvas on iPad);
 ///   `=undo` also adds a big "Draw" step 3 s after opening and undoes it 3 s
@@ -34,7 +35,12 @@ enum DebugLaunchActions {
         let environment = ProcessInfo.processInfo.environment
         if let mode = environment["MINDMAP_DEBUG_NOTE"] {
             didRun = true
-            seedNote(editor, open: mode == "sheet")
+            if mode == "new", let topic = topic("Research", editor) {
+                editor.select(topic)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { editor.addNote(to: topic) }
+            } else {
+                seedNote(editor, open: mode == "sheet")
+            }
         } else if let mode = environment["MINDMAP_DEBUG_FILE"] {
             didRun = true
             seedFiles(editor, mode: mode)

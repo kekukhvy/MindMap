@@ -7,8 +7,8 @@ import UIKit
 #endif
 
 /// Viewer of an imported file: name (rename), type/size, QuickLook preview
-/// and actions. iPad (sheet): Share, Open In…, Rename, Remove. macOS
-/// (window): Share, Open with the default app, Export…, Rename, Remove.
+/// and actions. iPad (sheet): Share, Open In…, Rename (+ Delete File in the sheet). macOS
+/// (window): Share, Open with the default app, Export…, Rename (+ Delete File in the window).
 ///
 /// The file lives inside the map package, so preview / share / open-in /
 /// export all use a temp copy named with the attachment's title. Changes
@@ -25,7 +25,6 @@ struct FileAttachmentView: View {
     @State private var copyURL: URL?
     @State private var errorMessage: String?
     @FocusState private var titleFocused: Bool
-    @Environment(\.dismiss) private var dismiss
     #if os(iOS)
     @State private var openIn = OpenInPresenter()
     #endif
@@ -127,8 +126,6 @@ struct FileAttachmentView: View {
                 Button("Export…", systemImage: "square.and.arrow.down", action: export)
                 #endif
                 Button("Rename", systemImage: "pencil") { titleFocused = true }
-                Divider()
-                Button("Remove", systemImage: "trash", role: .destructive, action: remove)
             }
         }
     }
@@ -149,12 +146,6 @@ struct FileAttachmentView: View {
             return
         }
         model.renameAttachment(attachment.id, to: trimmed, undoManager: undoManager)
-    }
-
-    private func remove() {
-        titleFocused = false
-        model.removeAttachment(attachment.id, undoManager: undoManager)
-        dismiss()
     }
 
     #if os(iOS)

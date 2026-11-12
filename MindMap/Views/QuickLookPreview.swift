@@ -65,6 +65,9 @@ struct QuickLookPreview: NSViewRepresentable {
     }
 
     func updateNSView(_ view: QLPreviewView, context: Context) {
+        // Its window closed: QuickLook closed the view (`shouldCloseWithWindow`);
+        // setting an item now raises an assertion.
+        if let window = view.window, !window.isVisible, !window.isMiniaturized { return }
         if (view.previewItem as? NSURL) as URL? != url { view.previewItem = url as NSURL }
     }
 

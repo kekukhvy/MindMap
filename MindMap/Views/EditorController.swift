@@ -240,7 +240,8 @@ final class EditorController {
            cachedScene.map == map {
             return cachedScene.scene
         }
-        let scene = MapScene.build(map: map, measurer: measurer, editing: editing.map { ($0, draft) }, now: now)
+        let scene = MapScene.build(map: map, measurer: measurer, editing: editing.map { ($0, draft) }, now: now,
+                                   hidesAttachment: hidesAttachmentIcon)
         cachedScene = (map, editing, draft, day, scene)
         return scene
     }

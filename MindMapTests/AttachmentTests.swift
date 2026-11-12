@@ -20,10 +20,10 @@ struct AttachmentModelTests {
         return (MindMapModel(map: MindMap(root: Node(text: "Central", children: [topic]))), topic.id)
     }
 
-    @Test func addNoteCreatesMarkdownFileWithHeading() throws {
+    @Test func addNoteCreatesMarkdownFile() throws {
         let (model, topic) = makeModel()
         let undo = makeUndo()
-        let id = try #require(model.addNote(to: topic, undoManager: undo))
+        let id = try #require(model.addNote(to: topic, text: "# Ideas\n\n", undoManager: undo))
         let attachment = try #require(model.attachment(id))
         #expect(attachment.kind == .markdown)
         #expect(attachment.fileName == "\(id.uuidString).md")
@@ -128,7 +128,7 @@ struct AttachmentModelTests {
         undo.undo()
         #expect(text(model, id) == "abc")
         undo.undo()
-        #expect(text(model, id) == "# Ideas\n\n")
+        #expect(text(model, id) == "")
         #expect(model.attachment(id)?.modifiedAt == created)
         undo.redo()
         #expect(text(model, id) == "abc")
@@ -364,15 +364,20 @@ struct AttachmentEditorTests {
         #expect(editor.perform(.note))
         let note = try #require(editor.firstNote(of: topic.id))
         #expect(editor.presentedAttachment?.attachmentID == note.id)
-        #expect(editor.commandState.selectionHasNote)
+        // A new note is an empty draft: re-opened by the command, not in the map yet.
+        #expect(editor.model.isDraft(note.id))
         editor.presentedAttachment = nil
         #expect(editor.perform(.note))
         #expect(editor.presentedAttachment?.attachmentID == note.id)
+        #expect(editor.model.drafts(of: topic.id).count == 1)
+        #expect(editor.model.setAttachmentContent(MarkdownNote.data("x"), for: note.id, undoManager: undo))
+        #expect(editor.commandState.selectionHasNote)
         #expect(editor.attachments(of: topic.id).count == 1)
         editor.addNote(to: topic.id)
-        #expect(editor.attachments(of: topic.id).count == 2)
-        editor.removeAttachment(note.id)
         #expect(editor.attachments(of: topic.id).count == 1)
+        #expect(editor.model.drafts(of: topic.id).count == 1)
+        editor.removeAttachment(note.id)
+        #expect(editor.attachments(of: topic.id).isEmpty)
     }
 
     @Test func markdownPreviewBlocks() {
@@ -381,8 +386,6 @@ struct AttachmentEditorTests {
                            .bullet(text: "a", indent: 0), .bullet(text: "b", indent: 1),
                            .numbered(marker: "1.", text: "one", indent: 0), .task(done: true, text: "done", indent: 0),
                            .quote("quote"), .rule, .code("code")])
-        #expect(MarkdownNote.initialContent(topicText: "Multi\nline") == "# Multi line\n\n")
-        #expect(MarkdownNote.initialContent(topicText: "  ") == "")
     }
 
     @MainActor @Test func registryFindsLiveDocumentsOnly() {

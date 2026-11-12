@@ -13,6 +13,10 @@ struct MarkdownTextView {
     /// The document's undo manager.
     var undoManager: UndoManager?
     var focusOnAppear = true
+    /// Called synchronously for every user edit (before SwiftUI's next
+    /// update), so the document has the text even if the window closes at
+    /// once (empty notes are removed on close).
+    var onEdit: ((String) -> Void)?
 
     final class Coordinator: NSObject {
         var parent: MarkdownTextView
@@ -21,6 +25,18 @@ struct MarkdownTextView {
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    /// Where the first character is drawn (container inset + line padding),
+    /// for the empty-note placeholder.
+    static var textOrigin: EdgeInsets {
+        #if os(macOS)
+        EdgeInsets(top: 12, leading: 19, bottom: 0, trailing: 19)
+        #else
+        EdgeInsets(top: 12, leading: 17, bottom: 0, trailing: 17)
+        #endif
+    }
+
+    static let placeholder = "Write your note… Markdown works: # Heading, - list, **bold**"
 
     static func fontSize(monospaced: Bool) -> CGFloat {
         #if os(macOS)
@@ -123,6 +139,7 @@ extension MarkdownTextView: NSViewRepresentable {
 extension MarkdownTextView.Coordinator: NSTextViewDelegate {
     func textDidChange(_ notification: Notification) {
         guard let textView = notification.object as? NSTextView else { return }
+        parent.onEdit?(textView.string)
         if parent.text != textView.string { parent.text = textView.string }
     }
 }
@@ -207,6 +224,7 @@ extension MarkdownTextView: UIViewRepresentable {
 
 extension MarkdownTextView.Coordinator: UITextViewDelegate {
     func textViewDidChange(_ textView: UITextView) {
+        parent.onEdit?(textView.text)
         if parent.text != textView.text { parent.text = textView.text }
     }
 }

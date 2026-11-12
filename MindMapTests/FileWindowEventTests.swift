@@ -75,6 +75,10 @@ struct FileWindowEventTests {
         // which an in-process snapshot cannot capture. Check that the remote
         // view fills the preview, and that QuickLook renders this very copy
         // (thumbnail of the PDF: colored header and bars; PNG for a look).
+        // QuickLook attaches its remote view asynchronously.
+        for _ in 0..<50 where preview.subviews.first?.subviews.first == nil {
+            try await harness.wait(100)
+        }
         let remote = try #require(preview.subviews.first?.subviews.first)
         #expect(String(describing: type(of: remote)).contains("RemoteView"))
         #expect(remote.frame.width >= 600 && remote.frame.height >= 500)

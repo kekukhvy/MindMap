@@ -100,7 +100,12 @@ struct MacDrawingBoard: NSViewRepresentable {
             if !userZoomed {
                 let fit = min(2, max(0.25, scroll.frame.width / HandwrittenNote.pageWidth))
                 if abs(scroll.magnification - fit) > 0.001 {
+                    // Keep the same top line visible (the magnification
+                    // setter zooms around the center: a resize would scroll).
+                    let top = scroll.documentVisibleRect.minY
                     scroll.magnification = fit
+                    scroll.contentView.scroll(to: CGPoint(x: 0, y: max(0, top)))
+                    scroll.reflectScrolledClipView(scroll.contentView)
                     page.renderIfNeeded()
                 }
             }

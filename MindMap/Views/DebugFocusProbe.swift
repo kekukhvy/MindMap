@@ -35,13 +35,15 @@ enum DebugFocusProbe {
     }
 
     /// `MINDMAP_DEBUG_NOTEWINDOW=fullscreen|normal`: (full screen map window,)
-    /// Add Note on the first topic, then report every visible window's frame,
-    /// style and tab group to `<container tmp>/note-window-report.txt`, close
-    /// the note via Esc and quit.
+    /// Add Note on the first topic, type "a", Return, "b" with real queued
+    /// key events (the menu's plain-key Return must not add a topic), then
+    /// report every visible window's frame, style, space and parent to
+    /// `<container tmp>/note-window-report.txt` + `note-window.png`, delete
+    /// the note, close it via Esc and quit.
     private static func noteWindowScenario(_ editor: EditorController, fullScreen: Bool) async {
         try? await Task.sleep(for: .seconds(2))
         NSApp.activate(ignoringOtherApps: true)
-        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.title.contains("focus-probe") }),
+        guard let window = editor.hostWindow ?? NSApp.windows.first(where: { $0.isVisible && $0.title.contains("focus-probe") }),
               let topic = editor.model.root.children.first?.id else { return }
         window.makeKeyAndOrderFront(nil)
         var preface = "active=\(NSApp.isActive)"
@@ -53,18 +55,43 @@ enum DebugFocusProbe {
             try? await Task.sleep(for: .seconds(1))
             preface += " fullScreenAfterToggle=\(window.styleMask.contains(.fullScreen))"
         }
+        let topicCount = editor.model.map.root.subtreeCount
         editor.addNote(to: topic)
-        try? await Task.sleep(for: .seconds(3))
-        var lines = [preface, "map fullScreen=\(window.styleMask.contains(.fullScreen)) screen=\(window.screen?.frame ?? .zero)"]
+        try? await Task.sleep(for: .seconds(2))
+        var lines = [preface, "map fullScreen=\(window.styleMask.contains(.fullScreen)) screen=\(window.screen?.frame ?? .zero)"
+                     + " onActiveSpace=\(window.isOnActiveSpace)"]
+        let note = AttachmentWindows.shared.openWindows.first
+        if let note {
+            note.makeKeyAndOrderFront(nil)
+            try? await Task.sleep(for: .milliseconds(500))
+            for (char, code) in [("a", UInt16(0)), ("\r", 36), ("b", 11)] {
+                for type in [NSEvent.EventType.keyDown, .keyUp] {
+                    if let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [],
+                                                    timestamp: ProcessInfo.processInfo.systemUptime,
+                                                    windowNumber: note.windowNumber, context: nil, characters: char,
+                                                    charactersIgnoringModifiers: char, isARepeat: false, keyCode: code) {
+                        NSApp.postEvent(event, atStart: false)
+                    }
+                    try? await Task.sleep(for: .milliseconds(60))
+                }
+            }
+            try? await Task.sleep(for: .milliseconds(800))
+            let id = note.windowID.attachmentID
+            lines.append("typed note text=\(String(reflecting: MarkdownNote.text(editor.model.content(of: id)))) "
+                         + "inMap=\(!editor.model.isDraft(id) && editor.model.attachment(id) != nil) "
+                         + "topicsBefore=\(topicCount) topicsAfter=\(editor.model.map.root.subtreeCount) "
+                         + "keyWindowIsNote=\(NSApp.keyWindow === note)")
+        }
         for item in NSApp.windows where item.isVisible {
             let mask = item.styleMask
             lines.append("window \"\(item.title)\" frame=\(item.frame) titled=\(mask.contains(.titled)) "
                          + "closable=\(mask.contains(.closable)) resizable=\(mask.contains(.resizable)) "
                          + "fullScreen=\(mask.contains(.fullScreen)) zoomed=\(item.isZoomed) "
-                         + "tabs=\(item.tabbedWindows?.count ?? 0) tabbingMode=\(item.tabbingMode.rawValue) "
-                         + "behavior=\(item.collectionBehavior.rawValue) minSize=\(item.minSize)")
+                         + "onActiveSpace=\(item.isOnActiveSpace) parentIsMap=\(item.parent === window) "
+                         + "closeButton=\(item.standardWindowButton(.closeButton)?.isHidden == false) "
+                         + "tabs=\(item.tabbedWindows?.count ?? 0) behavior=\(item.collectionBehavior.rawValue)")
         }
-        if let note = NSApp.windows.first(where: { $0.isVisible && $0 !== window && $0.title.hasPrefix("Note") }) {
+        if let note {
             // Whole window incl. title bar / toolbar, drawn in-process.
             if let frameView = note.contentView?.superview,
                let rep = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds) {
@@ -72,8 +99,17 @@ enum DebugFocusProbe {
                 let url = FileManager.default.temporaryDirectory.appendingPathComponent("note-window.png")
                 try? rep.representation(using: .png, properties: [:])?.write(to: url)
             }
+            // Clicking the map keeps the note above it.
+            window.makeKeyAndOrderFront(nil)
+            try? await Task.sleep(for: .milliseconds(400))
+            let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+            let numbers = list.compactMap { $0[kCGWindowNumber as String] as? Int }
+            lines.append("after map front: noteOnScreenIndex=\(numbers.firstIndex(of: note.windowNumber) ?? -1) "
+                         + "mapOnScreenIndex=\(numbers.firstIndex(of: window.windowNumber) ?? -1)")
+            // Leave the probe map unchanged: delete the note, then Esc.
+            editor.model.deleteAttachment(note.windowID.attachmentID, undoManager: editor.undoManager)
             note.makeKeyAndOrderFront(nil)
-            try? await Task.sleep(for: .milliseconds(500))
+            try? await Task.sleep(for: .milliseconds(300))
             for type in [NSEvent.EventType.keyDown, .keyUp] {
                 let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [],
                                              timestamp: ProcessInfo.processInfo.systemUptime,
@@ -91,6 +127,8 @@ enum DebugFocusProbe {
             window.toggleFullScreen(nil)
             try? await Task.sleep(for: .seconds(2))
         }
+        editor.undoManager?.removeAllActions()
+        (window.windowController?.document as? NSDocument)?.updateChangeCount(.changeCleared)
         NSApp.terminate(nil)
     }
 

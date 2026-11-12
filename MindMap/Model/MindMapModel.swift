@@ -14,6 +14,9 @@ final class MindMapModel {
     /// Identity of this open document for this process (attachment windows
     /// find their document by it, see `OpenDocumentRegistry`). Not persisted.
     let documentID = UUID()
+    /// New notes / handwritten notes without content yet (not in the map,
+    /// see `MindMapModel+Drafts.swift`).
+    var attachmentDrafts: [UUID: AttachmentDraft] = [:]
 
     var root: Node { map.root }
 

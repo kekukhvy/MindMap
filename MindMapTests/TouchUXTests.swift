@@ -322,9 +322,11 @@ struct PaletteActionRoutingTests {
         let before = editor.model.map
         editor.select(f.design)
         editor.performPaletteAction(.note)
-        #expect(editor.attachments(of: f.design).first?.kind == .markdown)
-        #expect(editor.presentedAttachment != nil)
-        expectSingleUndo(undo, editor.model, restores: before)
+        // A new note is an empty draft (joins the map with its first text).
+        let note = editor.presentedAttachment?.attachmentID
+        #expect(note.map { editor.model.attachment($0)?.kind == .markdown && editor.model.isDraft($0) } == true)
+        #expect(!undo.canUndo && editor.model.map == before)
+        note.map { _ = editor.model.discardIfEmpty($0, undoManager: undo) }
         editor.presentedAttachment = nil
 
         editor.select(f.design)
@@ -334,8 +336,10 @@ struct PaletteActionRoutingTests {
 
         editor.select(f.design)
         editor.performPaletteAction(.drawing)
-        #expect(editor.attachments(of: f.design).first?.kind == .drawing)
-        expectSingleUndo(undo, editor.model, restores: before)
+        let drawing = editor.presentedAttachment?.attachmentID
+        #expect(drawing.map { editor.model.attachment($0)?.kind == .drawing && editor.model.isDraft($0) } == true)
+        #expect(!undo.canUndo && editor.model.map == before)
+        drawing.map { _ = editor.model.discardIfEmpty($0, undoManager: undo) }
         editor.presentedAttachment = nil
 
         editor.select(f.design)

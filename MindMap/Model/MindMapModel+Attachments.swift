@@ -5,6 +5,10 @@ struct ContentStepKey: Equatable {
     var fileName: String
     var manager: ObjectIdentifier
     var time: Date
+    /// Name of the step being extended ("Edit Note", or "Add Note" when the
+    /// first content created the note: typing right after joins it).
+    var actionName: String
+    var isCreation = false
 }
 
 /// Undoable attachment operations (one undo step each). File content lives
@@ -14,8 +18,9 @@ extension MindMapModel {
     /// Typing pauses longer than this start a new "Edit Note" undo step.
     static let contentCoalesceInterval: TimeInterval = 2
 
+    /// The attachment in the map, or a draft (new, still empty note).
     func attachment(_ id: UUID) -> Attachment? {
-        map.attachment(withID: id)?.attachment
+        map.attachment(withID: id)?.attachment ?? attachmentDrafts[id]?.attachment
     }
 
     func content(of attachmentID: UUID) -> Data? {
@@ -35,29 +40,45 @@ extension MindMapModel {
         return perform(edits, actionName: actionName, undoManager: undoManager)
     }
 
-    /// New Markdown note on `nodeID`, starting with "# <topic text>".
+    /// Markdown note on `nodeID` with `text` (added now, one "Add Note"
+    /// step). The editor starts notes as drafts instead (`startNote`).
     @discardableResult
-    func addNote(to nodeID: UUID, undoManager: UndoManager?) -> UUID? {
+    func addNote(to nodeID: UUID, text: String = "", undoManager: UndoManager?) -> UUID? {
         guard let node = map.node(withID: nodeID) else { return nil }
-        let count = node.attachments.filter { $0.kind == .markdown }.count
-        let attachment = Attachment(kind: .markdown, title: count == 0 ? "Note" : "Note \(count + 1)")
-        let content = MarkdownNote.data(MarkdownNote.initialContent(topicText: node.text))
-        return addAttachment(attachment, to: nodeID, content: content, actionName: "Add Note",
+        let attachment = Attachment(kind: .markdown, title: defaultTitle(.markdown, on: node.id, in: node))
+        return addAttachment(attachment, to: nodeID, content: MarkdownNote.data(text), actionName: "Add Note",
                              undoManager: undoManager) ? attachment.id : nil
     }
 
-    /// New, empty handwritten note (PencilKit drawing) on `nodeID`.
+    /// Handwritten note (PencilKit drawing) on `nodeID`, added now. Without
+    /// `content` it starts empty; the editor uses `startDrawing` instead.
     @discardableResult
     func addDrawing(to nodeID: UUID, content: Data? = nil, undoManager: UndoManager?) -> UUID? {
         guard let node = map.node(withID: nodeID) else { return nil }
-        let count = node.attachments.filter { $0.kind == .drawing }.count
-        let attachment = Attachment(kind: .drawing, title: HandwrittenNote.defaultTitle(index: count))
+        let attachment = Attachment(kind: .drawing, title: defaultTitle(.drawing, on: node.id, in: node))
         return addAttachment(attachment, to: nodeID, content: content ?? HandwrittenNote.emptyData,
                              actionName: "Add Handwritten Note", undoManager: undoManager) ? attachment.id : nil
     }
 
+    /// "Note", "Note 2", … / "Handwritten Note", … counting drafts too.
+    func defaultTitle(_ kind: AttachmentKind, on nodeID: UUID, in node: Node) -> String {
+        let count = node.attachments.filter { $0.kind == kind }.count
+            + attachmentDrafts.values.filter { $0.nodeID == nodeID && $0.attachment.kind == kind }.count
+        switch kind {
+        case .drawing: return HandwrittenNote.defaultTitle(index: count)
+        default: return count == 0 ? "Note" : "Note \(count + 1)"
+        }
+    }
+
+    /// Removes the attachment (its bytes stay in the store for undo). A
+    /// draft is just dropped (no undo step). Default step names: "Remove
+    /// Note" / "Remove Handwritten Note" / "Remove File".
     @discardableResult
-    func removeAttachment(_ id: UUID, undoManager: UndoManager?) -> Bool {
+    func removeAttachment(_ id: UUID, actionName: String? = nil, undoManager: UndoManager?) -> Bool {
+        if attachmentDrafts[id] != nil {
+            attachmentDrafts[id] = nil
+            return true
+        }
         let name: String
         switch attachment(id)?.kind {
         case .markdown: name = "Remove Note"
@@ -66,11 +87,17 @@ extension MindMapModel {
         case nil: name = "Remove Attachment"
         }
         guard let edits = try? map.removeAttachmentEdits(id), !edits.isEmpty else { return false }
-        return perform(edits, actionName: name, undoManager: undoManager)
+        return perform(edits, actionName: actionName ?? name, undoManager: undoManager)
     }
 
     @discardableResult
     func renameAttachment(_ id: UUID, to title: String, undoManager: UndoManager?) -> Bool {
+        if var draft = attachmentDrafts[id] {
+            guard draft.attachment.title != title else { return false }
+            draft.attachment.title = title
+            attachmentDrafts[id] = draft
+            return true
+        }
         guard let current = attachment(id), current.title != title,
               let edits = try? map.updateAttachmentEdits(id, { $0.title = title }), !edits.isEmpty else { return false }
         return perform(edits, actionName: "Rename Attachment", undoManager: undoManager)
@@ -90,12 +117,16 @@ extension MindMapModel {
     @discardableResult
     func setAttachmentContent(_ data: Data, for attachmentID: UUID, actionName: String = "Edit Note",
                               coalescing: Bool = true, undoManager: UndoManager?, now: Date = Date()) -> Bool {
+        if let draft = attachmentDrafts[attachmentID] {
+            return writeDraftContent(data, draft: draft, undoManager: undoManager, now: now)
+        }
         guard let attachment = attachment(attachmentID), Attachment.isValidFileName(attachment.fileName),
               attachmentStore.data(for: attachment.fileName) != data else { return false }
         let fileName = attachment.fileName
         if coalescing, let undoManager, let last = lastContentStep, last.fileName == fileName,
            last.manager == ObjectIdentifier(undoManager), !undoManager.isUndoing, !undoManager.isRedoing,
-           !undoManager.canRedo, undoManager.undoActionName == actionName,
+           !undoManager.canRedo, last.actionName == actionName || last.isCreation,
+           undoManager.undoActionName == last.actionName,
            now.timeIntervalSince(last.time) < Self.contentCoalesceInterval {
             attachmentStore.write(data, to: fileName)
             lastContentStep?.time = now
@@ -129,7 +160,8 @@ extension MindMapModel {
         undoManager.endUndoGrouping()
         let isReplay = undoManager.isUndoing || undoManager.isRedoing
         lastContentStep = isReplay ? nil
-            : ContentStepKey(fileName: fileName, manager: ObjectIdentifier(undoManager), time: now)
+            : ContentStepKey(fileName: fileName, manager: ObjectIdentifier(undoManager), time: now,
+                             actionName: actionName)
         return true
     }
 }

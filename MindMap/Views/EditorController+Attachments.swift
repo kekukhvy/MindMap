@@ -6,8 +6,10 @@ extension EditorController {
         model.map.node(withID: id)?.attachments ?? []
     }
 
+    /// First note of the topic; a still-empty new note (draft) counts too,
+    /// so Cmd+Shift+N re-opens it instead of starting another one.
     func firstNote(of id: UUID) -> Attachment? {
-        attachments(of: id).first { $0.kind == .markdown }
+        (attachments(of: id) + model.drafts(of: id)).first { $0.kind == .markdown }
     }
 
     /// Shows the attachment: sheet on iPad, its own window on macOS.
@@ -18,14 +20,15 @@ extension EditorController {
     }
 
     func firstDrawing(of id: UUID) -> Attachment? {
-        attachments(of: id).first { $0.kind == .drawing }
+        (attachments(of: id) + model.drafts(of: id)).first { $0.kind == .drawing }
     }
 
-    /// Adds a new, empty handwritten note to `id` (default: selection) and opens it.
+    /// Starts a new, empty handwritten note on `id` (default: selection) and
+    /// opens it. It joins the map with its first stroke; closed empty, it
+    /// is dropped without an undo step (`MindMapModel+Drafts`).
     func addDrawing(to id: UUID? = nil) {
         commitEditing()
-        guard let target = id ?? selectedID, model.map.node(withID: target) != nil,
-              let drawing = model.addDrawing(to: target, undoManager: undoManager) else { return }
+        guard let target = id ?? selectedID, let drawing = model.startDrawing(on: target) else { return }
         select(target)
         openAttachment(drawing)
     }
@@ -41,11 +44,12 @@ extension EditorController {
         }
     }
 
-    /// Adds a new Markdown note to `id` (default: selection) and opens it.
+    /// Starts a new, empty Markdown note on `id` (default: selection) and
+    /// opens it. It joins the map with its first text; closed empty, it is
+    /// dropped without an undo step (`MindMapModel+Drafts`).
     func addNote(to id: UUID? = nil) {
         commitEditing()
-        guard let target = id ?? selectedID, model.map.node(withID: target) != nil,
-              let note = model.addNote(to: target, undoManager: undoManager) else { return }
+        guard let target = id ?? selectedID, let note = model.startNote(on: target) else { return }
         select(target)
         openAttachment(note)
     }
@@ -64,6 +68,11 @@ extension EditorController {
     func removeAttachment(_ attachmentID: UUID) {
         commitEditing()
         model.removeAttachment(attachmentID, undoManager: undoManager)
+    }
+
+    /// Hides icons of empty notes / drawings (`MapScene.build`).
+    func hidesAttachmentIcon(_ attachment: Attachment) -> Bool {
+        attachment.kind != .file && model.isContentEmpty(attachment)
     }
 
     /// Moves the attachment `offset` places within its topic's icon row.
