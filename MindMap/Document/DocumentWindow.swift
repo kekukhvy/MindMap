@@ -62,11 +62,17 @@ struct DocumentWindow: View {
 
     @ViewBuilder private var content: some View {
         if let document = session.document {
-            ContentView(model: document.model, documentURL: document.fileURL,
-                        mapOpener: { url, topicID, completion in
-                            session.openLinkedMap(url, revealing: topicID, completion: completion)
-                        })
-                .id(ObjectIdentifier(document))
+            MapLockGate(model: document.model, title: session.title, documentURL: document.fileURL,
+                        save: { [weak document] done in
+                            guard let document, document.hasUnsavedChanges else { return done() }
+                            document.autosave { _ in done() }
+                        }) {
+                ContentView(model: document.model, documentURL: document.fileURL,
+                            mapOpener: { url, topicID, completion in
+                                session.openLinkedMap(url, revealing: topicID, completion: completion)
+                            })
+            }
+            .id(ObjectIdentifier(document))
         } else if session.isWorking {
             ProgressView()
         } else {
@@ -88,6 +94,8 @@ struct DocumentWindow: View {
                 isRenaming = true
             }
             .disabled(session.document == nil)
+            Divider()
+            MapLockMenuItems(model: session.document?.model)
         }
     }
 }

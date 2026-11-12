@@ -7,17 +7,33 @@ struct AttachmentEditorView: View {
     let model: MindMapModel
     let attachmentID: UUID
     let undoManager: UndoManager?
+    /// A locked note prompts for Face ID / Touch ID by itself only once,
+    /// when its editor opens (not again after an idle relock).
+    @State private var didAutoPrompt = false
 
     var body: some View {
         if let attachment = model.attachment(attachmentID) {
             Group {
-                switch attachment.kind {
-                case .markdown:
-                    MarkdownNoteEditor(model: model, attachment: attachment, undoManager: undoManager)
-                case .drawing:
-                    DrawingNoteEditor(model: model, attachment: attachment, undoManager: undoManager)
-                case .file:
-                    FileAttachmentView(model: model, attachment: attachment, undoManager: undoManager)
+                if attachment.isLocked && !model.lock.isNoteUnlocked(attachment.id) {
+                    LockedNoteView(model: model, attachment: attachment, autoPrompt: !didAutoPrompt) {
+                        didAutoPrompt = true
+                    }
+                } else {
+                    switch attachment.kind {
+                    case .markdown:
+                        MarkdownNoteEditor(model: model, attachment: attachment, undoManager: undoManager)
+                    case .drawing:
+                        DrawingNoteEditor(model: model, attachment: attachment, undoManager: undoManager)
+                    case .file:
+                        FileAttachmentView(model: model, attachment: attachment, undoManager: undoManager)
+                    }
+                }
+            }
+            .toolbar {
+                if attachment.kind != .file {
+                    ToolbarItem(placement: .automatic) {
+                        NoteLockToolbarButton(model: model, attachmentID: attachmentID, undoManager: undoManager)
+                    }
                 }
             }
             .navigationTitle(attachment.title.isEmpty ? attachment.kind.displayName : attachment.title)
@@ -92,7 +108,11 @@ struct AttachmentSheet: View {
         .onDisappear {
             // After the editor flushed pending strokes / text.
             let model = model, id = attachmentID, undoManager = undoManager
-            DispatchQueue.main.async { model.discardIfEmpty(id, undoManager: undoManager) }
+            DispatchQueue.main.async {
+                model.discardIfEmpty(id, undoManager: undoManager)
+                // A locked note relocks when its sheet closes.
+                model.lock.relockNote(id, keyID: model.attachment(id)?.lockKeyID)
+            }
         }
     }
 }

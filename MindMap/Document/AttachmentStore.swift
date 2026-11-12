@@ -47,6 +47,17 @@ final class AttachmentStore {
     @ObservationIgnored private var sessionNames: Set<String> = []
     /// Private temp folder of this store (imports, large retained orphans).
     @ObservationIgnored let scratchDirectory: URL
+    /// Locked map (WP12): no plaintext may stay on disk, so imported files
+    /// and large retained orphans are held in memory instead of the
+    /// scratch folder (files already there are read in and deleted).
+    @ObservationIgnored var keepsContentInMemory = false {
+        didSet { if keepsContentInMemory && !oldValue { moveScratchFilesIntoMemory() } }
+    }
+    /// Plaintext of a note that was locked (its old file name): retained
+    /// for undo in memory only, never spilled to the scratch folder.
+    @ObservationIgnored private var sensitiveNames: Set<String> = []
+    /// Saved files whose wrapper still reads lazily from the scratch folder.
+    @ObservationIgnored private var scratchBacked: [String: URL] = [:]
 
     /// Bumped on every change of a file (editors reload on external changes).
     private(set) var revisions: [String: Int] = [:]
@@ -76,6 +87,8 @@ final class AttachmentStore {
         let changed = Set(revisions.keys).union(base.keys).union(pending.keys)
         pending = [:]
         retained = [:]
+        sensitiveNames = []
+        scratchBacked = [:]
         sessionNames = referenced
         for name in changed { revisions[name, default: 0] += 1 }
     }
@@ -161,8 +174,62 @@ final class AttachmentStore {
     func adoptScratchFile(_ url: URL, as fileName: String) -> Bool {
         guard Attachment.isValidFileName(fileName),
               url.standardizedFileURL.path.hasPrefix(scratchDirectory.standardizedFileURL.path) else { return false }
+        if keepsContentInMemory {
+            guard let data = try? Data(contentsOf: url) else { return false }
+            try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            set(.data(data), for: fileName)
+            return true
+        }
         set(.file(url), for: fileName)
         return true
+    }
+
+    /// The plaintext of `fileName` must never be written to the scratch
+    /// folder (a note that is being locked).
+    func markSensitive(_ fileName: String) {
+        sensitiveNames.insert(fileName)
+        for name in [fileName] {
+            if case let .file(url)? = pending[name], let data = try? Data(contentsOf: url) {
+                pending[name] = .data(data)
+                try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            }
+            if case let .file(url)? = retained[name], let data = try? Data(contentsOf: url) {
+                retained[name] = .data(data)
+                try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            }
+        }
+    }
+
+    /// Files of this store currently in the scratch folder (tests).
+    var scratchFileCount: Int {
+        scratchBacked.count + (Array(pending.values) + Array(retained.values)).filter {
+            if case .file = $0 { return true }
+            return false
+        }.count
+    }
+
+    private func moveScratchFilesIntoMemory() {
+        for (name, url) in scratchBacked {
+            if let data = try? Data(contentsOf: url) {
+                let wrapper = FileWrapper(regularFileWithContents: data)
+                wrapper.preferredFilename = name
+                base[name] = wrapper
+                try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            }
+        }
+        scratchBacked = [:]
+        for (name, blob) in pending {
+            if case let .file(url) = blob, let data = try? Data(contentsOf: url) {
+                pending[name] = .data(data)
+                try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            }
+        }
+        for (name, blob) in retained {
+            if case let .file(url) = blob, let data = try? Data(contentsOf: url) {
+                retained[name] = .data(data)
+                try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            }
+        }
     }
 
     private func set(_ blob: Blob, for fileName: String) {
@@ -178,14 +245,15 @@ final class AttachmentStore {
     /// orphans left out. Afterwards the result is the new base.
     func prepareSave(referencing names: Set<String>) -> [String: FileWrapper] {
         var children: [String: FileWrapper] = [:]
+        var backed: [String: URL] = [:]
         for name in names where Attachment.isValidFileName(name) {
-            if let blob = pending[name] {
+            if let blob = pending[name] ?? (base[name] == nil ? retained[name] : nil) {
                 children[name] = Self.wrapper(blob, name: name)
+                if case let .file(url) = blob { backed[name] = url }
             } else if let wrapper = base[name] {
                 // Reused wrappers keep their names (see `MindMapPackage`).
                 children[name] = wrapper
-            } else if let blob = retained[name] {
-                children[name] = Self.wrapper(blob, name: name)
+                backed[name] = scratchBacked[name]
             }
         }
         // Orphans: keep their bytes for undo (memory / scratch), drop them from the package.
@@ -197,13 +265,15 @@ final class AttachmentStore {
         }
         for name in children.keys { retained[name] = nil }
         base = children
+        scratchBacked = backed
         pending = [:]
         return children
     }
 
     /// Copy of an orphaned package file that survives the package losing it.
     private func retain(_ wrapper: FileWrapper, name: String) -> Blob? {
-        if (Self.size(of: wrapper) ?? 0) > Self.largeFileThreshold,
+        if !keepsContentInMemory, !sensitiveNames.contains(name),
+           (Self.size(of: wrapper) ?? 0) > Self.largeFileThreshold,
            let url = try? Self.makeScratchURL(in: scratchDirectory, name: name),
            (try? wrapper.write(to: url, options: [], originalContentsURL: nil)) != nil {
             return .file(url)

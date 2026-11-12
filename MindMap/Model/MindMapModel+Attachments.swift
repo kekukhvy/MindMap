@@ -23,8 +23,10 @@ extension MindMapModel {
         map.attachment(withID: id)?.attachment ?? attachmentDrafts[id]?.attachment
     }
 
+    /// The attachment's bytes; a locked note's plaintext only while it is
+    /// unlocked (nil otherwise).
     func content(of attachmentID: UUID) -> Data? {
-        attachment(attachmentID).flatMap { attachmentStore.data(for: $0.fileName) }
+        attachment(attachmentID).flatMap(decryptedContent(of:))
     }
 
     /// Adds `attachment` to `nodeID` (appended unless `index`), storing
@@ -121,7 +123,9 @@ extension MindMapModel {
             return writeDraftContent(data, draft: draft, undoManager: undoManager, now: now)
         }
         guard let attachment = attachment(attachmentID), Attachment.isValidFileName(attachment.fileName),
-              attachmentStore.data(for: attachment.fileName) != data else { return false }
+              decryptedContent(of: attachment) != data,
+              // A locked note is written encrypted (and not at all while locked).
+              let data = storedBytes(data, for: attachment) else { return false }
         let fileName = attachment.fileName
         if coalescing, let undoManager, let last = lastContentStep, last.fileName == fileName,
            last.manager == ObjectIdentifier(undoManager), !undoManager.isUndoing, !undoManager.isRedoing,

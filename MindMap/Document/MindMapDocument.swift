@@ -5,15 +5,15 @@ import UniformTypeIdentifiers
 /// place and every change goes through the environment UndoManager — which
 /// is exactly how ReferenceFileDocument detects unsaved changes (attachment
 /// content edits register undo steps too, see `MindMapModel+Attachments`).
+/// A locked map (WP12) opens sealed (lock screen) and is saved encrypted;
+/// see `MindMapModel.savePlan`.
 final class MindMapDocument: ReferenceFileDocument {
     static var readableContentTypes: [UTType] { [.mindMap] }
     static var writableContentTypes: [UTType] { [.mindMap] }
 
-    /// What one save writes: the map plus the prepared `attachments/` files.
-    struct Snapshot {
-        var map: MindMap
-        var attachments: [String: FileWrapper]
-    }
+    /// What one save writes: plain map + prepared `attachments/` files,
+    /// the same encrypted, or a sealed package unchanged.
+    typealias Snapshot = SavePlan
 
     let model: MindMapModel
 
@@ -22,18 +22,14 @@ final class MindMapDocument: ReferenceFileDocument {
     }
 
     required init(configuration: ReadConfiguration) throws {
-        let map = try MindMapPackage.read(configuration.file)
-        model = MindMapModel(map: map, attachmentStore: AttachmentStore(
-            package: configuration.file, referenced: map.referencedAttachmentFileNames))
+        model = MindMapModel()
+        try model.load(package: configuration.file)
     }
 
     /// Called on the main thread when saving (incl. autosave): the store
     /// work happens here; `fileWrapper(snapshot:)` may run on another thread.
     func snapshot(contentType: UTType) throws -> Snapshot {
-        model.breakCoalescing()
-        let map = model.map
-        return Snapshot(map: map, attachments: model.attachmentStore.prepareSave(
-            referencing: map.referencedAttachmentFileNames))
+        model.savePlan()
     }
 
     func fileWrapper(snapshot: Snapshot, configuration: WriteConfiguration) throws -> FileWrapper {
@@ -41,6 +37,6 @@ final class MindMapDocument: ReferenceFileDocument {
     }
 
     static func package(for snapshot: Snapshot, existing: FileWrapper?) throws -> FileWrapper {
-        try MindMapPackage.fileWrapper(for: snapshot.map, existing: existing, attachments: snapshot.attachments)
+        try snapshot.fileWrapper(existing: existing)
     }
 }

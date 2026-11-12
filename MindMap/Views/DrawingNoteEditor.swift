@@ -62,7 +62,7 @@ struct DrawingNoteEditor: View {
             .ignoresSafeArea(.container, edges: .bottom)
         #else
         VStack(spacing: 0) {
-            MacDrawingBoard(data: store.data(for: attachment.fileName),
+            MacDrawingBoard(data: model.content(of: attachment.id),
                             revision: store.revision(of: attachment.fileName),
                             tool: tool, inkColor: MacDrawingBoard.color(hex: inkHex), undoManager: undoManager) { data in
                 model.setAttachmentContent(data, for: attachment.id, actionName: "Draw", coalescing: false,

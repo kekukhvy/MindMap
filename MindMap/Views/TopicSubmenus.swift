@@ -35,6 +35,8 @@ enum TopicMenuAction: Hashable {
     // Attachments
     case openOrAddDrawing, addDrawing, attachFile, pasteFile
     case openAttachment(UUID), moveAttachment(UUID, by: Int), removeAttachment(UUID)
+    // Lock (WP12): Lock Note / Unlock Note / Remove Lock of one note
+    case noteLock(NoteLockMenu.Action)
 }
 
 struct TopicMenuEntry: Equatable {
@@ -100,6 +102,8 @@ struct TopicMenuFacts: Equatable {
         var id: UUID
         var title: String
         var systemImage: String
+        /// Lock Note, or Unlock Note + Remove Lock (notes only, WP12).
+        var lockActions: [NoteLockMenu.Action] = []
     }
 
     /// Topics the menu acts on (0 = nothing selected: all disabled).
@@ -115,6 +119,8 @@ struct TopicMenuFacts: Equatable {
     var anyDueDate = false
     var link: LinkFacts?
     var hasNote = false
+    /// Lock items of the first note (Note ▸).
+    var noteLockActions: [NoteLockMenu.Action] = []
     var hasDrawing = false
     var attachments: [AttachmentFacts] = []
 
@@ -185,6 +191,7 @@ enum TopicMenus {
             .button(facts.hasNote ? "Open Note" : "Add Note", facts.hasNote ? "note.text" : "note.text.badge.plus",
                     .openOrAddNote, shortcut: .shiftCommandN),
             .button("Add Another Note", "plus", .addNote, enabled: facts.hasNote),
+        ] + lockEntries(facts.hasNote ? facts.noteLockActions : [.lock(NoteLockMenu.noNote)], enabled: facts.hasNote) + [
             .divider,
             .button("Delete Note", "trash", .deleteNote, enabled: facts.hasNote, destructive: true),
         ])
@@ -211,11 +218,17 @@ enum TopicMenus {
                 items.append(.button("Move Right", "arrow.right", .moveAttachment(attachment.id, by: 1),
                                      enabled: index < count - 1))
             }
+            if !attachment.lockActions.isEmpty { items += [.divider] + lockEntries(attachment.lockActions) }
             items += [.divider, .button("Remove", "trash", .removeAttachment(attachment.id), destructive: true)]
             entries.append(.submenu(attachment.title, attachment.systemImage, items))
         }
         return TopicSubmenu(title: "Attachments", systemImage: "paperclip", isEnabled: facts.isSingle,
                             entries: entries)
+    }
+
+    /// Lock Note / Unlock Note / Remove Lock (WP12, see `NoteLockMenu`).
+    static func lockEntries(_ actions: [NoteLockMenu.Action], enabled: Bool = true) -> [TopicMenuEntry] {
+        actions.map { .button(NoteLockMenu.title($0), NoteLockMenu.systemImage($0), .noteLock($0), enabled: enabled) }
     }
 }
 

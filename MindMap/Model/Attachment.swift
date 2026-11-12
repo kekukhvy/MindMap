@@ -28,6 +28,11 @@ struct Attachment: Identifiable, Equatable, Codable {
     var fileName: String
     var createdAt: Date
     var modifiedAt: Date
+    /// Locked note (WP12): its file is AES-GCM encrypted with the key of
+    /// this ID (keychain) and named "<UUID>.<ext>.enc". nil = plain.
+    var lockKeyID: UUID?
+
+    var isLocked: Bool { lockKeyID != nil }
 
     init(id: UUID = UUID(), kind: AttachmentKind = .file, title: String = "", fileName: String? = nil,
          originalExtension: String? = nil, createdAt: Date = Date(), modifiedAt: Date? = nil) {
@@ -58,7 +63,7 @@ struct Attachment: Identifiable, Equatable, Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, title, fileName, createdAt, modifiedAt
+        case id, kind, title, fileName, createdAt, modifiedAt, lockKeyID
     }
 
     /// Tolerant decoding: Stage 1 files stored only `{"id": ...}`.
@@ -70,6 +75,7 @@ struct Attachment: Identifiable, Equatable, Codable {
         fileName = try c.decodeIfPresent(String.self, forKey: .fileName) ?? id.uuidString
         createdAt = (try? c.decodeIfPresent(Date.self, forKey: .createdAt)) ?? Date(timeIntervalSinceReferenceDate: 0)
         modifiedAt = (try? c.decodeIfPresent(Date.self, forKey: .modifiedAt)) ?? createdAt
+        lockKeyID = try? c.decodeIfPresent(UUID.self, forKey: .lockKeyID)
     }
 }
 

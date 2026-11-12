@@ -104,8 +104,10 @@ extension MindMapModel {
     /// non-empty attachments.
     func isContentEmpty(_ attachment: Attachment) -> Bool {
         guard attachment.kind != .file else { return false }
+        // A locked note counts as content unless it is unlocked and blank.
+        if let keyID = attachment.lockKeyID, lock.noteKey(keyID) == nil { return false }
         let fileName = attachment.fileName
-        let data = attachmentStore.data(for: fileName)
+        let data = decryptedContent(of: attachment)
         guard attachment.kind == .drawing else { return Self.isEmptyContent(data, kind: attachment.kind) }
         let key = "\(fileName)|\(attachmentStore.revision(of: fileName))|\(data?.count ?? -1)" as NSString
         if let cached = DrawingEmptinessCache.shared.object(forKey: key) { return cached.boolValue }

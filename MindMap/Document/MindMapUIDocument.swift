@@ -17,24 +17,22 @@ final class MindMapUIDocument: UIDocument {
 
     override func contents(forType typeName: String) throws -> Any {
         // Main thread. A rename after an autosave must register its own
-        // step (marks the document dirty again), as on macOS.
-        model.breakCoalescing()
-        let wrapper = try MindMapPackage.fileWrapper(for: model.map, store: model.attachmentStore, existing: package)
+        // step (marks the document dirty again), as on macOS. A locked map
+        // is written encrypted; a sealed one (not decrypted) unchanged.
+        let wrapper = try model.savePlan().fileWrapper(existing: package)
         package = wrapper
         return wrapper
     }
 
     override func load(fromContents contents: Any, ofType typeName: String?) throws {
         guard let wrapper = contents as? FileWrapper else { throw MindMapPackage.PackageError.notADirectory }
-        let map = try MindMapPackage.read(wrapper)
-        package = wrapper
         if hasLoaded {
             // Revert (file changed elsewhere): old undo steps no longer apply.
             undoManager?.removeAllActions()
         }
+        try model.load(package: wrapper)
+        package = wrapper
         hasLoaded = true
-        model.replaceMap(map)
-        model.attachmentStore.reset(package: wrapper, referenced: map.referencedAttachmentFileNames)
     }
 
     /// Keeps the version being edited when iCloud reports a conflict.

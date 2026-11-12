@@ -82,7 +82,8 @@ struct TopicMenuTests {
     @Test func noteAndAttachmentSubmenus() throws {
         let f = Fixture()
         let note = TopicMenus.note(f.editor.menuFacts(for: f.plain.id))
-        #expect(outline(note) == ["Add Note", "Add Another Note", "-", "Delete Note"])
+        #expect(outline(note) == ["Add Note", "Add Another Note", "Lock Note", "-", "Delete Note"])
+        #expect(try !entry(note, "Lock Note").isEnabled)
         #expect(try entry(note, "Add Note").shortcut == .shiftCommandN)
         #expect(try !entry(note, "Delete Note").isEnabled)
         let attachments = TopicMenus.attachments(f.editor.menuFacts(for: f.plain.id))
@@ -93,8 +94,14 @@ struct TopicMenuTests {
         // note is listed under Attachments.
         f.editor.model.addNote(to: f.plain.id, text: "Hello", undoManager: f.undo)
         let facts = f.editor.menuFacts(for: f.plain.id)
-        #expect(outline(TopicMenus.note(facts)) == ["Open Note", "Add Another Note", "-", "Delete Note"])
+        #expect(outline(TopicMenus.note(facts)) == ["Open Note", "Add Another Note", "Lock Note", "-", "Delete Note"])
         #expect(outline(TopicMenus.attachments(facts)).suffix(2) == ["-", "Note ▸"])
+        // Lock Note (WP12) is a request for the document's lock gate.
+        let noteID = try #require(f.editor.attachments(of: f.plain.id).first?.id)
+        #expect(facts.attachments.first?.lockActions == [.lock(noteID)])
+        f.editor.performMenuAction(.noteLock(.lock(noteID)), on: f.plain.id)
+        #expect(f.editor.model.lock.request == .lockNote(noteID))
+        f.editor.model.lock.request = nil
         f.editor.performMenuAction(.deleteNote, on: f.plain.id)
         #expect(f.editor.attachments(of: f.plain.id).isEmpty)
         f.undo.undo()

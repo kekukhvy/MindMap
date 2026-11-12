@@ -17,6 +17,8 @@ final class MindMapModel {
     /// New notes / handwritten notes without content yet (not in the map,
     /// see `MindMapModel+Drafts.swift`).
     var attachmentDrafts: [UUID: AttachmentDraft] = [:]
+    /// Map / note lock state (WP12, see `DocumentLock`).
+    let lock = DocumentLock()
 
     var root: Node { map.root }
 

@@ -206,9 +206,12 @@ final class AttachmentWindows: NSObject, NSWindowDelegate {
             // Tear the editor down (views dismantled, pending strokes / title
             // flushed), then clean up an empty note.
             window?.contentViewController = nil
-            guard !closingWithMap, let entry = OpenDocumentRegistry.shared.entry(for: id.documentID),
-                  let model = entry.model else { return }
-            model.discardIfEmpty(id.attachmentID, undoManager: entry.undoManager)
+            guard let entry = OpenDocumentRegistry.shared.entry(for: id.documentID), let model = entry.model else {
+                return
+            }
+            if !closingWithMap { model.discardIfEmpty(id.attachmentID, undoManager: entry.undoManager) }
+            // A locked note relocks when its window closes.
+            model.lock.relockNote(id.attachmentID, keyID: model.attachment(id.attachmentID)?.lockKeyID)
         }
     }
 

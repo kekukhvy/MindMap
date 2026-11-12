@@ -27,12 +27,12 @@ struct MarkdownNoteEditor: View {
         self.model = model
         self.attachment = attachment
         self.undoManager = undoManager
-        _text = State(initialValue: MarkdownNote.text(model.attachmentStore.data(for: attachment.fileName)))
+        _text = State(initialValue: MarkdownNote.text(model.content(of: attachment.id)))
         _title = State(initialValue: attachment.title)
     }
 
     private var store: AttachmentStore { model.attachmentStore }
-    private var storedText: String { MarkdownNote.text(store.data(for: attachment.fileName)) }
+    private var storedText: String { MarkdownNote.text(model.content(of: attachment.id)) }
 
     var body: some View {
         VStack(spacing: 0) {

@@ -129,7 +129,7 @@ struct PencilCanvas: UIViewRepresentable {
         canvas.showsHorizontalScrollIndicator = false
         canvas.contentInsetAdjustmentBehavior = .never
         canvas.tool = PKInkingTool(.pen, color: .black, width: 3)
-        coordinator.lastData = model.attachmentStore.data(for: fileName)
+        coordinator.lastData = model.content(of: attachmentID)
         canvas.drawing = HandwrittenNote.drawing(coordinator.lastData)
         canvas.delegate = coordinator
         canvas.forwarder.willForward = { [weak coordinator] in coordinator?.flush() }
@@ -225,7 +225,7 @@ struct PencilCanvas: UIViewRepresentable {
         /// The stored file changed (undo/redo/revert): show it.
         func reloadIfChanged() {
             guard pending == nil, let canvas else { return }
-            let stored = parent.model.attachmentStore.data(for: parent.fileName)
+            let stored = parent.model.content(of: parent.attachmentID)
             guard stored != lastData else { return }
             lastData = stored
             isReloading = true

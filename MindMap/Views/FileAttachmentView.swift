@@ -31,7 +31,9 @@ struct FileAttachmentView: View {
 
     private var store: AttachmentStore { model.attachmentStore }
     private var storedExtension: String { (attachment.fileName as NSString).pathExtension }
-    private var copyKey: String { "\(store.revision(of: attachment.fileName))|\(AttachmentFileName.exportName(for: attachment))" }
+    private var copyKey: String {
+        "\(store.revision(of: attachment.fileName))|\(AttachmentFileName.exportName(for: attachment))|\(model.lock.isMapLocked)"
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -87,7 +89,10 @@ struct FileAttachmentView: View {
     }
 
     @ViewBuilder private var preview: some View {
-        if let copyURL {
+        if model.lock.isMapLocked {
+            // No QuickLook temp copy (plaintext on disk) for a locked map.
+            InMemoryFilePreview(data: model.content(of: attachment.id), fileExtension: storedExtension)
+        } else if let copyURL {
             QuickLookPreview(url: copyURL, title: attachment.title)
         } else {
             ContentUnavailableView("No Preview", systemImage: "doc.questionmark",
@@ -134,7 +139,8 @@ struct FileAttachmentView: View {
 
     private func refreshCopy() {
         let old = copyURL
-        copyURL = try? model.exportCopy(of: attachment.id)
+        // Locked map: decrypted copies only on an explicit Open / Export.
+        copyURL = model.lock.isMapLocked ? nil : try? model.exportCopy(of: attachment.id)
         if let old, old != copyURL { try? FileManager.default.removeItem(at: old.deletingLastPathComponent()) }
     }
 

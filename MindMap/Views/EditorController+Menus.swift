@@ -25,10 +25,13 @@ extension EditorController {
                                goToSystemImage: Self.goToSystemImage(resolved),
                                canCopy: !resolved.isBroken, isMapLink: reference.link?.mapReference != nil)
         }
-        facts.hasNote = firstNote(of: id) != nil
+        let note = firstNote(of: id)
+        facts.hasNote = note != nil
+        facts.noteLockActions = note.map { noteLockActions($0.id) } ?? []
         facts.hasDrawing = firstDrawing(of: id) != nil
         facts.attachments = attachments(of: id).map {
-            .init(id: $0.id, title: $0.title.isEmpty ? $0.kind.displayName : $0.title, systemImage: $0.kind.systemImage)
+            .init(id: $0.id, title: $0.title.isEmpty ? $0.kind.displayName : $0.title, systemImage: $0.kind.systemImage,
+                  lockActions: noteLockActions($0.id))
         }
         return facts
     }
@@ -64,6 +67,9 @@ extension EditorController {
             openAttachment(attachmentID)
         case let .moveAttachment(attachmentID, offset): moveAttachment(attachmentID, by: offset)
         case let .removeAttachment(attachmentID): removeAttachment(attachmentID)
+        case let .noteLock(lockAction):
+            select(id)
+            performNoteLock(lockAction)
         }
     }
 

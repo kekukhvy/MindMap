@@ -5,11 +5,14 @@ struct AttachmentSummary: Equatable, Identifiable {
     var id: UUID
     var kind: AttachmentKind
     var title: String
+    /// Locked note (WP12): the icon gets a lock badge.
+    var isLocked = false
 
     init(_ attachment: Attachment) {
         id = attachment.id
         kind = attachment.kind
         title = attachment.title
+        isLocked = attachment.isLocked
     }
 }
 
@@ -96,7 +99,7 @@ struct AttachmentIconsView: View {
                 switch item {
                 case let .icon(kind, id):
                     Button { onOpen(id) } label: {
-                        icon(kind)
+                        icon(kind, locked: attachments.contains { $0.id == id && $0.isLocked })
                     }
                     .buttonStyle(.plain)
                     .help(tooltip(kind, id: id, collapsed: attachments.count > AttachmentIconRow.maxIcons))
@@ -131,11 +134,11 @@ struct AttachmentIconsView: View {
     /// collapsed (one icon per kind) all titles of that kind.
     private func tooltip(_ kind: AttachmentKind, id: UUID, collapsed: Bool) -> String {
         let titles = (collapsed ? attachments.filter { $0.kind == kind } : attachments.filter { $0.id == id })
-            .map { $0.title.isEmpty ? kind.displayName : $0.title }
+            .map { ($0.title.isEmpty ? kind.displayName : $0.title) + ($0.isLocked ? " (locked)" : "") }
         return titles.isEmpty ? kind.displayName : titles.joined(separator: "\n")
     }
 
-    private func icon(_ kind: AttachmentKind) -> some View {
+    private func icon(_ kind: AttachmentKind, locked: Bool) -> some View {
         let size = AttachmentIconRow.iconSize(fontSize: fontSize) * scale
         return Image(systemName: kind.systemImage)
             .resizable()
@@ -144,6 +147,27 @@ struct AttachmentIconsView: View {
             .foregroundStyle(color)
             .frame(width: size * 0.82, height: size * 0.82)
             .frame(width: size, height: size)
+            .overlay(alignment: .bottomTrailing) {
+                if locked { LockBadge(size: size * 0.55, color: color) }
+            }
             .contentShape(Rectangle())
+            .accessibilityValue(locked ? "Locked" : "")
+    }
+}
+
+/// Small padlock on the icon of a locked note.
+struct LockBadge: View {
+    let size: CGFloat
+    let color: Color
+
+    var body: some View {
+        Image(systemName: "lock.fill")
+            .resizable()
+            .scaledToFit()
+            .foregroundStyle(color)
+            .padding(size * 0.12)
+            .frame(width: size, height: size)
+            .background(Circle().fill(.white))
+            .offset(x: size * 0.3, y: size * 0.25)
     }
 }

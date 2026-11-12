@@ -11,9 +11,14 @@ struct MindMapApp: App {
 
     var body: some Scene {
         DocumentGroup(newDocument: { MindMapDocument() }) { file in
-            ContentView(model: file.document.model, documentURL: file.fileURL)
+            MapLockGate(model: file.document.model, title: Self.title(of: file.fileURL), documentURL: file.fileURL) {
+                ContentView(model: file.document.model, documentURL: file.fileURL)
+            }
         }
-        .commands { MindMapCommands() }
+        .commands {
+            MindMapCommands()
+            LockCommands()
+        }
         // Attachments open in AppKit windows above their map (`AttachmentWindows`).
     }
     #else
@@ -24,7 +29,13 @@ struct MindMapApp: App {
         .commands {
             DocumentCommands()
             MindMapCommands()
+            LockCommands()
         }
     }
     #endif
+
+    /// Name shown on the lock screen / in prompts (file name, not content).
+    static func title(of url: URL?) -> String {
+        url?.deletingPathExtension().lastPathComponent ?? "Untitled"
+    }
 }

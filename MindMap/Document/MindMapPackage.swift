@@ -31,7 +31,9 @@ enum MindMapPackage {
 
         var children: [String: FileWrapper] = [:]
         if existing?.isDirectory == true {
-            for (name, child) in existing?.fileWrappers ?? [:] where name != mapFileName {
+            // A plain save after "Remove Map Lock" drops the lock entries.
+            for (name, child) in existing?.fileWrappers ?? [:]
+            where name != mapFileName && !LockedPackage.lockEntryNames.contains(name) {
                 children[name] = child
             }
         }

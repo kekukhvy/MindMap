@@ -40,6 +40,8 @@
 			</dict>
 		</dict>
 	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>MindMap uses Face ID to unlock locked maps and notes.</string>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>com.kekukh.MindMap.openMap</string>
