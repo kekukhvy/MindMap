@@ -33,6 +33,8 @@ struct CanvasView: View {
                 .animation(.snappy(duration: 0.25), value: editor.model.map)
                 CanvasOverlays(editor: editor, viewport: viewport)
             }
+            // White XMind paper in dark mode too: topic colors assume it.
+            .environment(\.colorScheme, .light)
             .overlay(alignment: .top) { PickBanner(editor: editor) }
             .onContinuousHover(coordinateSpace: .named(CanvasView.space)) { phase in
                 guard editor.pickMode != nil else { return }

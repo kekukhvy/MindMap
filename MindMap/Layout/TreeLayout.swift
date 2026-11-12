@@ -45,7 +45,7 @@ struct TreeLayout {
         let engine = Engine(spacing: spacing, size: size, boundaries: subtreeBoundaries)
 
         let rootSize = size(map.root.id)
-        var all = engine.layoutSubtree(map.root, inherited: .root)
+        var all = engine.layoutSubtree(map.root, inherited: .root, isCentral: true)
             .offsetBy(dx: -rootSize.width / 2, dy: -rootSize.height / 2)
         for topic in map.floatingTopics {
             let nodeSize = size(topic.id)
@@ -107,8 +107,10 @@ struct TreeLayout {
         let size: (UUID) -> CGSize
         let boundaries: [UUID: [Boundary]]
 
-        func layoutSubtree(_ node: Node, inherited: LayoutContext) -> SubtreeLayout {
+        /// - Parameter isCentral: the main tree's root (uses the wider root gaps).
+        func layoutSubtree(_ node: Node, inherited: LayoutContext, isCentral: Bool = false) -> SubtreeLayout {
             let nodeSize = size(node.id)
+            let spacing = isCentral ? self.spacing.forCentralTopic : self.spacing
             var layout: SubtreeLayout
             // Freely positioned children leave the automatic stacking.
             var stacked = node

@@ -48,12 +48,18 @@ struct CanvasLogicTests {
     }
 
     @Test func appearanceDefaultsByLevel() {
-        let root = NodeAppearance.resolve(shape: nil, border: nil, level: 0, colorHex: "#2F3640")
-        #expect(root.shape == .roundedRect && root.fill == .solid && root.weight == .bold && root.border == nil)
-        let main = NodeAppearance.resolve(shape: nil, border: nil, level: 1, colorHex: "#E8524A")
-        #expect(main.fill == .solid && main.weight == .semibold)
-        let sub = NodeAppearance.resolve(shape: nil, border: nil, level: 2, colorHex: "#E8524A")
-        #expect(sub.shape == .underline && sub.fill == .none)
+        let root = NodeAppearance.resolve(shape: nil, border: nil, level: 0, colorHex: "#1E1E1E")
+        #expect(root.shape == .plainText && root.fill == .none && root.weight == .heavy && root.border == nil)
+        let boxedRoot = NodeAppearance.resolve(shape: .roundedRect, border: nil, level: 0, colorHex: "#2F3640")
+        #expect(boxedRoot.fill == .solid && boxedRoot.textColorHex == "#FFFFFF")
+        let main = NodeAppearance.resolve(shape: nil, border: nil, level: 1, colorHex: "#EE7471")
+        #expect(main.fill == .solid && main.weight == .medium && main.border == nil)
+        let sub = NodeAppearance.resolve(shape: nil, border: nil, level: 2, colorHex: "#EE7471")
+        #expect(sub.shape == .roundedRect && sub.fill == .tint && sub.border == nil)
+        let deep = NodeAppearance.resolve(shape: nil, border: nil, level: 3, colorHex: "#EE7471")
+        #expect(deep.shape == .plainText && deep.fill == .none && deep.border == nil)
+        let underline = NodeAppearance.resolve(shape: .underline, border: nil, level: 3, colorHex: "#EE7471")
+        #expect(underline.fill == .none && underline.border == .solid)
         let boxed = NodeAppearance.resolve(shape: .rectangle, border: .dashed, level: 3, colorHex: "#E8524A")
         #expect(boxed.fill == .tint && boxed.border == .dashed)
         let plain = NodeAppearance.resolve(shape: .plainText, border: nil, level: 1, colorHex: "#E8524A")
@@ -88,21 +94,21 @@ struct CanvasLogicTests {
     }
 
     @Test func sceneBadgesAndUnderlineAnchors() throws {
-        let leaf = Node(text: "leaf", children: TestTree.leaves(1))
+        let leaf = Node(text: "leaf", shape: .underline, children: TestTree.leaves(1))
         let collapsed = Node(text: "c", isCollapsed: true, children: TestTree.leaves(3))
-        let main = Node(text: "main", children: [leaf, collapsed])
+        let main = Node(text: "main", children: [Node(text: "sub", shape: .underline, children: [leaf]), collapsed])
         let map = MindMap(root: Node(text: "root", layoutStyle: .rightMap, children: [main]))
         let scene = MapScene.build(map: map, measurer: NodeMeasurer(), editing: nil)
         #expect(scene.nodes[collapsed.id]?.hiddenCount == 3)
         #expect(scene.nodes[collapsed.children[0].id] == nil)
         #expect(scene.order.first == map.root.id)
-        // main (level 1, filled) -> leaf (underline): line ends on the underline.
+        // sub (level 2, underline) -> leaf (underline override): line runs on the underlines.
         let edge = try #require(scene.connectors.first { $0.childID == leaf.id })
         let frame = try #require(scene.layout.frames[leaf.id])
         #expect(abs(edge.geometry.end.y - (frame.maxY - NodeAppearance.underlineWidth / 2)) < 0.001)
-        // Root edges are tapered.
+        // Root edges are thin, not tapered.
         let rootEdge = try #require(scene.connectors.first { $0.childID == main.id })
-        #expect(rootEdge.geometry.isTapered)
+        #expect(!rootEdge.geometry.isTapered)
         // Draft text drives the size while editing.
         let editing = MapScene.build(map: map, measurer: NodeMeasurer(),
                                      editing: (main.id, String(repeating: "W", count: 30)))

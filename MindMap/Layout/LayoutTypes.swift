@@ -39,9 +39,13 @@ struct Connector: Equatable {
 /// Spacing configuration for all layout styles.
 struct LayoutSpacing: Equatable {
     /// Gap between a parent and its children column (horizontal maps).
-    var horizontal: CGFloat = 40
+    var horizontal: CGFloat = 24
     /// Gap between vertically stacked sibling subtrees.
-    var vertical: CGFloat = 12
+    var vertical: CGFloat = 10
+    /// `horizontal` for the central topic's children (XMind: wide root gap).
+    var rootHorizontal: CGFloat = 72
+    /// `vertical` between the central topic's child subtrees (main topics).
+    var rootVertical: CGFloat = 30
     /// Indent of children in `.treeDown`.
     var treeIndent: CGFloat = 28
     /// Gap between a parent and the children below it (`.treeDown`, `.orgChartDown`).
@@ -52,6 +56,14 @@ struct LayoutSpacing: Equatable {
     var boundaryPadding: CGFloat = 10
     /// Extra space above enclosed frames for a boundary label.
     var boundaryLabelHeight: CGFloat = 20
+
+    /// Spacing used by the central topic's arranger (root gaps).
+    var forCentralTopic: LayoutSpacing {
+        var copy = self
+        copy.horizontal = rootHorizontal
+        copy.vertical = rootVertical
+        return copy
+    }
 }
 
 /// Inherited layout context a parent hands to a child subtree.

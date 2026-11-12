@@ -4,10 +4,15 @@ import Foundation
 enum NodeShape: String, Codable, CaseIterable {
     case roundedRect, rectangle, capsule, underline, plainText
 
-    /// XMind-like defaults: root and level 1 = rounded rect (views render
-    /// root bold, level 1 filled), deeper levels = underline.
+    /// XMind (pastel) defaults: central topic = plain bold text, main topics
+    /// (filled) and level-2 subtopics (pale tint) = rounded rect, deeper
+    /// levels = plain text.
     static func defaultShape(forDepth depth: Int) -> NodeShape {
-        depth <= 1 ? .roundedRect : .underline
+        switch depth {
+        case 0: return .plainText
+        case 1, 2: return .roundedRect
+        default: return .plainText
+        }
     }
 }
 

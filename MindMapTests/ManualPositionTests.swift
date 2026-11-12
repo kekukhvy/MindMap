@@ -22,7 +22,7 @@ struct ManualPositionTests {
         let first = try #require(result.frames[root.children[0].id])
         let last = try #require(result.frames[root.children[2].id])
         #expect(approx((first.midY + last.midY) / 2, 0))
-        #expect(approx(last.minY - first.maxY, LayoutSpacing().vertical))
+        #expect(approx(last.minY - first.maxY, LayoutSpacing().rootVertical))
         #expect(first != auto.frames[root.children[0].id])
         // Connector still drawn from the parent, bounds include the moved topic.
         let connector = try #require(result.connectors.first { $0.childID == root.children[1].id })

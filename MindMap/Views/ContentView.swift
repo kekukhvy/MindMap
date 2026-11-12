@@ -29,6 +29,10 @@ struct ContentView: View {
         CanvasView(editor: editor)
             .ignoresSafeArea(.container, edges: .bottom)
             .toolbar { FormatToolbar(editor: editor) }
+            #if os(iOS)
+            .toolbarRole(.editor)
+            .overlay(alignment: .bottomLeading) { OutlineCornerButton(editor: editor) }
+            #endif
             .focusedSceneValue(\.mindMapEditor, editor)
             .sheet(item: $editor.colorSheet) { request in
                 ColorPickerSheet(request: request) { hex in editor.applyColorSheet(request, hex: hex) }

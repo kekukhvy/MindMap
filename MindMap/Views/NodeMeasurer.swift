@@ -58,8 +58,10 @@ final class NodeMeasurer {
     private static func platformWeight(_ weight: TopicWeight) -> PlatformFont.Weight {
         switch weight {
         case .regular: return .regular
+        case .medium: return .medium
         case .semibold: return .semibold
         case .bold: return .bold
+        case .heavy: return .heavy
         }
     }
 }

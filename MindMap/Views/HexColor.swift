@@ -33,10 +33,54 @@ enum HexColor {
         return 0.2126 * linear(rgb.red) + 0.7152 * linear(rgb.green) + 0.0722 * linear(rgb.blue)
     }
 
-    /// True if dark text reads better than white on this background.
+    /// True if dark text reads better than white on this background
+    /// (pastel and mid-tone fills get dark text, like XMind).
     static func prefersDarkText(on hex: String) -> Bool {
         guard let rgb = parse(hex) else { return false }
-        return luminance(rgb) > 0.5
+        return luminance(rgb) > 0.3
+    }
+
+    /// `amount` of the color over white (0 = white, 1 = the color).
+    static func tint(_ hex: String, amount: Double) -> String {
+        guard let rgb = parse(hex) else { return hex }
+        func mix(_ c: Double) -> Double { 1 - (1 - c) * amount }
+        return string(RGB(red: mix(rgb.red), green: mix(rgb.green), blue: mix(rgb.blue)))
+    }
+
+    /// Dark shade of the same hue (text on pale tints / plain subtopics),
+    /// e.g. orange #F2A16D -> dark brown.
+    static func darkShade(_ hex: String, lightness: Double = 0.21) -> String {
+        guard let rgb = parse(hex) else { return hex }
+        let maxC = max(rgb.red, rgb.green, rgb.blue), minC = min(rgb.red, rgb.green, rgb.blue)
+        let l = (maxC + minC) / 2, delta = maxC - minC
+        guard delta > 0.0001 else { return string(RGB(red: lightness, green: lightness, blue: lightness)) }
+        let s = delta / (1 - abs(2 * l - 1))
+        var h: Double
+        if maxC == rgb.red {
+            h = ((rgb.green - rgb.blue) / delta).truncatingRemainder(dividingBy: 6)
+        } else if maxC == rgb.green {
+            h = (rgb.blue - rgb.red) / delta + 2
+        } else {
+            h = (rgb.red - rgb.green) / delta + 4
+        }
+        h = (h * 60 + 360).truncatingRemainder(dividingBy: 360)
+        return string(hsl(h, min(s, 1) * 0.75, lightness))
+    }
+
+    private static func hsl(_ h: Double, _ s: Double, _ l: Double) -> RGB {
+        let c = (1 - abs(2 * l - 1)) * s
+        let x = c * (1 - abs((h / 60).truncatingRemainder(dividingBy: 2) - 1))
+        let m = l - c / 2
+        let (r, g, b): (Double, Double, Double)
+        switch h {
+        case ..<60: (r, g, b) = (c, x, 0)
+        case ..<120: (r, g, b) = (x, c, 0)
+        case ..<180: (r, g, b) = (0, c, x)
+        case ..<240: (r, g, b) = (0, x, c)
+        case ..<300: (r, g, b) = (x, 0, c)
+        default: (r, g, b) = (c, 0, x)
+        }
+        return RGB(red: r + m, green: g + m, blue: b + m)
     }
 
     /// sRGB hex of a SwiftUI color (nil if not convertible).
@@ -61,13 +105,9 @@ extension Color {
         }
     }
 
-    static var canvasBackground: Color {
-        #if os(macOS)
-        Color(nsColor: .textBackgroundColor)
-        #else
-        Color(uiColor: .systemBackground)
-        #endif
-    }
+    /// XMind-like pure white paper in light and dark mode (the canvas is
+    /// forced to the light color scheme; topic colors assume white).
+    static var canvasBackground: Color { .white }
 }
 
 /// Named colors offered in menus.

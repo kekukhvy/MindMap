@@ -201,8 +201,11 @@ struct ThemeMenuItems: View {
 
     var body: some View {
         let theme = editor.model.map.theme
-        CheckItem("Rainbow", checked: theme == .rainbow) {
+        CheckItem("XMind Pastel", checked: theme == .rainbow) {
             editor.model.setTheme(.rainbow, undoManager: editor.undoManager)
+        }
+        CheckItem("Classic Rainbow", checked: theme == .classic) {
+            editor.model.setTheme(.classic, undoManager: editor.undoManager)
         }
         Menu("Single Color") {
             ForEach(ColorPresets.all, id: \.hex) { preset in

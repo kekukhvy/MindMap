@@ -17,8 +17,9 @@ struct LayoutStyleTests {
         let parent = try #require(result.frames[root.id])
         let right = root.children.prefix(2).compactMap { result.frames[$0.id] }
         let left = root.children.suffix(2).compactMap { result.frames[$0.id] }
-        for f in right { #expect(approx(f.minX, parent.maxX + spacing.horizontal)) }
-        for f in left { #expect(approx(f.maxX, parent.minX - spacing.horizontal)) }
+        // The central topic uses the wider root gap.
+        for f in right { #expect(approx(f.minX, parent.maxX + spacing.rootHorizontal)) }
+        for f in left { #expect(approx(f.maxX, parent.minX - spacing.rootHorizontal)) }
         // Mirror symmetry for equal sizes.
         for (r, l) in zip(right, left) {
             #expect(approx(r.minX - parent.maxX, parent.minX - l.maxX))
@@ -53,7 +54,7 @@ struct LayoutStyleTests {
         let root = TestTree.node("root", style: .leftMap, children: TestTree.leaves(3))
         let result = layout(root)
         let parent = result.frames[root.id]!
-        for child in root.children { #expect(approx(result.frames[child.id]!.maxX, parent.minX - spacing.horizontal)) }
+        for child in root.children { #expect(approx(result.frames[child.id]!.maxX, parent.minX - spacing.rootHorizontal)) }
     }
 
     @Test func treeDownStacksIndentedBelow() throws {
@@ -63,7 +64,7 @@ struct LayoutStyleTests {
         let kids = root.children.compactMap { result.frames[$0.id] }
         for kid in kids { #expect(approx(kid.minX, parent.minX + spacing.treeIndent)) }
         #expect(approx(kids[0].minY, parent.maxY + spacing.levelGap))
-        #expect(approx(kids[1].minY, kids[0].maxY + spacing.vertical))
+        #expect(approx(kids[1].minY, kids[0].maxY + spacing.rootVertical))
         let c = try #require(result.connectors.first { $0.childID == root.children[2].id })
         #expect(c.style == .elbow)
         #expect(c.startAxis == .vertical && c.endAxis == .horizontal)

@@ -11,6 +11,9 @@ struct NodeView: View {
     let editor: EditorController?
     let nodeID: UUID
 
+    /// XMind-like selection ring color (fixed: the canvas is always light).
+    static let selectionBlue = Color(hex: "#2E7CF6")
+
     private var appearance: NodeAppearance { info.appearance }
     private var color: Color { Color(hex: appearance.colorHex) }
 
@@ -27,11 +30,11 @@ struct NodeView: View {
         .system(size: appearance.fontSize * scale, weight: appearance.weight.fontWeight)
     }
 
-    private var textColor: Color {
-        guard appearance.fill == .solid else { return .primary }
-        return appearance.usesDarkTextOnFill ? Color(white: 0.12) : .white
-    }
+    private var textColor: Color { Color(hex: appearance.textColorHex) }
 
+    /// Stage 2 hook: attachment indicators (e.g. a notes "≡" icon in the
+    /// branch color) go after the text here; the measurer must then add
+    /// their width to the node size.
     @ViewBuilder private var content: some View {
         if let editor {
             NodeEditorField(editor: editor, nodeID: nodeID, font: font, textColor: textColor)
@@ -67,8 +70,8 @@ struct NodeView: View {
             shape.fill(color)
                 .overlay { if appearance.border != nil { shape.stroke(color.opacity(0.55), style: strokeStyle(2)) } }
         case .tint:
-            shape.fill(color.opacity(0.14))
-                .overlay { shape.stroke(color, style: strokeStyle(1.5)) }
+            shape.fill(Color(hex: appearance.fillHex ?? appearance.colorHex))
+                .overlay { if appearance.border != nil { shape.stroke(color, style: strokeStyle(1.5)) } }
         case .none:
             if appearance.shape == .underline {
                 GeometryReader { proxy in
@@ -92,8 +95,8 @@ struct NodeView: View {
                 .overlay { outline.stroke(Color.accentColor, lineWidth: 3) }
                 .padding(-5 * scale)
         } else if isSelected {
-            outline.stroke(Color.accentColor, lineWidth: 2)
-                .padding(-4 * scale)
+            outline.stroke(NodeView.selectionBlue, lineWidth: 2)
+                .padding(-3 * scale)
         }
     }
 }

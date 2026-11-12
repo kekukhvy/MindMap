@@ -22,10 +22,10 @@ struct TreeLayoutTests {
         let parent = try #require(result.frames[root.id])
         let kids = root.children.compactMap { result.frames[$0.id] }
         #expect(kids.count == 3)
-        for kid in kids { #expect(approx(kid.minX, parent.maxX + spacing.horizontal)) }
+        for kid in kids { #expect(approx(kid.minX, parent.maxX + spacing.rootHorizontal)) }
         #expect(approx((kids[0].midY + kids[2].midY) / 2, parent.midY))
         #expect(kids[0].minY < kids[1].minY && kids[1].minY < kids[2].minY)
-        #expect(approx(kids[1].minY - kids[0].maxY, spacing.vertical))
+        #expect(approx(kids[1].minY - kids[0].maxY, spacing.rootVertical))
         #expect(result.connectors.count == 3)
         let connector = try #require(result.connectors.first { $0.childID == root.children[0].id })
         #expect(connector.style == .curved)

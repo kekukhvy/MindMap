@@ -7,12 +7,7 @@ import Foundation
 enum ColorResolver {
     static func effectiveColors(in map: MindMap) -> [UUID: String] {
         var result: [UUID: String] = [:]
-        let rootTheme: String
-        switch map.theme {
-        case .rainbow: rootTheme = ColorTheme.rootColorHex
-        case let .mono(hex): rootTheme = hex
-        }
-        result[map.root.id] = own(map.root) ?? rootTheme
+        result[map.root.id] = own(map.root) ?? map.theme.rootHex
         var branchIndex = 0
         let branches = map.root.children + map.floatingTopics.map(\.node)
         for branch in branches {
@@ -27,13 +22,8 @@ enum ColorResolver {
     }
 
     static func themeColor(_ theme: ColorTheme, branchIndex: Int) -> String {
-        switch theme {
-        case .rainbow:
-            let palette = ColorTheme.rainbowPalette
-            return palette[branchIndex % palette.count]
-        case let .mono(hex):
-            return hex
-        }
+        guard let palette = theme.palette else { return theme.rootHex }
+        return palette[branchIndex % palette.count]
     }
 
     private static func own(_ node: Node) -> String? {

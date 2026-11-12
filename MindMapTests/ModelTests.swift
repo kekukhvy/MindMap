@@ -95,7 +95,9 @@ struct ModelTests {
         let edits = try root.setAttributeEdits(.shape(.capsule), for: root.children[0].id, wholeBranch: true)
         #expect(edits.count == 3)
         #expect(try root.setAttributeEdits(.borderStyle(.dashed), for: root.id).count == 1)
-        #expect(NodeShape.defaultShape(forDepth: 0) == .roundedRect)
-        #expect(NodeShape.defaultShape(forDepth: 2) == .underline)
+        #expect(NodeShape.defaultShape(forDepth: 0) == .plainText)
+        #expect(NodeShape.defaultShape(forDepth: 1) == .roundedRect)
+        #expect(NodeShape.defaultShape(forDepth: 2) == .roundedRect)
+        #expect(NodeShape.defaultShape(forDepth: 3) == .plainText)
     }
 }

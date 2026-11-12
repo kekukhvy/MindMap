@@ -17,7 +17,7 @@ struct ColorThemeTests {
         let colors = ColorResolver.effectiveColors(in: map)
         let palette = ColorTheme.rainbowPalette
         let a = map.root.children[0], b = map.root.children[1], c = map.root.children[2]
-        #expect(colors[map.root.id] == ColorTheme.rootColorHex)
+        #expect(colors[map.root.id] == ColorTheme.rainbow.rootHex)
         #expect(colors[a.id] == palette[0])
         #expect(colors[a.children[0].id] == palette[0])
         #expect(colors[b.id] == palette[1])

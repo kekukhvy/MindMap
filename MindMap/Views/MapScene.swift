@@ -97,11 +97,16 @@ struct MapScene {
         return scene
     }
 
-    /// Resolves widths/taper and moves endpoints onto underlines (XMind look).
+    /// Default branch line width (thin, XMind pastel look; not tapered).
+    static let defaultLineWidth: CGFloat = 1.25
+
+    /// Resolves widths, moves endpoints onto underlines and gives central
+    /// topic edges their XMind quarter curves.
     private func styled(_ connector: Connector) -> StyledConnector {
         let parent = nodes[connector.parentID]
         let child = nodes[connector.childID]
         var start = connector.start, end = connector.end
+        var startAxis = connector.startAxis
         let inset = NodeAppearance.underlineWidth / 2
         if parent?.appearance.shape == .underline, connector.startAxis == .horizontal,
            let frame = layout.frames[connector.parentID] {
@@ -111,15 +116,29 @@ struct MapScene {
            let frame = layout.frames[connector.childID] {
             end.y = frame.maxY - inset
         }
-        let fromRoot = parent?.level == 0
-        let base = CGFloat(connector.lineWidth ?? (fromRoot ? 2 : 1.5))
-        let tapered = fromRoot && connector.style == .curved && connector.dash == .solid
+        if parent?.level == 0, connector.style == .curved, connector.startAxis == .horizontal,
+           connector.endAxis == .horizontal, let frame = layout.frames[connector.parentID] {
+            (start, startAxis) = MapScene.rootAnchor(rootFrame: frame, sideX: start.x, end: end)
+        }
+        let width = connector.lineWidth.map { CGFloat($0) } ?? MapScene.defaultLineWidth
         let geometry = ConnectorGeometry(
-            start: start, end: end, startAxis: connector.startAxis, endAxis: connector.endAxis,
-            style: connector.style, startWidth: tapered ? base * 3 : base, endWidth: tapered ? base * 0.75 : base,
-            dash: connector.dash
+            start: start, end: end, startAxis: startAxis, endAxis: connector.endAxis,
+            style: connector.style, startWidth: width, endWidth: width, dash: connector.dash
         )
         return StyledConnector(childID: connector.childID, geometry: geometry,
                                colorHex: child?.appearance.colorHex ?? ColorTheme.rootColorHex)
+    }
+
+    /// Start of a central topic edge on the root's side (`sideX`): a topic
+    /// level with the root gets a straight horizontal line; others leave the
+    /// root's upper/lower side region vertically and turn horizontal.
+    static func rootAnchor(rootFrame: CGRect, sideX: CGFloat, end: CGPoint) -> (CGPoint, ConnectorAxis) {
+        let band = rootFrame.height * 0.35
+        if abs(end.y - rootFrame.midY) <= band {
+            return (CGPoint(x: sideX, y: end.y), .horizontal)
+        }
+        let above = end.y < rootFrame.midY
+        let y = above ? rootFrame.midY - band : rootFrame.midY + band
+        return (CGPoint(x: sideX, y: y), .vertical)
     }
 }
