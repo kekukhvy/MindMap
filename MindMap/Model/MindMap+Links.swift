@@ -6,6 +6,8 @@ enum ResolvedLink: Equatable {
     case topic(UUID)
     /// Topic link whose target no longer exists (deleted; undo restores it).
     case brokenTopic(UUID)
+    /// Another map file (found on disk only when followed).
+    case map(MapReference)
 
     var isBroken: Bool {
         if case .brokenTopic = self { return true }
@@ -26,15 +28,18 @@ struct LinkCandidate: Equatable, Identifiable {
 
 /// Topic links: resolution, paths, candidates and edits (one undo step each).
 extension MindMap {
+    /// `id`'s link if this version understands it (`.unknown` = no link).
     func link(of id: UUID) -> TopicLink? {
-        node(withID: id)?.link
+        guard let link = node(withID: id)?.link, link.isKnown else { return nil }
+        return link
     }
 
     func resolvedLink(of id: UUID) -> ResolvedLink? {
         switch link(of: id) {
         case let .web(url): return .web(url)
         case let .topic(target): return contains(target) ? .topic(target) : .brokenTopic(target)
-        case nil: return nil
+        case let .map(reference): return .map(reference)
+        case .unknown, nil: return nil
         }
     }
 
@@ -81,8 +86,25 @@ extension MindMap {
     func setLinkEdits(_ link: TopicLink?, for id: UUID) throws -> [MapEdit] {
         guard let node = node(withID: id) else { throw TreeEditError.nodeNotFound }
         if let target = link?.topicID, target == id || !contains(target) { throw TreeEditError.invalidLink }
+        if let reference = link?.mapReference, !reference.isUsable { throw TreeEditError.invalidLink }
         guard node.link != link else { return [] }
         return try setAttributeEdits(.link(link), for: id)
+    }
+
+    /// Every topic linking to another map, in map order.
+    var mapLinks: [(id: UUID, reference: MapReference)] {
+        trees.flatMap(\.allNodes).compactMap { node in node.link?.mapReference.map { (node.id, $0) } }
+    }
+
+    /// Replaces map references (refreshed path / bookmark) without checks.
+    func updateMapLinkEdits(_ updates: [UUID: MapReference]) -> [MapEdit] {
+        var edits: [MapEdit] = []
+        for (id, reference) in updates {
+            guard let node = node(withID: id), node.link?.mapReference != nil, node.link != .map(reference),
+                  let set = try? setAttributeEdits(.link(.map(reference)), for: id) else { continue }
+            edits += set
+        }
+        return edits
     }
 
     /// Collapsed ancestors of `id` (nearest first).

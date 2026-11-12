@@ -1,20 +1,26 @@
 import SwiftUI
 
-/// Add / edit a topic's link: Web (URL, "https://" added when no scheme)
-/// or Topic (searchable list of this map's topics with their path, or
-/// pick the target on the canvas). Saving is one undo step.
+/// Add / edit a topic's link: Web (URL, "https://" added when no scheme),
+/// Topic (searchable list of this map's topics with their path, or pick the
+/// target on the canvas) or Map (another .mindmap file, optionally at one
+/// of its topics; `MapLinkPane`). Saving is one undo step.
 struct LinkEditorSheet: View {
     enum Mode: Hashable {
-        case web, topic
+        case web, topic, map
     }
 
     let editor: EditorController
     let nodeID: UUID
+    /// Pane to show first (nil: the existing link's kind, else Web).
+    var initialMode: Mode?
     @Environment(\.dismiss) private var dismiss
     @State private var mode: Mode = .web
     @State private var urlText = ""
     @State private var query = ""
     @State private var targetID: UUID?
+    @State private var mapChoice = MapLinkChoice()
+    /// Map choice as loaded (unchanged → the stored reference is kept).
+    @State private var loadedMapChoice = MapLinkChoice()
     @FocusState private var urlFocused: Bool
 
     private var existing: TopicLink? { editor.link(of: nodeID) }
@@ -24,7 +30,28 @@ struct LinkEditorSheet: View {
         switch mode {
         case .web: return normalizedURL.map(TopicLink.web)
         case .topic: return targetID.flatMap { editor.model.map.contains($0) ? TopicLink.topic($0) : nil }
+        case .map: return newMapLink
         }
+    }
+
+    private var canSave: Bool {
+        switch mode {
+        case .web, .topic: return newLink != nil
+        case .map:
+            guard let url = mapChoice.url else { return false }
+            return editor.documentURL.map { LaunchEnvironment.key($0) != LaunchEnvironment.key(url) } ?? true
+        }
+    }
+
+    /// Unchanged file: the stored reference (new topic only); else a new
+    /// reference (relative path + bookmark) to the chosen file.
+    private var newMapLink: TopicLink? {
+        guard canSave, let url = mapChoice.url else { return nil }
+        if var reference = existing?.mapReference, mapChoice.url == loadedMapChoice.url {
+            reference.targetTopicID = mapChoice.targetTopicID
+            return .map(reference)
+        }
+        return .map(editor.mapReference(to: url, targetTopicID: mapChoice.targetTopicID))
     }
 
     var body: some View {
@@ -34,19 +61,21 @@ struct LinkEditorSheet: View {
             Picker("Link to", selection: $mode) {
                 Text("Web").tag(Mode.web)
                 Text("Topic").tag(Mode.topic)
+                Text("Map").tag(Mode.map)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             switch mode {
             case .web: webPane
             case .topic: topicPane
+            case .map: MapLinkPane(editor: editor, nodeID: nodeID, choice: $mapChoice, onLinkedNewMap: { dismiss() })
             }
             Spacer(minLength: 0)
             buttons
         }
         .padding(20)
         #if os(macOS)
-        .frame(width: 480, height: 440)
+        .frame(width: 520, height: 500)
         #else
         .presentationDetents([.medium, .large])
         #endif
@@ -139,7 +168,7 @@ struct LinkEditorSheet: View {
                 .keyboardShortcut(.cancelAction)
             Button(existing == nil ? "Add Link" : "Save", action: save)
                 .keyboardShortcut(.defaultAction)
-                .disabled(newLink == nil)
+                .disabled(!canSave)
         }
     }
 
@@ -151,9 +180,16 @@ struct LinkEditorSheet: View {
         case let .topic(id):
             mode = .topic
             targetID = id
-        case nil:
+        case let .map(reference):
+            mode = .map
+            let url = editor.resolvedMapURL(of: nodeID)
+            mapChoice = MapLinkChoice(url: url, missingName: url == nil ? reference.displayName : nil,
+                                      targetTopicID: reference.targetTopicID)
+            loadedMapChoice = mapChoice
+        case .unknown, nil:
             mode = .web
         }
+        if let initialMode { mode = initialMode }
         urlFocused = mode == .web
     }
 

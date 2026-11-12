@@ -25,4 +25,15 @@ extension MindMapModel {
         guard !edits.isEmpty else { return false }
         return perform(edits, actionName: "Show Topic", undoManager: undoManager)
     }
+
+    /// Writes refreshed map references (new relative path after the
+    /// document was saved/moved, re-created stale bookmark). Not an undo
+    /// step: it only records where the same file is now; it is saved with
+    /// the document's next save.
+    @discardableResult
+    func refreshMapLinks(_ updates: [UUID: MapReference]) -> Bool {
+        let edits = map.updateMapLinkEdits(updates)
+        guard !edits.isEmpty else { return false }
+        return perform(edits, actionName: "Update Map Links", undoManager: nil)
+    }
 }

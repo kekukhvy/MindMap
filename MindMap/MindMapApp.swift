@@ -11,7 +11,7 @@ struct MindMapApp: App {
 
     var body: some Scene {
         DocumentGroup(newDocument: { MindMapDocument() }) { file in
-            ContentView(model: file.document.model)
+            ContentView(model: file.document.model, documentURL: file.fileURL)
         }
         .commands { MindMapCommands() }
         // Attachments open in their own window, keyed by document + attachment.

@@ -67,6 +67,30 @@ final class CanvasEventHarness {
         try await wait(200)
     }
 
+    /// Real document window of the map file at `url` (opened like File ›
+    /// Open), its editor and canvas set up as in `init(realDocumentWith:)`.
+    init(realDocumentAt url: URL) async throws {
+        _ = try await NSDocumentController.shared.openDocument(withContentsOf: url, display: true)
+        try await Task.sleep(for: .milliseconds(800))
+        let key = LaunchEnvironment.key(url)
+        let document = try #require(NSDocumentController.shared.documents.first {
+            $0.fileURL.map(LaunchEnvironment.key) == key })
+        window = try #require(document.windowControllers.first?.window)
+        editor = try #require(EditorController.debugInstances.compactMap(\.editor).last {
+            $0.documentURL.map(LaunchEnvironment.key) == key })
+        queued = true
+        window.setContentSize(CGSize(width: 1000, height: 700))
+        Self.forceKey(window)
+        window.makeKeyAndOrderFront(nil)
+        editor.select(nil)
+        undo.groupsByEvent = false
+        editor.undoManager = undo
+        try await wait(500)
+        editor.viewport = Viewport(scale: 1, offset: CGPoint(x: editor.viewSize.width / 3,
+                                                              y: editor.viewSize.height / 2))
+        try await wait(200)
+    }
+
     /// Makes an existing window act as key and all its views accept the
     /// first click although the hosted test app is not frontmost.
     private static func forceKey(_ window: NSWindow) {

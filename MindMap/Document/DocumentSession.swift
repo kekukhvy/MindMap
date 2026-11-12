@@ -16,6 +16,12 @@ final class DocumentSession {
     var message: String?
     /// Presents the document picker (toolbar or File › Open…).
     var isImporting = false
+    /// Maps this window showed before following map links in place (no
+    /// multi-window support): Back returns to the last one.
+    private(set) var backStack: [MapBackEntry] = []
+    /// The window's scene session (to bring this window to the front when
+    /// a link in another window points at its map).
+    @ObservationIgnored weak var sceneSession: UISceneSession?
 
     /// Window undo manager (editor + system Edit menu); every document of
     /// the window adopts it, which drives UIDocument's dirty state/autosave.
@@ -35,17 +41,86 @@ final class DocumentSession {
     /// Documents open in any window (key -> session), to never edit one
     /// file from two windows.
     private static var openDocuments: [String: ObjectIdentifier] = [:]
+    /// Live sessions (find the window showing a map).
+    private static var sessions: [ObjectIdentifier: WeakSession] = [:]
+    /// Maps requested for new windows (map links), consumed by the next
+    /// window that starts; also delivered as the scene's user activity.
+    static var pendingWindowOpens: [URL] = []
     private static var launchRestoreClaimed = false
     static var store = LastDocumentStore(defaults: LaunchEnvironment.isTesting
                                          ? UserDefaults(suiteName: "com.kekukh.MindMap.tests") ?? .standard
                                          : .standard)
 
-    #if DEBUG
     struct WeakSession { weak var session: DocumentSession? }
+    #if DEBUG
     /// Debug-only registry for in-app tests.
     static var debugInstances: [WeakSession] = []
-    init() { Self.debugInstances.append(WeakSession(session: self)) }
-    #endif
+    
+/// A map this window showed before following a map link in place.
+struct MapBackEntry: Equatable {
+    var url: URL
+    var title: String
+}
+
+/// User activity that creates a new iPad window for a map link.
+@MainActor
+enum MapLinkActivity {
+    static let type = "com.kekukh.MindMap.openMap"
+
+    static func make(for url: URL) -> NSUserActivity {
+        let activity = NSUserActivity(activityType: type)
+        var info: [String: Any] = ["path": url.path]
+        if let bookmark = try? SystemBookmarkCoder().bookmark(for: url) { info["bookmark"] = bookmark }
+        activity.userInfo = info
+        activity.targetContentIdentifier = DocumentWindow.sceneID
+        return activity
+    }
+
+    static func url(from activity: NSUserActivity) -> URL? {
+        guard activity.activityType == type else { return nil }
+        if let data = activity.userInfo?["bookmark"] as? Data, let url = try? SystemBookmarkCoder().resolve(data).url {
+            return url
+        }
+        return (activity.userInfo?["path"] as? String).map { URL(fileURLWithPath: $0) }
+    }
+}
+#endif
+
+    init() {
+        Self.sessions[ObjectIdentifier(self)] = WeakSession(session: self)
+        #if DEBUG
+        Self.debugInstances.append(WeakSession(session: self))
+        
+/// A map this window showed before following a map link in place.
+struct MapBackEntry: Equatable {
+    var url: URL
+    var title: String
+}
+
+/// User activity that creates a new iPad window for a map link.
+@MainActor
+enum MapLinkActivity {
+    static let type = "com.kekukh.MindMap.openMap"
+
+    static func make(for url: URL) -> NSUserActivity {
+        let activity = NSUserActivity(activityType: type)
+        var info: [String: Any] = ["path": url.path]
+        if let bookmark = try? SystemBookmarkCoder().bookmark(for: url) { info["bookmark"] = bookmark }
+        activity.userInfo = info
+        activity.targetContentIdentifier = DocumentWindow.sceneID
+        return activity
+    }
+
+    static func url(from activity: NSUserActivity) -> URL? {
+        guard activity.activityType == type else { return nil }
+        if let data = activity.userInfo?["bookmark"] as? Data, let url = try? SystemBookmarkCoder().resolve(data).url {
+            return url
+        }
+        return (activity.userInfo?["path"] as? String).map { URL(fileURLWithPath: $0) }
+    }
+}
+#endif
+    }
 
     // MARK: Requests
 
@@ -54,7 +129,21 @@ final class DocumentSession {
     func start(sceneBookmark: Data?) {
         guard !started else { return }
         started = true
+        if !Self.pendingWindowOpens.isEmpty {
+            // A window opened for a map link.
+            let url = Self.pendingWindowOpens.removeFirst()
+            Self.launchRestoreClaimed = true
+            enqueue { if await !self.openNow(url, reportErrors: true) { await self.createNow() } }
+            return
+        }
         enqueue { await self.launch(sceneBookmark: sceneBookmark) }
+    }
+
+    /// The scene was created for a map link (`MapLinkActivity`).
+    func open(activity: NSUserActivity) {
+        guard let url = MapLinkActivity.url(from: activity) else { return }
+        Self.pendingWindowOpens.removeAll { LaunchEnvironment.key($0) == LaunchEnvironment.key(url) }
+        open(url)
     }
 
     func open(_ url: URL) {
@@ -90,6 +179,64 @@ final class DocumentSession {
         document.autosave(completionHandler: nil)
     }
 
+    // MARK: Map links
+
+    /// Map link Go to: the map opens in its own window (a new scene) when
+    /// the device supports several windows — like a new tab on the Mac;
+    /// already open in a window → that window comes to the front.
+    /// Otherwise this window switches to the map and Back returns.
+    func openLinkedMap(_ url: URL, revealing topicID: UUID?, completion: @escaping (String?) -> Void) {
+        let key = LaunchEnvironment.key(url)
+        if let topicID { MapRevealCenter.shared.request(topicID, in: url) }
+        if let current = document, LaunchEnvironment.key(current.fileURL) == key {
+            completion(nil)
+            return
+        }
+        // Failures of scene requests arrive later (after completion(nil)).
+        if let ownerID = Self.openDocuments[key], let owner = Self.sessions[ownerID]?.session, owner !== self {
+            guard let sceneSession = owner.sceneSession else {
+                completion("It is already open in another window.")
+                return
+            }
+            UIApplication.shared.activateSceneSession(for: UISceneSessionActivationRequest(session: sceneSession)) { error in
+                completion(error.localizedDescription)
+            }
+            completion(nil)
+            return
+        }
+        if Self.usesSeparateWindows {
+            Self.pendingWindowOpens.append(url)
+            let request = UISceneSessionActivationRequest(role: .windowApplication,
+                                                          userActivity: MapLinkActivity.make(for: url))
+            UIApplication.shared.activateSceneSession(for: request) { error in
+                Self.pendingWindowOpens.removeAll { LaunchEnvironment.key($0) == key }
+                completion(error.localizedDescription)
+            }
+            completion(nil)
+            return
+        }
+        enqueue {
+            let previous = self.document.map { MapBackEntry(url: $0.fileURL, title: self.title) }
+            if await self.openNow(url, reportErrors: false) {
+                if let previous { self.backStack.append(previous) }
+                completion(nil)
+            } else {
+                completion("It could not be opened.")
+            }
+        }
+    }
+
+    /// Several windows (iPad multitasking). Tests: never (in-window switch).
+    static var usesSeparateWindows: Bool {
+        !LaunchEnvironment.isTesting && UIApplication.shared.supportsMultipleScenes
+    }
+
+    /// Back (in-window map links): reopens the previous map.
+    func goBackToPreviousMap() {
+        guard let entry = backStack.popLast() else { return }
+        enqueue { _ = await self.openNow(entry.url, reportErrors: true) }
+    }
+
     private func enqueue(_ operation: @escaping @MainActor () async -> Void) {
         pending += 1
         let previous = queue
@@ -105,8 +252,9 @@ final class DocumentSession {
     private func launch(sceneBookmark: Data?) async {
         let mayRestoreLast = !Self.launchRestoreClaimed && !LaunchEnvironment.isTesting
         Self.launchRestoreClaimed = true
-        // A document from Files (onOpenURL) is already queued behind.
-        guard pending == 1 else { return }
+        // A document from Files (onOpenURL) / a map link is already queued
+        // behind or was opened.
+        guard pending == 1, document == nil else { return }
         if let sceneBookmark, let url = try? SystemBookmarkCoder().resolve(sceneBookmark).url,
            LastDocumentStore.itemExists(url), await openNow(url, reportErrors: false) {
             return
@@ -260,6 +408,35 @@ final class DocumentSession {
                 try? FileManager.default.removeItem(at: target)
             }
         }.value
+    }
+}
+
+/// A map this window showed before following a map link in place.
+struct MapBackEntry: Equatable {
+    var url: URL
+    var title: String
+}
+
+/// User activity that creates a new iPad window for a map link.
+@MainActor
+enum MapLinkActivity {
+    static let type = "com.kekukh.MindMap.openMap"
+
+    static func make(for url: URL) -> NSUserActivity {
+        let activity = NSUserActivity(activityType: type)
+        var info: [String: Any] = ["path": url.path]
+        if let bookmark = try? SystemBookmarkCoder().bookmark(for: url) { info["bookmark"] = bookmark }
+        activity.userInfo = info
+        activity.targetContentIdentifier = DocumentWindow.sceneID
+        return activity
+    }
+
+    static func url(from activity: NSUserActivity) -> URL? {
+        guard activity.activityType == type else { return nil }
+        if let data = activity.userInfo?["bookmark"] as? Data, let url = try? SystemBookmarkCoder().resolve(data).url {
+            return url
+        }
+        return (activity.userInfo?["path"] as? String).map { URL(fileURLWithPath: $0) }
     }
 }
 #endif

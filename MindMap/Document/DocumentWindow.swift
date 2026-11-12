@@ -21,8 +21,19 @@ struct DocumentWindow: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) { documentsMenu }
+                    if let back = session.backStack.last {
+                        // In-window map links (no multi-window support).
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("Back to “\(back.title)”", systemImage: "chevron.backward") {
+                                session.goBackToPreviousMap()
+                            }
+                            .labelStyle(.titleAndIcon)
+                        }
+                    }
                 }
         }
+        .background { SceneSessionReader { session.sceneSession = $0 } }
+        .onContinueUserActivity(MapLinkActivity.type) { activity in session.open(activity: activity) }
         .focusedSceneValue(\.documentSession, session)
         .fileImporter(isPresented: $session.isImporting, allowedContentTypes: [.mindMap]) { result in
             if case .success(let url) = result { session.open(url) }
@@ -51,7 +62,10 @@ struct DocumentWindow: View {
 
     @ViewBuilder private var content: some View {
         if let document = session.document {
-            ContentView(model: document.model)
+            ContentView(model: document.model, documentURL: document.fileURL,
+                        mapOpener: { url, topicID, completion in
+                            session.openLinkedMap(url, revealing: topicID, completion: completion)
+                        })
                 .id(ObjectIdentifier(document))
         } else if session.isWorking {
             ProgressView()
@@ -74,6 +88,31 @@ struct DocumentWindow: View {
                 isRenaming = true
             }
             .disabled(session.document == nil)
+        }
+    }
+}
+
+/// Reports the UIKit scene session of the window showing it.
+private struct SceneSessionReader: UIViewRepresentable {
+    let onSession: (UISceneSession?) -> Void
+
+    func makeUIView(context: Context) -> ReaderView {
+        let view = ReaderView()
+        view.onSession = onSession
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ uiView: ReaderView, context: Context) {
+        uiView.onSession = onSession
+    }
+
+    final class ReaderView: UIView {
+        var onSession: ((UISceneSession?) -> Void)?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            onSession?(window?.windowScene?.session)
         }
     }
 }

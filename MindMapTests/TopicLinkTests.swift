@@ -83,12 +83,14 @@ struct TopicLinkTests {
         let old = #"{"id":"\#(id.uuidString)","text":"Old"}"#
         let node = try JSONDecoder().decode(Node.self, from: Data(old.utf8))
         #expect(node.link == nil && node.text == "Old")
-        // A future link kind ("file") or a bad value: no link, rest intact.
+        // A future link kind ("file") or a bad value: no link for this
+        // version (kept verbatim for saving, see MapLinkTests), rest intact.
         for link in [#"{"kind":"file","path":"a.pdf"}"#, #"{"kind":"web"}"#, #""https://x.com""#,
                      #"{"kind":"topic","topicID":"nope"}"#] {
             let json = #"{"id":"\#(id.uuidString)","text":"T","link":\#(link),"children":[{"id":"\#(UUID().uuidString)"}]}"#
             let decoded = try JSONDecoder().decode(Node.self, from: Data(json.utf8))
-            #expect(decoded.link == nil && decoded.text == "T" && decoded.children.count == 1)
+            #expect(decoded.link?.isKnown != true && decoded.text == "T" && decoded.children.count == 1)
+            #expect(MindMap(root: decoded).link(of: id) == nil)
         }
         let web = #"{"id":"\#(id.uuidString)","link":{"kind":"web","url":"mailto:a@b.com"}}"#
         #expect(try JSONDecoder().decode(Node.self, from: Data(web.utf8)).link == .web(URL(string: "mailto:a@b.com")!))

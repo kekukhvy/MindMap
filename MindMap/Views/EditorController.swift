@@ -140,6 +140,29 @@ final class EditorController {
     var dueDatePickerID: UUID?
     /// Opens web links (default browser); replaced by tests.
     @ObservationIgnored var openURL: (URL) -> Void = EditorController.openInBrowser
+    /// The document's file (nil while never saved); map links store paths
+    /// relative to its folder. Set by the window hosting the editor.
+    var documentURL: URL? {
+        didSet {
+            guard documentURL.map(LaunchEnvironment.key) != oldValue.map(LaunchEnvironment.key) else { return }
+            refreshMapLinkPaths()
+        }
+    }
+    /// Opens a linked map file (macOS: new tab; iPad: new window or in this
+    /// window) and reports failure text; set by the hosting window.
+    @ObservationIgnored var mapOpener: MapOpener?
+    @ObservationIgnored var mapResolver = MapLinkResolver()
+    /// A map link that could not be followed (alert with Locate…).
+    var mapLinkProblem: MapLinkProblem?
+    /// "Locate…": file picker shown for the map link of `mapLocateNodeID`.
+    var isMapLocatorPresented = false
+    @ObservationIgnored var mapLocateNodeID: UUID?
+    #if os(macOS)
+    /// Window showing this editor (linked maps open as tabs of it).
+    @ObservationIgnored weak var hostWindow: NSWindow?
+    #endif
+    /// Topic to reveal once the canvas has its size (opened at a topic).
+    @ObservationIgnored var pendingRevealID: UUID?
     private(set) var canUndo = false
     private(set) var canRedo = false
 
@@ -228,6 +251,10 @@ final class EditorController {
             let bounds = scene.layout.bounds
             if bounds.width > size.width - 80 || bounds.height > size.height - 80 {
                 viewport = .fitting(bounds, in: size, maxScale: 1)
+            }
+            if let id = pendingRevealID {
+                pendingRevealID = nil
+                DispatchQueue.main.async { [weak self] in self?.show(id) }
             }
         } else {
             // Keep the content center fixed on resize.

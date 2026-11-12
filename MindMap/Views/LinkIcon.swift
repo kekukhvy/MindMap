@@ -3,7 +3,7 @@ import SwiftUI
 /// What a topic shows of its link: the icon before the title + tooltip.
 struct LinkSummary: Equatable {
     enum Kind: Equatable {
-        case web, topic
+        case web, topic, map
     }
 
     var kind: Kind
@@ -30,6 +30,8 @@ struct LinkSummary: Equatable {
             self.init(kind: .topic, isBroken: false, tooltip: map.breadcrumb(to: target) ?? "")
         case .brokenTopic:
             self.init(kind: .topic, isBroken: true, tooltip: LinkSummary.brokenMessage)
+        case let .map(reference):
+            self.init(kind: .map, isBroken: false, tooltip: LinkSummary.mapTooltip(reference))
         }
     }
 
@@ -37,7 +39,19 @@ struct LinkSummary: Equatable {
         switch kind {
         case .web: return "link"
         case .topic: return "arrow.turn.down.right"
+        case .map: return "map"
         }
+    }
+
+    /// "Open map “Plan” in a new tab — Projects/Plan.mindmap".
+    static func mapTooltip(_ reference: MapReference) -> String {
+        #if os(macOS)
+        let place = "in a new tab"
+        #else
+        let place = "in a new window"
+        #endif
+        let topic = reference.targetTopicID == nil ? "" : " at a topic"
+        return "Open map “\(reference.displayName)”\(topic) \(place) — \(reference.pathDescription)"
     }
 }
 
@@ -73,7 +87,16 @@ struct LinkIconView: View {
         }
         .buttonStyle(.plain)
         .help(link.tooltip)
-        .accessibilityLabel(link.isBroken ? "Broken link" : (link.kind == .web ? "Open link" : "Go to linked topic"))
+        .accessibilityLabel(accessibilityLabel)
         .padding(.trailing, LinkIconMetrics.trailingGap(fontSize: fontSize) * scale)
+    }
+
+    private var accessibilityLabel: String {
+        if link.isBroken { return "Broken link" }
+        switch link.kind {
+        case .web: return "Open link"
+        case .topic: return "Go to linked topic"
+        case .map: return "Open linked map"
+        }
     }
 }

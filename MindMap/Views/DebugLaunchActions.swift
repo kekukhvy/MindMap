@@ -20,6 +20,11 @@ typealias DebugInkColor = UIColor
 ///   "Mockup.png" to topic "Files"; `=sheet` opens the PDF (sheet on iPad,
 ///   window on macOS), `=image` the PNG, `=picker` shows the Attach File…
 ///   picker, `=many` adds 3 more files (collapsed icon row + count badge).
+/// - `MINDMAP_DEBUG_MAPLINK=editor` writes "Roadmap.mindmap" next to the
+///   open map, links topic "Roadmap" to its topic "Q3" and opens the link
+///   editor on the Map tab; `=open` follows the link instead (iPad: new
+///   window) and 5 s later writes the windows' maps to
+///   `<tmp>/maplink-report.txt`.
 /// (simctl: `SIMCTL_CHILD_MINDMAP_DEBUG_NOTE=sheet xcrun simctl launch ...`.)
 enum DebugLaunchActions {
     nonisolated(unsafe) private static var didRun = false
@@ -33,9 +38,42 @@ enum DebugLaunchActions {
         } else if let mode = environment["MINDMAP_DEBUG_FILE"] {
             didRun = true
             seedFiles(editor, mode: mode)
+        } else if let mode = environment["MINDMAP_DEBUG_MAPLINK"] {
+            didRun = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { seedMapLink(editor, mode: mode) }
         } else if let mode = environment["MINDMAP_DEBUG_DRAWING"] {
             didRun = true
             seedDrawing(editor, open: mode == "sheet" || mode == "undo", exerciseUndo: mode == "undo")
+        }
+    }
+
+    private static func seedMapLink(_ editor: EditorController, mode: String) {
+        guard let documentURL = editor.documentURL, let topic = topic("Roadmap", editor) else { return }
+        let url = MapPaths.baseFolder(of: documentURL).appendingPathComponent("Roadmap.mindmap", isDirectory: true)
+        let q3 = Node(text: "Q3")
+        let roadmap = MindMap(root: Node(text: "Roadmap", children: [
+            Node(text: "Q2", children: [Node(text: "Beta")]), q3, Node(text: "Q4", children: [Node(text: "Launch")]),
+        ]))
+        if !FileManager.default.fileExists(atPath: url.path) {
+            try? MindMapPackage.fileWrapper(for: roadmap).write(to: url, options: .atomic, originalContentsURL: nil)
+        }
+        let targetID = (try? MapFiles.readMap(at: url))?.root.children.first { $0.text == "Q3" }?.id ?? q3.id
+        editor.linkMap(at: url, to: topic, targetTopicID: targetID)
+        editor.select(topic)
+        if mode == "open" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { editor.goToLink(of: topic) }
+            #if os(iOS)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+                let lines = DocumentSession.debugInstances.compactMap(\.session).map {
+                    "window: \($0.title) back=\($0.backStack.map(\.title))"
+                } + ["supportsMultipleScenes=\(UIApplication.shared.supportsMultipleScenes)",
+                     "problem=\(editor.mapLinkProblem?.message ?? "none")"]
+                let report = FileManager.default.temporaryDirectory.appendingPathComponent("maplink-report.txt")
+                try? lines.joined(separator: "\n").write(to: report, atomically: true, encoding: .utf8)
+            }
+            #endif
+        } else {
+            editor.beginEditLink(topic, mode: .map)
         }
     }
 

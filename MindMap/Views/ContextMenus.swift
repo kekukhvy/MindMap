@@ -152,7 +152,11 @@ struct GoToLinkButton: View {
     }
 
     private var icon: String {
-        editor.link(of: id)?.webURL != nil ? "safari" : "arrow.right.circle"
+        switch editor.link(of: id) {
+        case .web: return "safari"
+        case .map: return "macwindow.badge.plus"
+        default: return "arrow.right.circle"
+        }
     }
 
     private var title: String {
@@ -162,6 +166,7 @@ struct GoToLinkButton: View {
             let text = LinkCandidate.displayText(editor.model.map.node(withID: target)?.text ?? "")
             return "Go to “\(Self.short(text))”"
         case .brokenTopic: return "Go to (Deleted Topic)"
+        case let .map(reference): return "Open “\(Self.short(reference.displayName))”"
         case nil: return "Go to"
         }
     }
@@ -171,7 +176,7 @@ struct GoToLinkButton: View {
     }
 }
 
-/// Add / Edit Link… (⌘K), Copy Link, Remove Link.
+/// Add / Edit Link… (⌘K), Locate… (missing map file), Copy Link, Remove Link.
 struct LinkMenuItems: View {
     let editor: EditorController
     let id: UUID
@@ -180,6 +185,10 @@ struct LinkMenuItems: View {
         let link = editor.link(of: id)
         Button(link == nil ? "Add Link…" : "Edit Link…", systemImage: "link") { editor.beginEditLink(id) }
         if link != nil {
+            if link?.mapReference != nil, editor.resolvedMapURL(of: id) == nil {
+                // Missing map file: relink (also offered when Go to fails).
+                Button("Locate…", systemImage: "magnifyingglass") { editor.beginLocateMap(id) }
+            }
             Button("Copy Link", systemImage: "doc.on.doc") { editor.copyLink(id) }
                 .disabled(editor.model.map.resolvedLink(of: id)?.isBroken ?? true)
             Button("Remove Link", systemImage: "xmark.circle") { editor.removeLink(id) }

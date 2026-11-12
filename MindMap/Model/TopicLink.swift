@@ -1,21 +1,32 @@
 import Foundation
 
-/// Where a topic links to: a web URL or another topic of the same map
-/// (main tree or floating). JSON: `{"kind":"web","url":"https://…"}` /
-/// `{"kind":"topic","topicID":"<UUID>"}`; unknown kinds decode as no link.
+/// Where a topic links to: a web URL, another topic of the same map (main
+/// tree or floating) or another map file (WP10). JSON:
+/// `{"kind":"web","url":"https://…"}` / `{"kind":"topic","topicID":"<UUID>"}`
+/// / `{"kind":"map","path":"Other.mindmap","bookmark":"<base64>","name":"Other","topicID":"<UUID>"}`.
+/// A link this version does not understand (newer kind, bad value) is kept
+/// verbatim as `.unknown` — written back unchanged on save, but treated as
+/// "no link" everywhere else (`MindMap.link(of:)`).
 enum TopicLink: Equatable, Hashable, Codable {
     case web(URL)
     case topic(UUID)
+    case map(MapReference)
+    case unknown(JSONValue)
 
     private enum CodingKeys: String, CodingKey {
-        case kind, url, topicID
+        case kind, url, topicID, path, bookmark, name
     }
 
     private enum Kind: String, Codable {
-        case web, topic
+        case web, topic, map
     }
 
     init(from decoder: Decoder) throws {
+        let raw = try JSONValue(from: decoder)
+        self = (try? Self.decodeKnown(from: decoder)) ?? .unknown(raw)
+    }
+
+    private static func decodeKnown(from decoder: Decoder) throws -> TopicLink {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         switch try c.decode(Kind.self, forKey: .kind) {
         case .web:
@@ -23,13 +34,26 @@ enum TopicLink: Equatable, Hashable, Codable {
             guard let url = URL(string: string) else {
                 throw DecodingError.dataCorruptedError(forKey: .url, in: c, debugDescription: "Invalid URL")
             }
-            self = .web(url)
+            return .web(url)
         case .topic:
-            self = .topic(try c.decode(UUID.self, forKey: .topicID))
+            return .topic(try c.decode(UUID.self, forKey: .topicID))
+        case .map:
+            let reference = MapReference(relativePath: try c.decodeIfPresent(String.self, forKey: .path),
+                                         bookmark: try c.decodeIfPresent(Data.self, forKey: .bookmark),
+                                         displayName: try c.decodeIfPresent(String.self, forKey: .name),
+                                         targetTopicID: try c.decodeIfPresent(UUID.self, forKey: .topicID))
+            guard reference.isUsable else {
+                throw DecodingError.dataCorruptedError(forKey: .path, in: c, debugDescription: "No path or bookmark")
+            }
+            return .map(reference)
         }
     }
 
     func encode(to encoder: Encoder) throws {
+        if case let .unknown(raw) = self {
+            try raw.encode(to: encoder)
+            return
+        }
         var c = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case let .web(url):
@@ -38,6 +62,14 @@ enum TopicLink: Equatable, Hashable, Codable {
         case let .topic(id):
             try c.encode(Kind.topic, forKey: .kind)
             try c.encode(id, forKey: .topicID)
+        case let .map(reference):
+            try c.encode(Kind.map, forKey: .kind)
+            try c.encodeIfPresent(reference.relativePath, forKey: .path)
+            try c.encodeIfPresent(reference.bookmark, forKey: .bookmark)
+            try c.encode(reference.displayName, forKey: .name)
+            try c.encodeIfPresent(reference.targetTopicID, forKey: .topicID)
+        case .unknown:
+            break
         }
     }
 
@@ -49,6 +81,17 @@ enum TopicLink: Equatable, Hashable, Codable {
     var topicID: UUID? {
         if case let .topic(id) = self { return id }
         return nil
+    }
+
+    var mapReference: MapReference? {
+        if case let .map(reference) = self { return reference }
+        return nil
+    }
+
+    /// A kind this version understands (not `.unknown`).
+    var isKnown: Bool {
+        if case .unknown = self { return false }
+        return true
     }
 }
 

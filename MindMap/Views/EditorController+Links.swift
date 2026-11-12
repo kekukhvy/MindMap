@@ -9,6 +9,8 @@ import UIKit
 struct LinkEditorRequest: Identifiable, Equatable {
     let id = UUID()
     var nodeID: UUID
+    /// Pane to open (nil: the link's kind).
+    var mode: LinkEditorSheet.Mode?
 }
 
 /// Topic links: edit (one undo step each), Go to, Back, copy.
@@ -18,12 +20,12 @@ extension EditorController {
     }
 
     /// ⌘K / "Add Link…" / "Edit Link…": shows the link editor.
-    func beginEditLink(_ id: UUID? = nil) {
+    func beginEditLink(_ id: UUID? = nil, mode: LinkEditorSheet.Mode? = nil) {
         commitEditing()
         cancelPick()
         guard let target = id ?? selectedID, model.map.node(withID: target) != nil else { return }
         select(target)
-        linkEditor = LinkEditorRequest(nodeID: target)
+        linkEditor = LinkEditorRequest(nodeID: target, mode: mode)
     }
 
     @discardableResult
@@ -51,6 +53,7 @@ extension EditorController {
         switch resolved {
         case let .web(url): text = url.absoluteString
         case let .topic(topic): text = model.map.breadcrumb(to: topic) ?? ""
+        case let .map(reference): text = resolvedMapURL(of: target)?.path ?? reference.pathDescription
         case .brokenTopic: return
         }
         #if os(macOS)
@@ -61,9 +64,10 @@ extension EditorController {
         #endif
     }
 
-    /// Go to: opens a web link in the browser, or jumps to the linked topic
-    /// (expanding collapsed ancestors, remembering `id` for Back). A broken
-    /// topic link shows "Target topic was deleted".
+    /// Go to: opens a web link in the browser, jumps to the linked topic
+    /// (expanding collapsed ancestors, remembering `id` for Back) or opens
+    /// the linked map (`openMapLink`). A broken topic link shows "Target
+    /// topic was deleted".
     func goToLink(of id: UUID? = nil) {
         guard let source = id ?? selectedID, let resolved = model.map.resolvedLink(of: source) else { return }
         commitEditing()
@@ -75,6 +79,8 @@ extension EditorController {
         case let .topic(target):
             navigationHistory.push(source)
             show(target)
+        case .map:
+            openMapLink(of: source)
         case .brokenTopic:
             select(source)
             linkMessage = LinkSummary.brokenMessage
