@@ -4,6 +4,11 @@ import SwiftUI
 /// Node being dragged for reparenting / reordering (canvas coordinates).
 struct NodeDrag: Equatable {
     var id: UUID
+    /// Topics that move (the dragged one plus the rest of a multi-selection,
+    /// without topics whose ancestor moves too), document order.
+    var movingIDs: [UUID] = []
+    /// Topics drawn as ghosts following the pointer (the whole selection).
+    var ghostIDs: Set<UUID> = []
     var translation: CGSize
     var targetID: UUID?
     var placement: DropPlacement = .child
@@ -56,7 +61,8 @@ struct ControlPointDrag: Equatable {
 /// Request for the custom color sheet.
 struct ColorSheetRequest: Identifiable {
     enum Target: Equatable {
-        case node(UUID, wholeBranch: Bool)
+        /// One or several topics (a multi-selection).
+        case nodes([UUID], wholeBranch: Bool)
         case relationship(UUID)
         case boundary(UUID)
         case theme
@@ -83,8 +89,27 @@ final class EditorController {
     let model: MindMapModel
     @ObservationIgnored weak var undoManager: UndoManager?
 
-    /// Selected topic (exclusive with `selectedItem`).
-    var selectedID: UUID?
+    /// Primary selected topic = keyboard focus (exclusive with
+    /// `selectedItem`). Setting it to a topic outside `selectedIDs`
+    /// collapses the multi-selection to that topic; nil clears it.
+    var selectedID: UUID? {
+        didSet {
+            if let selectedID {
+                if !selectedIDs.contains(selectedID) { selectedIDs = [selectedID] }
+            } else if !selectedIDs.isEmpty {
+                selectedIDs = []
+            }
+        }
+    }
+    /// All selected topics (contains `selectedID`; empty without one).
+    /// Changed through `EditorController+Selection`.
+    var selectedIDs: Set<UUID> = []
+    /// iPad "Select" mode: taps toggle topics, background drags draw a marquee.
+    var isSelectMode = false
+    /// Rubber-band selection in progress (screen coordinates).
+    var marquee: MarqueeDrag?
+    /// Boundary whose members are being edited (= the topic selection).
+    var boundaryMemberEditing: UUID?
     /// Selected relationship / boundary.
     var selectedItem: CanvasItem?
     var pickMode: PickMode?
@@ -217,7 +242,8 @@ final class EditorController {
                                   selectionHasLink: selected?.link != nil,
                                   canGoBack: backTargetID != nil,
                                   selectionIsTask: selected?.task != nil,
-                                  selectionIsDoneTask: selected?.task?.isDone == true)
+                                  selectionIsDoneTask: selected?.task?.isDone == true,
+                                  selectionCount: selectedIDs.count)
     }
 
     // MARK: Editing state
@@ -279,6 +305,12 @@ final class EditorController {
         if let item = selectedItem, !itemExists(item) { selectedItem = nil }
         if let item = labelEditing, !itemExists(item) { setLabelEditing(nil, text: "") }
         if let pickMode, scene.nodes[pickMode.sourceID] == nil { cancelPick() }
+        if let boundaryMemberEditing, model.map.boundaries.allSatisfy({ $0.id != boundaryMemberEditing }) {
+            self.boundaryMemberEditing = nil
+        }
+        // Hidden / deleted topics leave a multi-selection.
+        let stale = selectedIDs.filter { scene.nodes[$0] == nil }
+        if !stale.isEmpty, let primary = selectedID, scene.nodes[primary] != nil { selectedIDs.subtract(stale) }
         guard var id = selectedID, scene.nodes[id] == nil else { return }
         while let parent = model.map.parentID(of: id) {
             if scene.nodes[parent] != nil {
@@ -307,4 +339,6 @@ struct EditorCommandState: Equatable {
     var canGoBack: Bool = false
     var selectionIsTask: Bool = false
     var selectionIsDoneTask: Bool = false
+    /// Selected topics (> 1 = multi-selection).
+    var selectionCount: Int = 0
 }

@@ -118,7 +118,7 @@ extension EditorController {
         let hit = CanvasHitTester.hit(at: viewport.toMap(screenPoint), layout: scene.layout, map: model.map,
                                       tolerance: Self.hitTolerance / viewport.scale)
         switch hit {
-        case let .node(id): if selectedID != id { select(id) }
+        case let .node(id): if !isSelected(id) { select(id) }
         case let .item(item): if selectedItem != item { selectItem(item) }
         case nil: break
         }
@@ -241,6 +241,6 @@ extension EditorController {
 
     /// Effective outline color of a boundary.
     func boundaryColorHex(_ boundary: Boundary) -> String {
-        boundary.colorHex ?? scene.colors[boundary.nodeID] ?? ColorTheme.rootColorHex
+        boundary.colorHex ?? boundary.primaryMemberID.flatMap { scene.colors[$0] } ?? ColorTheme.rootColorHex
     }
 }

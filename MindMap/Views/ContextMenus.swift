@@ -6,9 +6,16 @@ struct NodeContextMenu: View {
     let id: UUID
 
     var body: some View {
-        Group { items }
-            // Right click / long press selects the topic first.
-            .onAppear { if editor.selectedID != id { editor.select(id) } }
+        Group {
+            if editor.isMultiSelection && editor.isSelected(id) {
+                MultiTopicMenuItems(editor: editor, id: id)
+            } else {
+                items
+            }
+        }
+        // Right click / long press selects the topic first (a topic of the
+        // multi-selection keeps the selection: the menu acts on all).
+        .onAppear { if !editor.isSelected(id) { editor.select(id) } }
     }
 
     @ViewBuilder private var items: some View {
@@ -56,7 +63,7 @@ struct NodeContextMenu: View {
             editor.beginRelationship(from: id)
         }
         if !isMainRoot {
-            Button("Boundary", systemImage: "square.dashed") { editor.addBoundary(around: id) }
+            Button("Boundary", systemImage: "square.dashed") { editor.addBoundaryFromSelection(id) }
         }
         if isFloatingRoot {
             Button("Attach to…", systemImage: "link") { editor.beginAttach(id) }
@@ -72,6 +79,49 @@ struct NodeContextMenu: View {
                 editor.deleteSelection()
             }
         }
+    }
+}
+
+/// Menu of a topic that is part of a multi-selection: "N Topics" header,
+/// then the actions that apply to all of them (one undo step each).
+struct MultiTopicMenuItems: View {
+    let editor: EditorController
+    let id: UUID
+
+    var body: some View {
+        let ids = editor.selection
+        let nodes = ids.compactMap { editor.model.map.node(withID: $0) }
+        let reference = editor.model.map.node(withID: id)
+        Text("\(ids.count) Topics")
+        Divider()
+        LayoutStyleMenu(editor: editor, id: id)
+        if nodes.contains(where: { !$0.children.isEmpty }) {
+            let collapsed = reference?.isCollapsed == true
+            Button(collapsed ? "Expand" : "Collapse", systemImage: collapsed ? "plus.circle" : "minus.circle") {
+                editor.toggleCollapseTargets(id)
+            }
+        }
+        Divider()
+        if nodes.contains(where: { $0.task == nil }) {
+            Button("Convert to Task", systemImage: "checkmark.circle") { editor.convertToTask(id) }
+        }
+        if let task = reference?.task {
+            Button(task.isDone ? "Mark as Not Done" : "Mark as Done",
+                   systemImage: task.isDone ? "circle" : "checkmark.circle") { editor.toggleTargetsDone(id) }
+        }
+        if nodes.contains(where: { $0.task != nil }) {
+            Button("Convert to Topic", systemImage: "circle.slash") { editor.convertToTopic(id) }
+        }
+        Divider()
+        Button("Add Boundary", systemImage: "square.dashed") { editor.addBoundaryFromSelection(id) }
+            .disabled(editor.model.map.movableTopics(ids).isEmpty)
+        Divider()
+        NodeFormatMenus(editor: editor, id: id, includesLayout: false)
+        Divider()
+        Button("Delete \(ids.count) Topics", systemImage: "trash", role: .destructive) {
+            editor.deleteSelectedTopics()
+        }
+        .disabled(editor.model.map.movableTopics(ids).isEmpty)
     }
 }
 
@@ -212,7 +262,7 @@ struct TaskMenuItems: View {
         if let task = editor.task(of: id) {
             Button(task.isDone ? "Mark as Not Done" : "Mark as Done",
                    systemImage: task.isDone ? "circle" : "checkmark.circle") {
-                if includesGoTo { editor.togglePanelTask(id) } else { editor.toggleTaskDone(id) }
+                if includesGoTo { editor.togglePanelTask(id) } else { editor.toggleTargetsDone(id) }
             }
             Menu("Priority", systemImage: "exclamationmark.circle") {
                 ForEach(TaskPriority.allCases, id: \.self) { priority in

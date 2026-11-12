@@ -56,13 +56,14 @@ struct CurveHitTests {
         let onCurve = RelationshipCurve.point(on: curve, at: 0.5)
         #expect(CanvasHitTester.hit(at: onCurve, layout: layout, map: map, tolerance: 6)
             == .item(.relationship(relationship.id)))
-        let rect = try #require(layout.boundaries[boundary.id])
+        let outline = try #require(layout.boundaries[boundary.id])
+        let rect = outline.bounds
         #expect(CanvasHitTester.hit(at: CGPoint(x: rect.minX + 1, y: rect.midY), layout: layout, map: map,
                                     tolerance: 6) == .item(.boundary(boundary.id)))
         // Label tab is a hit area; far away is nothing.
-        #expect(CanvasHitTester.boundaryHits(CGPoint(x: rect.minX + 30, y: rect.minY + 12), rect: rect,
+        #expect(CanvasHitTester.boundaryHits(CGPoint(x: rect.minX + 30, y: rect.minY + 12), outline: outline,
                                              hasLabel: true, tolerance: 6, labelHeight: 20))
-        #expect(!CanvasHitTester.boundaryHits(CGPoint(x: rect.midX, y: rect.midY + 1), rect: rect,
+        #expect(!CanvasHitTester.boundaryHits(CGPoint(x: rect.midX, y: rect.midY + 1), outline: outline,
                                               hasLabel: false, tolerance: 2, labelHeight: 20))
         #expect(CanvasHitTester.hit(at: CGPoint(x: 5000, y: 5000), layout: layout, map: map, tolerance: 6) == nil)
     }
@@ -236,7 +237,7 @@ struct CanvasItemEditorTests {
         editor.select(a.id)
         #expect(editor.perform(.addBoundary))
         let boundary = try #require(editor.model.map.boundaries.first)
-        #expect(boundary.nodeID == a.id)
+        #expect(boundary.memberIDs == [a.id])
         #expect(editor.selectedItem == .boundary(boundary.id))
         editor.setLabel("Scope", for: .boundary(boundary.id))
         editor.setBoundaryColor("#E8524A", for: boundary.id)

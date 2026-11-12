@@ -7,6 +7,8 @@ extension EditorController {
     func select(_ id: UUID?) {
         commitLabelEdit()
         if let editingID, editingID != id { commitEditing() }
+        boundaryMemberEditing = nil
+        selectedIDs = id.map { [$0] } ?? []
         selectedID = id
         selectedItem = nil
     }
@@ -14,6 +16,7 @@ extension EditorController {
     /// Selects a relationship / boundary (deselects topics).
     func selectItem(_ item: CanvasItem?) {
         commitEditing()
+        boundaryMemberEditing = nil
         selectedID = nil
         selectedItem = item
     }
@@ -75,6 +78,10 @@ extension EditorController {
             removeItem(item)
             return
         }
+        if isMultiSelection {
+            deleteSelectedTopics()
+            return
+        }
         guard let id = selectedID, id != model.root.id else { return }
         let next = model.map.isFloatingRoot(id) ? nil : model.map.tree(containing: id)?.selectionAfterDeleting(id)
         if model.delete(id, undoManager: undoManager) { selectedID = next }
@@ -93,6 +100,7 @@ extension EditorController {
     func beginEditing(_ id: UUID? = nil, replacement: String? = nil) {
         guard let id = id ?? selectedID, let node = model.map.node(withID: id) else { return }
         if let editingID, editingID != id { commitEditing() }
+        selectedIDs = [id]
         selectedID = id
         selectedItem = nil
         namingNewID = nil
@@ -122,23 +130,36 @@ extension EditorController {
         if editingID != nil { commitEditing() }
         cancelPick()
         let point = viewport.toMap(location)
-        let excluded = Set(model.map.node(withID: id)?.allIDs ?? [id])
+        // Dragging a topic of a multi-selection drags the whole selection.
+        let group = isSelected(id) && isMultiSelection
+        let moving = group ? model.map.movableTopics(selectedIDs.union([id])) : [id]
+        let excluded = Set(moving.flatMap { model.map.node(withID: $0)?.allIDs ?? [$0] } + [id])
         let target = freeMove ? nil
             : DropTargetFinder.target(at: point, frames: scene.layout.frames, excluding: excluded)
         var drag = NodeDrag(id: id, translation: translation, targetID: target)
+        drag.movingIDs = moving
+        drag.ghostIDs = group ? selectedIDs.subtracting([model.root.id]).union([id]) : [id]
         drag.freeMove = freeMove
         if let target, let frame = scene.layout.frames[target], scene.nodes[target]?.isTreeRoot == false {
             drag.siblingAxis = scene.siblingAxis(of: target)
             drag.placement = DropTargetFinder.placement(at: point, in: frame, siblingAxis: drag.siblingAxis)
         }
         self.drag = drag
-        selectedID = id
+        if !group {
+            if selectedID != id || selectedIDs.count != 1 { select(id) }
+        } else if selectedID != id {
+            selectedID = id
+        }
         selectedItem = nil
     }
 
     func endDrag() {
         guard let drag else { return }
         self.drag = nil
+        if drag.movingIDs.count > 1 {
+            endGroupDrag(drag)
+            return
+        }
         if let target = drag.targetID {
             switch drag.placement {
             case .child:
@@ -158,8 +179,36 @@ extension EditorController {
         }
     }
 
+    /// Drop of a multi-selection (one undo step): on a topic = all become
+    /// its children, on a sibling's edge = all inserted there, on empty
+    /// space = all move freely by the same offset (relative order kept).
+    private func endGroupDrag(_ drag: NodeDrag) {
+        let ids = drag.movingIDs
+        if let target = drag.targetID {
+            switch drag.placement {
+            case .child: model.reparent(ids, to: target, undoManager: undoManager)
+            case .before, .after:
+                model.insert(ids, beside: target, after: drag.placement == .after, undoManager: undoManager)
+            }
+        } else if drag.translation != .zero {
+            let moves = ids.compactMap { id -> (id: UUID, position: CGPoint)? in
+                if let topic = model.map.floatingTopic(id) {
+                    return (id, CGPoint(x: topic.position.x + drag.translation.width / viewport.scale,
+                                        y: topic.position.y + drag.translation.height / viewport.scale))
+                }
+                return freePosition(of: id, translation: drag.translation).map { (id, $0) }
+            }
+            model.moveTopics(moves, undoManager: undoManager)
+        }
+    }
+
     /// Offset of the dropped topic's center from its parent's center (map points).
     func freePosition(for drag: NodeDrag) -> CGPoint? {
+        freePosition(of: drag.id, translation: drag.translation)
+    }
+
+    func freePosition(of id: UUID, translation: CGSize) -> CGPoint? {
+        let drag = (id: id, translation: translation)
         guard let parent = model.map.parentID(of: drag.id),
               let frame = scene.layout.frames[drag.id], let parentFrame = scene.layout.frames[parent] else { return nil }
         let x = frame.midX + drag.translation.width / viewport.scale - parentFrame.midX
@@ -185,23 +234,28 @@ extension EditorController {
     func setLayoutStyle(_ style: LayoutStyle?, for id: UUID? = nil) {
         guard let id = id ?? selectedID else { return }
         commitEditing()
+        let ids = targets(for: id)
+        if ids.count > 1 {
+            model.setAttribute(.layoutStyle(style), for: ids, actionName: "Change Layout", undoManager: undoManager)
+            return
+        }
         guard model.setLayoutStyle(style, for: id, undoManager: undoManager) else { return }
         reveal(id)
     }
 
     /// Clears color tag and custom color (one undo step).
+    /// Clears color tag and custom color of `id` (or the whole selection
+    /// it belongs to), one undo step.
     func resetColor(_ id: UUID, wholeBranch: Bool) {
-        let map = model.map
-        guard let tagEdits = try? map.setAttributeEdits(.colorTag(.none), for: id, wholeBranch: wholeBranch),
-              let customEdits = try? map.setAttributeEdits(.customColor(nil), for: id, wholeBranch: wholeBranch)
-        else { return }
-        model.perform(tagEdits + customEdits, actionName: "Reset Color", undoManager: undoManager)
+        model.setAttributes([.colorTag(.none), .customColor(nil)], for: targets(for: id), wholeBranch: wholeBranch,
+                            actionName: "Reset Color", undoManager: undoManager)
     }
 
     func applyColorSheet(_ request: ColorSheetRequest, hex: String) {
         switch request.target {
-        case let .node(id, wholeBranch):
-            model.setCustomColor(hex, for: id, wholeBranch: wholeBranch, undoManager: undoManager)
+        case let .nodes(ids, wholeBranch):
+            model.setAttribute(.customColor(hex), for: ids, wholeBranch: wholeBranch, actionName: "Change Color",
+                               undoManager: undoManager)
         case let .relationship(id):
             setRelationshipColor(hex, for: id)
         case let .boundary(id):
@@ -255,7 +309,7 @@ extension EditorController {
         case .edit, .editReplacing:
             guard selectedID != nil else { return false }
             if case let .editReplacing(text) = command { beginEditing(replacement: text) } else { beginEditing() }
-        case .toggleCollapse: toggleCollapse()
+        case .toggleCollapse: toggleCollapseTargets()
         case .undo: undo()
         case .redo: redo()
         case let .move(direction): move(direction)
@@ -266,8 +320,10 @@ extension EditorController {
             guard let id = selectedID else { return false }
             beginRelationship(from: id)
         case .addBoundary:
-            guard let id = selectedID else { return false }
-            addBoundary(around: id)
+            guard selectedID != nil else { return false }
+            addBoundaryFromSelection()
+        case .selectAll:
+            selectAllTopics()
         case .note:
             guard let id = selectedID, scene.nodes[id] != nil else { return false }
             openOrAddNote(id)
@@ -285,10 +341,18 @@ extension EditorController {
             goBack()
         case .toggleTaskDone:
             guard let id = selectedID, scene.nodes[id] != nil, task(of: id) != nil else { return false }
-            toggleTaskDone(id)
+            if isMultiSelection { toggleTargetsDone() } else { toggleTaskDone(id) }
         case let .collapseToLevel(level): collapseToLevel(level)
         case .expandAll: expandAll()
         case .cancel:
+            if boundaryMemberEditing != nil {
+                finishEditBoundaryMembers(commit: false)
+                return true
+            }
+            if isMultiSelection {
+                collapseSelectionToPrimary()
+                return true
+            }
             guard pickMode != nil || selectedItem != nil else { return false }
             if pickMode != nil { cancelPick() } else { selectItem(nil) }
         }

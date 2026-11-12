@@ -6,6 +6,8 @@ struct CanvasView: View {
     @FocusState private var isFocused: Bool
     @State private var pinchStart: Viewport?
     @State private var panStart: Viewport?
+    /// What the current background drag does (decided when it starts).
+    @State private var backgroundDrag: BackgroundDragMode?
     /// Edited topic whose border is pressed: keeps `editingDragHandle`
     /// alive when the press ends editing (focus leaves the text field).
     @GestureState private var pressedHandleID: UUID?
@@ -40,7 +42,12 @@ struct CanvasView: View {
             }
             // White XMind paper in dark mode too: topic colors assume it.
             .environment(\.colorScheme, .light)
-            .overlay(alignment: .top) { PickBanner(editor: editor) }
+            .overlay(alignment: .top) {
+                VStack(spacing: 6) {
+                    PickBanner(editor: editor)
+                    SelectionBanner(editor: editor)
+                }
+            }
             .overlay(alignment: .bottom) { BackPill(editor: editor) }
             .onContinuousHover(coordinateSpace: .named(CanvasView.space)) { phase in
                 guard editor.pickMode != nil else { return }
@@ -87,7 +94,8 @@ struct CanvasView: View {
             })
             .simultaneousGesture(TapGesture().onEnded {
                 editor.cancelPick()
-                editor.select(nil)
+                // Editing boundary members: only topic clicks count.
+                if editor.boundaryMemberEditing == nil { editor.select(nil) }
                 isFocused = true
             })
             .gesture(pan)
@@ -118,16 +126,45 @@ struct CanvasView: View {
             #endif
     }
 
+    /// Background drag: pans; with ⇧ or ⌘ held (iPad: Select mode) it
+    /// draws a rubber band that adds the touched topics to the selection.
     private var pan: some Gesture {
-        DragGesture(minimumDistance: 2)
+        DragGesture(minimumDistance: 2, coordinateSpace: .named(CanvasView.space))
             .onChanged { value in
+                if backgroundDrag == nil {
+                    backgroundDrag = editor.tapsToggleSelection || Self.isSelectionModifierPressed ? .marquee : .pan
+                }
+                if backgroundDrag == .marquee {
+                    editor.updateMarquee(from: value.startLocation, to: value.location)
+                    return
+                }
                 let start = panStart ?? editor.viewport
                 if panStart == nil { panStart = start }
                 var viewport = start
                 viewport.pan(dx: value.translation.width, dy: value.translation.height)
                 editor.viewport = viewport
             }
-            .onEnded { _ in panStart = nil }
+            .onEnded { _ in
+                if backgroundDrag == .marquee { editor.endMarquee() }
+                backgroundDrag = nil
+                panStart = nil
+                isFocused = true
+            }
+    }
+
+    private enum BackgroundDragMode { case pan, marquee }
+
+    /// ⇧ or ⌘ held for the current mouse event (macOS; synthesized events too).
+    private static var isSelectionModifierPressed: Bool { isCommandClick || isShiftClick }
+
+    /// Shift held for the current click (macOS; synthesized events too).
+    private static var isShiftClick: Bool {
+        #if os(macOS)
+        NSApp.currentEvent?.modifierFlags.contains(.shift) == true
+            || ScrollWheelHandler.lastMouseModifiers.contains(.shift)
+        #else
+        false
+        #endif
     }
 
     private static var isOptionPressed: Bool {
@@ -166,8 +203,10 @@ struct CanvasView: View {
     private func node(_ id: UUID, scene: MapScene, viewport: Viewport) -> some View {
         if let info = scene.nodes[id], let frame = scene.layout.frames[id] {
             let screen = viewport.toScreen(frame)
-            let drag = editor.drag?.id == id ? editor.drag : nil
-            NodeView(info: info, scale: viewport.scale, isSelected: editor.selectedID == id,
+            // Dragged topics (the whole selection) follow the pointer as ghosts.
+            let drag = editor.drag.flatMap { $0.id == id || $0.ghostIDs.contains(id) ? $0 : nil }
+            NodeView(info: info, scale: viewport.scale, isSelected: editor.isSelected(id),
+                     isPrimarySelection: editor.selectedID == id,
                      isDropTarget: editor.drag?.parentTargetID == id || editor.pickHoverID == id
                          || editor.fileDropTargetID == id,
                      editor: editor.editingID == id ? editor : nil, nodeID: id,
@@ -194,8 +233,8 @@ struct CanvasView: View {
                 // Double-click / double-tap = new child (being named); rename via
                 // the context menu, Space, F2 or typing.
                 .onTapGesture(count: 2) {
-                    guard editor.pickMode == nil, editor.editingID != id,
-                          !editor.isRecentCheckboxClick(on: id) else { return }
+                    guard editor.pickMode == nil, editor.editingID != id, !editor.tapsToggleSelection,
+                          !Self.isSelectionModifierPressed, !editor.isRecentCheckboxClick(on: id) else { return }
                     editor.select(id)
                     editor.addChild()
                 }
@@ -203,18 +242,19 @@ struct CanvasView: View {
                 .help(info.link?.tooltip ?? "")
                 .simultaneousGesture(TapGesture().onEnded {
                     if editor.completePick(id) { return }
-                    // Cmd+click a linked topic = Go to (plain click selects).
-                    if Self.isCommandClick, editor.editingID != id, info.link != nil {
+                    // Cmd+click a linked topic = Go to (plain click selects);
+                    // on other topics Cmd+click toggles, Shift+click adds.
+                    if Self.isCommandClick, editor.editingID != id, info.link != nil, !editor.tapsToggleSelection {
                         editor.goToLink(of: id)
                         isFocused = true
                         return
                     }
-                    if editor.editingID != id { editor.select(id) }
+                    editor.clickTopic(id, command: Self.isCommandClick, shift: Self.isShiftClick)
                     if editor.editingID == nil { isFocused = true }
                 })
                 #if os(iOS)
                 .simultaneousGesture(LongPressGesture(minimumDuration: 0.3).onEnded { _ in
-                    if editor.selectedID != id, editor.editingID != id { editor.select(id) }
+                    if !editor.isSelected(id), editor.editingID != id { editor.select(id) }
                 })
                 #endif
                 .contextMenu {

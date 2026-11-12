@@ -112,23 +112,27 @@ struct UndoEveryOperationTests {
         #expect(fixture.model.map == before)
     }
 
-    @Test func movingASiblingOutPrunesBoundarySiblingLists() {
+    /// Members are arbitrary topics: moving one anywhere keeps it a member
+    /// (the outline follows it); no extra undo edits.
+    @Test func movingAMemberKeepsItInTheBoundary() {
         let fixture = Fixture()
         #expect(fixture.model.reparent(fixture.a2, to: fixture.b, undoManager: fixture.undo))
-        #expect(fixture.model.map.boundaries.first?.siblingIDs == [])
+        #expect(fixture.model.map.boundaries.first?.memberIDs == [fixture.a1, fixture.a2])
         fixture.undo.undo()
-        #expect(fixture.model.map.boundaries.first?.siblingIDs == [fixture.a2])
 
-        // Detaching the anchor keeps the subtree boundary but drops siblings.
         #expect(fixture.model.detach(fixture.a1, to: .zero, undoManager: fixture.undo))
-        #expect(fixture.model.map.boundaries.first?.nodeID == fixture.a1)
-        #expect(fixture.model.map.boundaries.first?.siblingIDs == [])
+        #expect(fixture.model.map.boundaries.first?.memberIDs == [fixture.a1, fixture.a2])
         #expect(fixture.model.map.relationships.count == 1) // both ends still exist
-
-        // Reordering within the same parent keeps the sibling range.
         fixture.undo.undo()
-        #expect(fixture.model.reparent(fixture.a2, to: fixture.a, at: 0, undoManager: fixture.undo))
-        #expect(fixture.model.map.boundaries.first?.siblingIDs == [fixture.a2])
+
+        // Deleting one member shrinks it; deleting the last removes it.
+        #expect(fixture.model.delete(fixture.a2, undoManager: fixture.undo))
+        #expect(fixture.model.map.boundaries.first?.memberIDs == [fixture.a1])
+        #expect(fixture.model.delete(fixture.a1, undoManager: fixture.undo))
+        #expect(fixture.model.map.boundaries.isEmpty)
+        fixture.undo.undo()
+        fixture.undo.undo()
+        #expect(fixture.model.map.boundaries.first?.memberIDs == [fixture.a1, fixture.a2])
     }
 }
 

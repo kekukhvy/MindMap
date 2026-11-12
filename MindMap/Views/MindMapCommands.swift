@@ -32,6 +32,8 @@ struct MindMapCommands: Commands {
     private var canAct: Bool { editor != nil && state?.isEditing == false }
     private var hasSelection: Bool { canAct && state?.hasSelection == true }
     private var hasNodeSelection: Bool { canAct && state?.hasNodeSelection == true }
+    /// Only the central topic is selected (nothing to delete / enclose).
+    private var onlyMainRoot: Bool { state?.selectionIsMainRoot == true && (state?.selectionCount ?? 0) <= 1 }
 
     var body: some Commands {
         CommandMenu("Topic") {
@@ -63,7 +65,7 @@ struct MindMapCommands: Commands {
                 .disabled(!hasNodeSelection)
             Button("Boundary") { editor?.perform(.addBoundary) }
                 .keyboardShortcut("b", modifiers: .command)
-                .disabled(!hasNodeSelection || state?.selectionIsMainRoot == true)
+                .disabled(!hasNodeSelection || onlyMainRoot)
             Button(state?.selectionHasNote == true ? "Open Note" : "Add Note") { editor?.perform(.note) }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 .disabled(!hasNodeSelection)
@@ -114,9 +116,11 @@ struct MindMapCommands: Commands {
                 .keyboardShortcut("[", modifiers: .command)
                 .disabled(!canAct || state?.canGoBack != true)
             Divider()
-            Button("Delete") { editor?.perform(.delete) }
-                .plainKeyShortcut(.delete)
-                .disabled(!hasSelection || state?.selectionIsMainRoot == true)
+            Button((state?.selectionCount ?? 0) > 1 ? "Delete \(state?.selectionCount ?? 0) Topics" : "Delete") {
+                editor?.perform(.delete)
+            }
+            .plainKeyShortcut(.delete)
+            .disabled(!hasSelection || onlyMainRoot)
         }
         CommandGroup(after: .toolbar) {
             Button("Zoom In") { editor?.zoom(by: 1.25) }

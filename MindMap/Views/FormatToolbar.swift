@@ -35,15 +35,22 @@ struct FormatToolbar: ToolbarContent {
             Button("Add Subtopic", systemImage: "arrow.turn.down.right") { editor.addChild() }
             Button("Add Sibling Topic", systemImage: "plus.rectangle") { editor.addSibling() }
             Button("Boundary", systemImage: "square.dashed") {
-                if let id = selectedTopic { editor.addBoundary(around: id) }
+                if selectedTopic != nil { editor.addBoundaryFromSelection() }
             }
-            .disabled(selectedTopic == nil || selectedTopic == editor.model.root.id)
+            .disabled(selectedTopic == nil || editor.model.map.movableTopics(editor.selectedIDs).isEmpty)
             Button("Note", systemImage: "note.text") {
                 if let id = selectedTopic { editor.openOrAddNote(id) }
             }
             .help("Add or open the note of the selected topic (⇧⌘N)")
             .disabled(selectedTopic == nil)
             Menu("Insert", systemImage: "plus") { InsertMenuItems(editor: editor) }
+            #if os(iOS)
+            // Select mode: taps toggle topics, drags draw a selection band.
+            Button(editor.isSelectMode ? "Done Selecting" : "Select",
+                   systemImage: editor.isSelectMode ? "checkmark.circle.fill" : "checkmark.circle") {
+                editor.isSelectMode.toggle()
+            }
+            #endif
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Menu("Format", systemImage: "paintbrush") {

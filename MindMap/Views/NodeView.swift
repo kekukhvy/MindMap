@@ -6,6 +6,8 @@ struct NodeView: View {
     let info: MapScene.NodeInfo
     let scale: CGFloat
     let isSelected: Bool
+    /// The keyboard-focus topic of a (multi-)selection: stronger ring.
+    var isPrimarySelection = true
     let isDropTarget: Bool
     /// Inline editor shown instead of the text (nil = not editing).
     let editor: EditorController?
@@ -134,7 +136,8 @@ struct NodeView: View {
                 .overlay { outline.stroke(Color.accentColor, lineWidth: 3) }
                 .padding(-5 * scale)
         } else if isSelected {
-            outline.stroke(NodeView.selectionBlue, lineWidth: 2)
+            outline.stroke(NodeView.selectionBlue.opacity(isPrimarySelection ? 1 : 0.7),
+                           lineWidth: isPrimarySelection ? 2.5 : 1.5)
                 .padding(-3 * scale)
         }
     }

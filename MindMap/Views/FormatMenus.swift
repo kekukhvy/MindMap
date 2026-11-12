@@ -116,6 +116,12 @@ struct NodeFormatMenus: View {
     private var model: MindMapModel { editor.model }
     private var undo: UndoManager? { editor.undoManager }
     private var node: Node? { model.map.node(withID: id) }
+    /// The whole selection when `id` is part of a multi-selection.
+    private var ids: [UUID] { editor.targets(for: id) }
+
+    private func set(_ attribute: NodeAttribute, wholeBranch: Bool = false, _ actionName: String) {
+        model.setAttribute(attribute, for: ids, wholeBranch: wholeBranch, actionName: actionName, undoManager: undo)
+    }
 
     var body: some View {
         if let node {
@@ -130,11 +136,11 @@ struct NodeFormatMenus: View {
     private func shapeItems(_ node: Node, wholeBranch: Bool) -> some View {
         Group {
             CheckItem("Default", checked: !wholeBranch && node.shape == nil) {
-                model.setShape(nil, for: id, wholeBranch: wholeBranch, undoManager: undo)
+                set(.shape(nil), wholeBranch: wholeBranch, "Change Shape")
             }
             ForEach(NodeShape.allCases, id: \.self) { shape in
                 CheckItem(shape.title, checked: !wholeBranch && node.shape == shape) {
-                    model.setShape(shape, for: id, wholeBranch: wholeBranch, undoManager: undo)
+                    set(.shape(shape), wholeBranch: wholeBranch, "Change Shape")
                 }
             }
         }
@@ -151,11 +157,11 @@ struct NodeFormatMenus: View {
     private func borderItems(_ node: Node, wholeBranch: Bool) -> some View {
         Group {
             CheckItem("Default", checked: !wholeBranch && node.borderStyle == nil) {
-                model.setBorderStyle(nil, for: id, wholeBranch: wholeBranch, undoManager: undo)
+                set(.borderStyle(nil), wholeBranch: wholeBranch, "Change Border")
             }
             ForEach(BorderStyle.allCases, id: \.self) { style in
                 CheckItem(style.rawValue.capitalized, checked: !wholeBranch && node.borderStyle == style) {
-                    model.setBorderStyle(style, for: id, wholeBranch: wholeBranch, undoManager: undo)
+                    set(.borderStyle(style), wholeBranch: wholeBranch, "Change Border")
                 }
             }
         }
@@ -173,12 +179,12 @@ struct NodeFormatMenus: View {
         Group {
             ForEach(ColorPresets.all, id: \.hex) { preset in
                 CheckItem(preset.name, checked: !wholeBranch && node.customColor == preset.hex) {
-                    model.setCustomColor(preset.hex, for: id, wholeBranch: wholeBranch, undoManager: undo)
+                    set(.customColor(preset.hex), wholeBranch: wholeBranch, "Change Color")
                 }
             }
             Button("Custom…") {
                 let current = ColorResolver.effectiveColor(of: id, in: model.map) ?? ColorTheme.rootColorHex
-                editor.colorSheet = ColorSheetRequest(target: .node(id, wholeBranch: wholeBranch),
+                editor.colorSheet = ColorSheetRequest(target: .nodes(ids, wholeBranch: wholeBranch),
                                                       initialHex: current)
             }
             Divider()
@@ -198,31 +204,31 @@ struct NodeFormatMenus: View {
         Menu("Branch Line") {
             Menu("Style") {
                 CheckItem("Inherit", checked: node.connectorStyle == nil) {
-                    model.setConnectorStyle(nil, for: id, undoManager: undo)
+                    set(.connectorStyle(nil), "Change Line")
                 }
                 ForEach(ConnectorStyle.allCases, id: \.self) { style in
                     CheckItem(style.title, checked: node.connectorStyle == style) {
-                        model.setConnectorStyle(style, for: id, undoManager: undo)
+                        set(.connectorStyle(style), "Change Line")
                     }
                 }
             }
             Menu("Width") {
                 CheckItem("Inherit", checked: node.lineWidth == nil) {
-                    model.setLineWidth(nil, for: id, undoManager: undo)
+                    set(.lineWidth(nil), "Change Line")
                 }
                 ForEach([1.0, 1.5, 2, 3, 4], id: \.self) { width in
                     CheckItem(width.formatted() + " pt", checked: node.lineWidth == width) {
-                        model.setLineWidth(width, for: id, undoManager: undo)
+                        set(.lineWidth(width), "Change Line")
                     }
                 }
             }
             Menu("Dash") {
                 CheckItem("Inherit", checked: node.lineDash == nil) {
-                    model.setLineDash(nil, for: id, undoManager: undo)
+                    set(.lineDash(nil), "Change Line")
                 }
                 ForEach(LineDash.allCases, id: \.self) { dash in
                     CheckItem(dash.title, checked: node.lineDash == dash) {
-                        model.setLineDash(dash, for: id, undoManager: undo)
+                        set(.lineDash(dash), "Change Line")
                     }
                 }
             }

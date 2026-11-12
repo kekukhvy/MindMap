@@ -15,8 +15,8 @@ struct ColorPickerSheet: View {
 
     private var title: String {
         switch request.target {
-        case .node(_, wholeBranch: false): return "Topic Color"
-        case .node(_, wholeBranch: true): return "Branch Color"
+        case .nodes(_, wholeBranch: false): return "Topic Color"
+        case .nodes(_, wholeBranch: true): return "Branch Color"
         case .relationship: return "Relationship Color"
         case .boundary: return "Boundary Color"
         case .theme: return "Map Color"

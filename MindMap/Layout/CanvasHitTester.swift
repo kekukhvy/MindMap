@@ -31,9 +31,9 @@ enum CanvasHitTester {
         }
         // Innermost (smallest) boundary first.
         let boundaries = map.boundaries.compactMap { boundary in layout.boundaries[boundary.id].map { (boundary, $0) } }
-            .sorted { $0.1.width * $0.1.height < $1.1.width * $1.1.height }
-        for (boundary, rect) in boundaries
-        where boundaryHits(point, rect: rect, hasLabel: boundary.hasLabel, tolerance: tolerance,
+            .sorted { $0.1.bounds.width * $0.1.bounds.height < $1.1.bounds.width * $1.1.bounds.height }
+        for (boundary, outline) in boundaries
+        where boundaryHits(point, outline: outline, hasLabel: boundary.hasLabel, tolerance: tolerance,
                            labelHeight: labelHeight) {
             return .item(.boundary(boundary.id))
         }
@@ -53,16 +53,10 @@ enum CanvasHitTester {
     }
 
     /// Hit on the outline band (inside or outside by `tolerance`) or on the label tab.
-    static func boundaryHits(_ point: CGPoint, rect: CGRect, hasLabel: Bool, tolerance: CGFloat,
+    static func boundaryHits(_ point: CGPoint, outline: BoundaryOutline, hasLabel: Bool, tolerance: CGFloat,
                              labelHeight: CGFloat) -> Bool {
-        let outer = rect.insetBy(dx: -tolerance, dy: -tolerance)
-        guard outer.contains(point) else { return false }
-        let inner = rect.insetBy(dx: tolerance, dy: tolerance)
-        if inner.isNull || !inner.contains(point) { return true }
-        if hasLabel {
-            let tab = CGRect(x: rect.minX, y: rect.minY, width: min(boundaryTabWidth, rect.width), height: labelHeight)
-            return tab.contains(point)
-        }
-        return false
+        guard outline.bounds.insetBy(dx: -tolerance, dy: -tolerance).contains(point) else { return false }
+        if outline.distanceToOutline(point) <= tolerance { return true }
+        return hasLabel && outline.labelRect(width: boundaryTabWidth, height: labelHeight).contains(point)
     }
 }

@@ -10,6 +10,7 @@ struct CanvasOverlays: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             dragLine
+            marquee
             rubberBand
             insertionIndicator
             controlHandles
@@ -20,13 +21,28 @@ struct CanvasOverlays: View {
     // MARK: Live branch line of a dragged topic
 
     @ViewBuilder private var dragLine: some View {
-        if let connector = editor.dragConnector {
+        ForEach(editor.dragConnectors) { connector in
             let geometry = connector.geometry.transformed(by: viewport)
             ConnectorShape(geometry: geometry)
                 .stroke(Color(hex: connector.colorHex), style: StrokeStyle(
                     lineWidth: geometry.startWidth, lineCap: .round, lineJoin: .round,
                     dash: ConnectorGeometry.dashPattern(geometry.dash, width: geometry.startWidth)
                 ))
+                .allowsHitTesting(false)
+                .transaction { $0.animation = nil }
+        }
+    }
+
+    // MARK: Rubber-band selection
+
+    @ViewBuilder private var marquee: some View {
+        if let band = editor.marquee {
+            let rect = band.rect
+            Rectangle()
+                .fill(NodeView.selectionBlue.opacity(0.08))
+                .overlay(Rectangle().stroke(NodeView.selectionBlue.opacity(0.8), lineWidth: 1))
+                .frame(width: rect.width, height: rect.height)
+                .position(x: rect.midX, y: rect.midY)
                 .allowsHitTesting(false)
                 .transaction { $0.animation = nil }
         }
@@ -121,6 +137,41 @@ struct PickBanner: View {
                 Text(mode.prompt).font(.callout)
                 Button("Cancel") { editor.cancelPick() }
                     .buttonStyle(.borderless)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(.regularMaterial, in: Capsule())
+            .padding(.top, 10)
+        }
+    }
+}
+
+/// Banner while taps toggle the selection: editing a boundary's members
+/// (Done stores them), or the iPad Select mode.
+struct SelectionBanner: View {
+    @Bindable var editor: EditorController
+
+    var body: some View {
+        if editor.boundaryMemberEditing != nil {
+            HStack(spacing: 10) {
+                Text(editor.memberEditPrompt).font(.callout)
+                Button("Cancel") { editor.finishEditBoundaryMembers(commit: false) }
+                    .buttonStyle(.borderless)
+                Button("Done") { editor.finishEditBoundaryMembers(commit: true) }
+                    .buttonStyle(.borderless)
+                    .fontWeight(.semibold)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(.regularMaterial, in: Capsule())
+            .padding(.top, 10)
+        } else if editor.isSelectMode {
+            HStack(spacing: 10) {
+                Text(editor.selectedIDs.isEmpty ? "Tap topics or drag an area to select"
+                     : "\(editor.selectedIDs.count) selected").font(.callout)
+                Button("Done") { editor.isSelectMode = false }
+                    .buttonStyle(.borderless)
+                    .fontWeight(.semibold)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)

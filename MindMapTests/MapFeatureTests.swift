@@ -187,7 +187,9 @@ struct BoundaryTests {
         let root = TestTree.node("root", style: .rightMap, children: [a, b])
         let plain = TreeLayout().layout(root) { _ in size }
         let result = TreeLayout().layout(MindMap(root: root, boundaries: [boundary])) { _ in size }
-        let rect = try #require(result.boundaries[boundary.id])
+        let outline = try #require(result.boundaries[boundary.id])
+        #expect(outline.isRectangle)
+        let rect = outline.bounds
         let spacing = LayoutSpacing()
         for id in a.allIDs { #expect(rect.contains(result.frames[id]!)) }
         #expect(!rect.intersects(result.frames[b.id]!))
@@ -206,8 +208,8 @@ struct BoundaryTests {
         let inner = Boundary(nodeID: a.children[0].id)
         let outer = Boundary(nodeID: a.id, siblingIDs: [b.id])
         let result = TreeLayout().layout(MindMap(root: root, boundaries: [inner, outer])) { _ in size }
-        let innerRect = try #require(result.boundaries[inner.id])
-        let outerRect = try #require(result.boundaries[outer.id])
+        let innerRect = try #require(result.boundaries[inner.id]).bounds
+        let outerRect = try #require(result.boundaries[outer.id]).bounds
         #expect(outerRect.contains(innerRect))
         for id in a.allIDs + b.allIDs { #expect(outerRect.contains(result.frames[id]!)) }
         #expect(!outerRect.contains(result.frames[root.children[2].id]!))
@@ -219,7 +221,9 @@ struct BoundaryTests {
         let a = try #require(model.addChild(to: model.root.id, undoManager: undo))
         let b = try #require(model.addChild(to: model.root.id, undoManager: undo))
         let a1 = try #require(model.addChild(to: a, undoManager: undo))
-        #expect(model.addBoundary(around: a, siblings: [a1], undoManager: undo) == nil) // not a sibling
+        #expect(model.addBoundary(members: [model.root.id, a], undoManager: undo) == nil) // central topic
+        #expect(model.addBoundary(members: [UUID()], undoManager: undo) == nil)
+        _ = a1
         let range = try #require(model.addBoundary(around: a, siblings: [b], label: "R", undoManager: undo))
         let single = try #require(model.addBoundary(around: b, undoManager: undo))
         #expect(model.updateBoundary(single, label: "S", colorHex: "#00FF00", undoManager: undo))
@@ -227,12 +231,13 @@ struct BoundaryTests {
 
         #expect(model.delete(b, undoManager: undo))
         #expect(model.map.boundaries.map(\.id) == [range])
-        #expect(model.map.boundaries[0].siblingIDs.isEmpty)
+        #expect(model.map.boundaries[0].memberIDs == [a])
         undo.undo()
         #expect(model.map == before)
 
         #expect(model.delete(a, undoManager: undo))
-        #expect(model.map.boundaries.map(\.id) == [single])
+        #expect(model.map.boundaries.map(\.id) == [range, single])
+        #expect(model.map.boundaries[0].memberIDs == [b])
         undo.undo()
         #expect(model.map == before)
         #expect(model.removeBoundary(range, undoManager: undo))

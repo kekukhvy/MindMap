@@ -22,7 +22,10 @@ enum EditorCommand: Equatable {
     case goBack
     /// Cmd+Return: mark the selected task done / not done.
     case toggleTaskDone
-    /// Esc: cancel relationship/attach picking, or deselect a relationship/boundary.
+    /// Cmd+A: select every visible topic.
+    case selectAll
+    /// Esc: cancel picking / member editing, keep only the primary of a
+    /// multi-selection, or deselect a relationship/boundary.
     case cancel
 
     /// Only navigation and zoom repeat while a key is held.
@@ -47,7 +50,8 @@ enum KeyCommandMap {
             switch key {
             case .tab where modifiers.isEmpty: return .addChild
             case .return: return .addSibling
-            case .delete, .deleteForward: return .delete
+            // Backspace arrives as U+007F on macOS (not `.delete` = U+0008).
+            case .delete, .deleteForward, KeyEquivalent("\u{7F}"): return .delete
             case .space: return .edit
             case .escape where modifiers.isEmpty: return .cancel
             case .upArrow: return .move(.up)
@@ -72,6 +76,7 @@ enum KeyCommandMap {
             case "a" where modifiers.contains(.shift): return .attachFile
             case "k" where !modifiers.contains(.shift): return .editLink
             case "[" where !modifiers.contains(.shift): return .goBack
+            case "a" where !modifiers.contains(.shift): return .selectAll
             default: return nil
             }
         }

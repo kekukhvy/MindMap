@@ -31,6 +31,9 @@ struct CanvasItemMenu: View {
                 }
             case let .boundary(id):
                 if let boundary = editor.boundary(id) {
+                    Button("Edit Members…", systemImage: "square.dashed.inset.filled") {
+                        editor.beginEditBoundaryMembers(id)
+                    }
                     ItemColorMenu(editor: editor, current: boundary.colorHex, target: .boundary(id),
                                   defaultTitle: "Branch Color",
                                   apply: { editor.setBoundaryColor($0, for: id) })
@@ -130,7 +133,7 @@ struct InsertMenuItems: View {
         }
         .disabled(selected == nil)
         Button("Boundary", systemImage: "square.dashed") {
-            if let selected { editor.addBoundary(around: selected) }
+            if selected != nil { editor.addBoundaryFromSelection() }
         }
         .disabled(selected == nil || selected == editor.model.root.id)
         Divider()

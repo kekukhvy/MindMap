@@ -20,11 +20,11 @@ struct LabelEditorOverlay: View {
         case let .relationship(id):
             return editor.relationshipPath(id)?.transformed(by: viewport).labelPoint
         case let .boundary(id):
-            guard let rect = editor.scene.layout.boundaries[id] else { return nil }
-            let screen = viewport.toScreen(rect)
+            guard let outline = editor.scene.layout.boundaries[id] else { return nil }
+            let screen = viewport.toScreen(CGPoint(x: outline.labelOrigin.x, y: outline.labelOrigin.y))
             let size = LabelEditorField.size(scale: viewport.scale)
-            return CGPoint(x: screen.minX + 8 * viewport.scale + size.width / 2,
-                           y: screen.minY + 3 * viewport.scale + size.height / 2)
+            return CGPoint(x: screen.x + 8 * viewport.scale + size.width / 2,
+                           y: screen.y + 3 * viewport.scale + size.height / 2)
         }
     }
 }

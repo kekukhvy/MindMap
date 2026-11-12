@@ -31,10 +31,9 @@ struct ObstacleAvoidance {
     var gap: CGFloat
 
     /// Moves blocks of `layout` (node frame at the origin) off obstacles.
-    /// `boundaryNode` maps boundary id -> its topic. Returns true if any moved.
+    /// Boundary pieces move with their member. Returns true if any moved.
     @discardableResult
-    func resolve(_ layout: inout SubtreeLayout, nodeID: UUID, blocks: [Block],
-                 boundaryNode: [UUID: UUID]) -> Bool {
+    func resolve(_ layout: inout SubtreeLayout, nodeID: UUID, blocks: [Block]) -> Bool {
         guard !layout.obstacles.isEmpty, !blocks.isEmpty else { return false }
         let nodeFrame = layout.frames[nodeID] ?? .zero
         // Columns: left / right of the node for vertical stacking.
@@ -53,7 +52,7 @@ struct ObstacleAvoidance {
             for (block, delta) in shifts {
                 bounds = bounds.union(offset(block.rect, delta))
                 guard abs(delta) > 0.001 else { continue }
-                apply(delta, to: block, layout: &layout, boundaryNode: boundaryNode)
+                apply(delta, to: block, layout: &layout)
                 moved = true
             }
         }
@@ -164,8 +163,7 @@ struct ObstacleAvoidance {
 
     // MARK: Applying
 
-    private func apply(_ delta: CGFloat, to block: Block, layout: inout SubtreeLayout,
-                       boundaryNode: [UUID: UUID]) {
+    private func apply(_ delta: CGFloat, to block: Block, layout: inout SubtreeLayout) {
         let dx = axis == .horizontal ? delta : 0
         let dy = axis == .vertical ? delta : 0
         for id in block.ids {
@@ -180,10 +178,8 @@ struct ObstacleAvoidance {
                 layout.connectors[index].end.y += dy
             }
         }
-        for (boundaryID, rect) in layout.boundaryRects {
-            if let owner = boundaryNode[boundaryID], block.ids.contains(owner) {
-                layout.boundaryRects[boundaryID] = rect.offsetBy(dx: dx, dy: dy)
-            }
+        for (piece, rect) in layout.boundaryRects where block.ids.contains(piece.memberID) {
+            layout.boundaryRects[piece] = rect.offsetBy(dx: dx, dy: dy)
         }
         for index in layout.obstacles.indices where block.ids.contains(layout.obstacles[index].id) {
             layout.obstacles[index] = layout.obstacles[index].offsetBy(dx: dx, dy: dy)

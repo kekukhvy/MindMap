@@ -40,14 +40,11 @@ extension MindMap {
         var edits: [MapEdit] = relationships
             .filter { ids.contains($0.fromNodeID) || ids.contains($0.toNodeID) }
             .map { .removeRelationship(id: $0.id) }
-        for boundary in boundaries {
-            if ids.contains(boundary.nodeID) {
-                edits.append(.removeBoundary(id: boundary.id))
-            } else if boundary.siblingIDs.contains(where: ids.contains) {
-                var updated = boundary
-                updated.siblingIDs.removeAll(where: ids.contains)
-                edits.append(.updateBoundary(updated))
-            }
+        // Members go with their topics; a boundary without members goes too.
+        for boundary in boundaries where boundary.memberIDs.contains(where: ids.contains) {
+            var updated = boundary
+            updated.memberIDs.removeAll(where: ids.contains)
+            edits.append(updated.memberIDs.isEmpty ? .removeBoundary(id: boundary.id) : .updateBoundary(updated))
         }
         return edits
     }
@@ -93,19 +90,10 @@ extension MindMap {
         ]
     }
 
-    /// Sibling-range boundaries stop being valid when `id` leaves its parent:
-    /// drop `id` from other boundaries' sibling lists and clear the sibling
-    /// list of boundaries anchored on `id` (the subtree boundary stays).
+    /// Boundary members are arbitrary topics: a moved topic stays a member
+    /// wherever it goes (the outline follows it), so moving needs no edits.
     func boundaryEditsForMoving(_ id: UUID) -> [MapEdit] {
-        boundaries.compactMap { boundary in
-            var updated = boundary
-            if boundary.nodeID == id {
-                updated.siblingIDs = []
-            } else {
-                updated.siblingIDs.removeAll { $0 == id }
-            }
-            return updated == boundary ? nil : .updateBoundary(updated)
-        }
+        []
     }
 
     func moveFloatingEdits(_ id: UUID, to position: CGPoint) throws -> [MapEdit] {
@@ -130,15 +118,30 @@ extension MindMap {
         return [.updateRelationship(relationship)]
     }
 
-    /// Boundary around `nodeID`'s subtree, optionally plus sibling subtrees.
+    /// Boundary around its members' subtrees (any topics except the
+    /// central one; members are normalized: an ancestor encloses its
+    /// descendants, document order).
     func addBoundaryEdits(_ boundary: Boundary) throws -> [MapEdit] {
-        guard let tree = tree(containing: boundary.nodeID) else { throw TreeEditError.invalidBoundary }
-        let parent = tree.parentID(of: boundary.nodeID)
-        let siblingsValid = boundary.siblingIDs.allSatisfy {
-            $0 != boundary.nodeID && parent != nil && tree.parentID(of: $0) == parent
+        var normalized = boundary
+        normalized.memberIDs = try validBoundaryMembers(boundary.memberIDs)
+        return [.insertBoundary(normalized, index: boundaries.count)]
+    }
+
+    /// Replaces a boundary's members (normalized); no members = removes it.
+    func setBoundaryMembersEdits(_ id: UUID, members: [UUID]) throws -> [MapEdit] {
+        guard var boundary = boundaries.first(where: { $0.id == id }) else { throw TreeEditError.invalidBoundary }
+        guard !members.isEmpty else { return [.removeBoundary(id: id)] }
+        let valid = try validBoundaryMembers(members)
+        guard valid != boundary.memberIDs else { return [] }
+        boundary.memberIDs = valid
+        return [.updateBoundary(boundary)]
+    }
+
+    private func validBoundaryMembers(_ members: [UUID]) throws -> [UUID] {
+        guard !members.isEmpty, !members.contains(root.id), members.allSatisfy(contains) else {
+            throw TreeEditError.invalidBoundary
         }
-        guard siblingsValid else { throw TreeEditError.invalidBoundary }
-        return [.insertBoundary(boundary, index: boundaries.count)]
+        return normalizedTopics(members)
     }
 
     func updateBoundaryEdits(_ id: UUID, _ change: (inout Boundary) -> Void) throws -> [MapEdit] {

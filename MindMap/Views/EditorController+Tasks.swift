@@ -32,17 +32,42 @@ extension EditorController {
 
     // MARK: Topic ops
 
+    /// "Convert to Task" for `id` (or the selection it belongs to).
     func convertToTask(_ id: UUID? = nil) {
         guard let target = id ?? selectedID else { return }
         commitEditing()
-        model.makeTask(target, undoManager: undoManager)
+        let ids = targets(for: target)
+        if ids.count > 1 {
+            model.makeTasks(ids, undoManager: undoManager)
+        } else {
+            model.makeTask(target, undoManager: undoManager)
+        }
     }
 
     func convertToTopic(_ id: UUID? = nil) {
         guard let target = id ?? selectedID else { return }
         commitEditing()
-        lingeringTaskIDs.remove(target)
-        model.removeTask(target, undoManager: undoManager)
+        let ids = targets(for: target)
+        lingeringTaskIDs.subtract(ids)
+        if ids.count > 1 {
+            model.removeTasks(ids, undoManager: undoManager)
+        } else {
+            model.removeTask(target, undoManager: undoManager)
+        }
+    }
+
+    /// Mark as Done / Not Done on the selection: every task follows the
+    /// reference topic (`id` / the primary), one undo step.
+    func toggleTargetsDone(_ id: UUID? = nil) {
+        guard let reference = id ?? selectedID, let task = task(of: reference) else { return }
+        let ids = targets(for: reference)
+        guard ids.count > 1 else {
+            toggleTaskDone(reference)
+            return
+        }
+        commitEditing()
+        lingeringTaskIDs.subtract(ids)
+        model.setTasksDone(ids, !task.isDone, now: now(), undoManager: undoManager)
     }
 
     /// Checkbox on a topic / ⌘⏎: done <-> open.

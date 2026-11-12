@@ -7,8 +7,9 @@ import Foundation
 struct SubtreeLayout {
     var frames: [UUID: CGRect]
     var connectors: [Connector]
-    /// Boundary outlines by boundary id.
-    var boundaryRects: [UUID: CGRect]
+    /// Padded area of each boundary member's subtree (one piece per
+    /// boundary and member; `BoundaryHull` joins a boundary's pieces).
+    var boundaryRects: [BoundaryPiece: CGRect]
     var bounds: CGRect
     /// Extents of freely positioned subtrees inside this one (not in
     /// `bounds`): auto-laid sibling subtrees at every ancestor level are
@@ -47,6 +48,12 @@ struct SubtreeLayout {
         copy.bounds = bounds.offsetBy(dx: dx, dy: dy)
         return copy
     }
+}
+
+/// One member of one boundary (key of its padded subtree area).
+struct BoundaryPiece: Hashable {
+    var boundaryID: UUID
+    var memberID: UUID
 }
 
 /// A laid-out child subtree waiting to be placed by its parent's arranger.

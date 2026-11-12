@@ -11,10 +11,12 @@ struct BoundariesLayer: View {
         let scene = editor.scene
         ZStack(alignment: .topLeading) {
             ForEach(editor.model.map.boundaries) { boundary in
-                if let rect = scene.layout.boundaries[boundary.id] {
-                    BoundaryView(editor: editor, boundary: boundary, rect: viewport.toScreen(rect),
+                if let outline = scene.layout.boundaries[boundary.id] {
+                    BoundaryView(editor: editor, boundary: boundary, outline: outline,
+                                 rect: viewport.toScreen(outline.bounds),
                                  color: Color(hex: editor.boundaryColorHex(boundary)), scale: viewport.scale,
-                                 isSelected: editor.selectedItem == .boundary(boundary.id))
+                                 isSelected: editor.selectedItem == .boundary(boundary.id)
+                                     || editor.boundaryMemberEditing == boundary.id)
                 }
             }
         }
@@ -24,6 +26,8 @@ struct BoundariesLayer: View {
 private struct BoundaryView: View {
     let editor: EditorController
     let boundary: Boundary
+    let outline: BoundaryOutline
+    /// Screen rect of `outline.bounds` (animates with the layout).
     let rect: CGRect
     let color: Color
     let scale: CGFloat
@@ -32,21 +36,19 @@ private struct BoundaryView: View {
     private var cornerRadius: CGFloat { 12 * scale }
 
     var body: some View {
-        let outline = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        let hit = BoundaryHitShape(cornerRadius: cornerRadius, band: EditorController.hitTolerance,
-                                   tab: boundary.hasLabel ? tabSize : nil)
+        let shape = HullShape(outline: outline, cornerRadius: cornerRadius)
+        let hit = BoundaryHitShape(outline: shape, band: EditorController.hitTolerance,
+                                   tab: boundary.hasLabel ? tabRect : nil)
         ZStack(alignment: .topLeading) {
-            outline.fill(color.opacity(0.06))
+            shape.fill(color.opacity(0.06))
             HatchShape(spacing: 9 * scale).stroke(color.opacity(0.16), lineWidth: max(0.75, scale))
-                .clipShape(outline)
-            outline.stroke(color.opacity(isSelected ? 1 : 0.8),
-                           style: StrokeStyle(lineWidth: (isSelected ? 2.5 : 1.5) * scale,
-                                              dash: [6 * scale, 4 * scale]))
+                .clipShape(shape)
             if isSelected {
-                RoundedRectangle(cornerRadius: cornerRadius + 3 * scale, style: .continuous)
-                    .stroke(Color.accentColor.opacity(0.6), lineWidth: 2)
-                    .padding(-3 * scale)
+                shape.stroke(Color.accentColor.opacity(0.35), lineWidth: 6 * max(scale, 0.5))
             }
+            shape.stroke(color.opacity(isSelected ? 1 : 0.8),
+                         style: StrokeStyle(lineWidth: (isSelected ? 2.5 : 1.5) * scale,
+                                            dash: [6 * scale, 4 * scale]))
             labelTab
         }
         .frame(width: rect.width, height: rect.height)
@@ -58,9 +60,14 @@ private struct BoundaryView: View {
         .position(x: rect.midX, y: rect.midY)
     }
 
-    private var tabSize: CGSize {
-        CGSize(width: min(CanvasHitTester.boundaryTabWidth * scale, rect.width),
-               height: LayoutSpacing().boundaryLabelHeight * scale)
+    /// Label tab in the view's own coordinates (top-left of the label piece).
+    private var tabRect: CGRect {
+        let bounds = outline.bounds
+        let sx = bounds.width > 0 ? rect.width / bounds.width : scale
+        let sy = bounds.height > 0 ? rect.height / bounds.height : scale
+        return CGRect(x: (outline.labelOrigin.x - bounds.minX) * sx, y: (outline.labelOrigin.y - bounds.minY) * sy,
+                      width: min(CanvasHitTester.boundaryTabWidth, outline.labelWidth) * sx,
+                      height: LayoutSpacing().boundaryLabelHeight * sy)
     }
 
     @ViewBuilder private var labelTab: some View {
@@ -75,6 +82,7 @@ private struct BoundaryView: View {
                 .fixedSize()
                 .padding(.leading, 8 * scale)
                 .padding(.top, 3 * scale)
+                .offset(x: tabRect.minX, y: tabRect.minY)
         }
     }
 }
@@ -96,19 +104,31 @@ struct HatchShape: Shape {
     }
 }
 
-/// Outline band (± `band`) of a rounded rect plus an optional top-left tab.
-struct BoundaryHitShape: Shape {
+/// A boundary outline with rounded corners. The polygon is stored relative
+/// to its bounds, so it follows the (animated) frame it is drawn in.
+struct HullShape: Shape {
+    var outline: BoundaryOutline
     var cornerRadius: CGFloat
-    var band: CGFloat
-    var tab: CGSize?
 
     func path(in rect: CGRect) -> Path {
-        let outline = Path(roundedRect: rect, cornerRadius: cornerRadius, style: .continuous)
-        var path = outline.strokedPath(StrokeStyle(lineWidth: band * 2))
-        if let tab {
-            path.addRect(CGRect(x: rect.minX + band, y: rect.minY + band,
-                                width: max(tab.width - band, 0), height: max(tab.height - band, 0)))
-        }
+        let bounds = outline.bounds
+        guard bounds.width > 0, bounds.height > 0 else { return Path(rect) }
+        let sx = rect.width / bounds.width, sy = rect.height / bounds.height
+        return Path(BoundaryHull.roundedPath(outline.polygon, radius: cornerRadius) { point in
+            CGPoint(x: rect.minX + (point.x - bounds.minX) * sx, y: rect.minY + (point.y - bounds.minY) * sy)
+        })
+    }
+}
+
+/// Outline band (± `band`) of a boundary plus an optional label tab.
+struct BoundaryHitShape: Shape {
+    var outline: HullShape
+    var band: CGFloat
+    var tab: CGRect?
+
+    func path(in rect: CGRect) -> Path {
+        var path = outline.path(in: rect).strokedPath(StrokeStyle(lineWidth: band * 2))
+        if let tab { path.addRect(tab.offsetBy(dx: rect.minX, dy: rect.minY)) }
         return path
     }
 }

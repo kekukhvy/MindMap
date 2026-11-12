@@ -8,38 +8,60 @@ import Foundation
 extension EditorController {
     /// Parent the dragged topic would get if dropped now (nil: floating root).
     func prospectiveParent(for drag: NodeDrag) -> UUID? {
+        prospectiveParent(for: drag, of: drag.id)
+    }
+
+    /// Parent topic `id` (one of the dragged topics) would get if dropped now.
+    func prospectiveParent(for drag: NodeDrag, of id: UUID) -> UUID? {
         if let target = drag.targetID {
             return drag.placement == .child ? target : model.map.parentID(of: target)
         }
-        return model.map.parentID(of: drag.id)
+        return model.map.parentID(of: id)
     }
 
     /// Where the dragged topic is drawn now (map coordinates).
     func ghostFrame(for drag: NodeDrag) -> CGRect? {
-        scene.layout.frames[drag.id]?.offsetBy(dx: drag.translation.width / viewport.scale,
-                                               dy: drag.translation.height / viewport.scale)
+        ghostFrame(for: drag, of: drag.id)
     }
 
-    /// The live line (map coordinates), styled like the topic's own line.
+    func ghostFrame(for drag: NodeDrag, of id: UUID) -> CGRect? {
+        scene.layout.frames[id]?.offsetBy(dx: drag.translation.width / viewport.scale,
+                                          dy: drag.translation.height / viewport.scale)
+    }
+
+    /// The dragged topic's live line (map coordinates), styled like its own line.
     var dragConnector: MapScene.StyledConnector? {
-        guard let drag, drag.translation != .zero, let parentID = prospectiveParent(for: drag),
-              parentID != drag.id, let parent = scene.layout.frames[parentID],
-              let ghost = ghostFrame(for: drag) else { return nil }
-        let original = scene.connectors.first { $0.childID == drag.id }
+        guard let drag else { return nil }
+        return dragConnector(for: drag, of: drag.id)
+    }
+
+    /// Live lines of every moving topic (a multi-selection drags them all).
+    var dragConnectors: [MapScene.StyledConnector] {
+        guard let drag else { return [] }
+        let ids = drag.movingIDs.isEmpty ? [drag.id] : drag.movingIDs
+        return ids.compactMap { dragConnector(for: drag, of: $0) }
+    }
+
+    private func dragConnector(for drag: NodeDrag, of id: UUID) -> MapScene.StyledConnector? {
+        guard drag.translation != .zero, let parentID = prospectiveParent(for: drag, of: id),
+              parentID != id, let parent = scene.layout.frames[parentID],
+              let ghost = ghostFrame(for: drag, of: id) else { return nil }
+        let original = scene.connectors.first { $0.childID == id }
         var geometry = EditorController.liveGeometry(from: parent, to: ghost)
         geometry.style = original?.geometry.style ?? .curved
         geometry.startWidth = original?.geometry.startWidth ?? MapScene.defaultLineWidth
         geometry.endWidth = geometry.startWidth
         geometry.dash = original?.geometry.dash ?? .solid
-        let color = original?.colorHex ?? scene.nodes[drag.id]?.appearance.colorHex ?? ColorTheme.rootColorHex
-        return MapScene.StyledConnector(childID: drag.id, geometry: geometry, colorHex: color)
+        let color = original?.colorHex ?? scene.nodes[id]?.appearance.colorHex ?? ColorTheme.rootColorHex
+        return MapScene.StyledConnector(childID: id, geometry: geometry, colorHex: color)
     }
 
-    /// Branch lines to draw: the dragged topic's own line is replaced by
-    /// `dragConnector` while it moves.
+    /// Branch lines to draw: the dragged topics' own lines are replaced by
+    /// `dragConnectors` while they move.
     var drawnConnectors: [MapScene.StyledConnector] {
-        guard let id = drag?.id, drag?.translation != .zero else { return scene.connectors }
-        return scene.connectors.filter { $0.childID != id }
+        guard let drag, drag.translation != .zero else { return scene.connectors }
+        let moving = Set(drag.movingIDs + [drag.id])
+        return scene.connectors.filter { !moving.contains($0.childID) }
     }
 
     /// Parent edge -> ghost edge: sideways when the ghost is beside the

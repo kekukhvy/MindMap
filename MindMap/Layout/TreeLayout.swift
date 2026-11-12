@@ -14,8 +14,8 @@ struct TreeLayout {
         var frames: [UUID: CGRect]
         /// One connector per visible parent→child edge.
         var connectors: [Connector]
-        /// Outline rect per boundary id (only if its node is visible).
-        var boundaries: [UUID: CGRect]
+        /// Outline per boundary id (only if a member is visible).
+        var boundaries: [UUID: BoundaryOutline]
         /// Geometry per relationship id (only if both ends are visible).
         var relationships: [UUID: RelationshipPath]
         /// Union of all frames and boundaries.
@@ -39,12 +39,22 @@ struct TreeLayout {
     }
 
     private func layout(_ map: MindMap, escapingSize size: @escaping (UUID) -> CGSize) -> Result {
-        // Single-subtree boundaries reserve space inside the subtree layout,
-        // so neighbours keep clear of them.
-        let subtreeBoundaries = Dictionary(grouping: map.boundaries.filter { $0.siblingIDs.isEmpty }, by: \.nodeID)
-        var boundaryNode: [UUID: UUID] = [:]
-        for boundary in map.boundaries { boundaryNode[boundary.id] = boundary.nodeID }
-        let engine = Engine(spacing: spacing, size: size, boundaries: subtreeBoundaries, boundaryNode: boundaryNode)
+        // Every boundary member reserves padding around its subtree inside
+        // the subtree layout, so neighbours keep clear of the outline.
+        var reservations: [UUID: [Engine.Reservation]] = [:]
+        var members: [UUID: [UUID]] = [:]
+        for (index, boundary) in map.boundaries.enumerated() {
+            let ids = map.normalizedMembers(of: boundary)
+            members[boundary.id] = ids
+            for id in ids {
+                // Fewer members = inner (padded first, enclosed by the others).
+                reservations[id, default: []].append(Engine.Reservation(
+                    boundaryID: boundary.id, hasLabel: boundary.hasLabel && id == ids.first,
+                    rank: ids.count * 100_000 + index))
+            }
+        }
+        let engine = Engine(spacing: spacing, size: size,
+                            reservations: reservations.mapValues { $0.sorted { $0.rank < $1.rank } })
 
         let rootSize = size(map.root.id)
         var all = engine.layoutSubtree(map.root, inherited: .root, isCentral: true)
@@ -55,10 +65,10 @@ struct TreeLayout {
             all.merge(local, dx: topic.position.x - nodeSize.width / 2, dy: topic.position.y - nodeSize.height / 2)
         }
 
-        var boundaryRects = all.boundaryRects
-        for boundary in map.boundaries where !boundary.siblingIDs.isEmpty {
-            if let rect = rangeBoundaryRect(boundary, map: map, layout: all) {
-                boundaryRects[boundary.id] = rect
+        var outlines: [UUID: BoundaryOutline] = [:]
+        for boundary in map.boundaries {
+            if let outline = outline(of: boundary, members: members[boundary.id] ?? [], map: map, layout: all) {
+                outlines[boundary.id] = outline
             }
         }
 
@@ -72,27 +82,33 @@ struct TreeLayout {
 
         // Freely positioned subtrees are not in the stacking bounds.
         let frameBounds = all.frames.values.reduce(all.bounds) { $0.union($1) }
-        let bounds = boundaryRects.values.reduce(frameBounds) { $0.union($1) }
-        return Result(frames: all.frames, connectors: all.connectors, boundaries: boundaryRects,
+        let bounds = outlines.values.reduce(frameBounds) { $0.union($1.bounds) }
+        return Result(frames: all.frames, connectors: all.connectors, boundaries: outlines,
                       relationships: relationshipPaths, bounds: bounds)
     }
 
-    /// Boundary over several sibling subtrees: union of their visible frames
-    /// and nested boundaries, plus padding (not reserved in spacing).
-    private func rangeBoundaryRect(_ boundary: Boundary, map: MindMap, layout: SubtreeLayout) -> CGRect? {
-        guard layout.frames[boundary.nodeID] != nil else { return nil }
-        var ids = Set<UUID>()
-        for rootID in boundary.enclosedRootIDs {
-            if let node = map.node(withID: rootID) { ids.formUnion(node.allIDs) }
+    /// Outline over the visible members' pieces (padded subtree areas; free
+    /// descendants outside them get their own padded piece) avoiding the
+    /// other topics (`BoundaryHull`).
+    private func outline(of boundary: Boundary, members: [UUID], map: MindMap,
+                         layout: SubtreeLayout) -> BoundaryOutline? {
+        var pieces: [CGRect] = []
+        var labelPiece = 0
+        var enclosed = Set<UUID>()
+        for id in members {
+            guard let rect = layout.boundaryRects[BoundaryPiece(boundaryID: boundary.id, memberID: id)],
+                  let node = map.node(withID: id) else { continue }
+            if id == members.first { labelPiece = pieces.count }
+            pieces.append(rect)
+            for inner in node.allIDs {
+                guard let frame = layout.frames[inner] else { continue }
+                enclosed.insert(inner)
+                if !rect.contains(frame) { pieces.append(padded(frame, hasLabel: false)) }
+            }
         }
-        var rect: CGRect?
-        for id in ids {
-            if let frame = layout.frames[id] { rect = rect?.union(frame) ?? frame }
-        }
-        for inner in map.boundaries where inner.id != boundary.id && ids.contains(inner.nodeID) {
-            if let innerRect = layout.boundaryRects[inner.id] { rect = rect?.union(innerRect) ?? innerRect }
-        }
-        return rect.map { padded($0, hasLabel: boundary.hasLabel) }
+        guard !pieces.isEmpty else { return nil }
+        let obstacles = layout.frames.compactMap { enclosed.contains($0.key) ? nil : $0.value }
+        return BoundaryHull.outline(pieces: pieces, labelPiece: labelPiece, obstacles: obstacles)
     }
 
     fileprivate func padded(_ rect: CGRect, hasLabel: Bool) -> CGRect {
@@ -107,9 +123,15 @@ struct TreeLayout {
     private struct Engine {
         let spacing: LayoutSpacing
         let size: (UUID) -> CGSize
-        let boundaries: [UUID: [Boundary]]
-        /// Boundary id -> its topic.
-        let boundaryNode: [UUID: UUID]
+        /// Boundaries a topic is a member of (inner first).
+        let reservations: [UUID: [Reservation]]
+
+        struct Reservation {
+            var boundaryID: UUID
+            /// The label strip goes above this member's piece.
+            var hasLabel: Bool
+            var rank: Int
+        }
 
         /// - Parameter isCentral: the main tree's root (uses the wider root gaps).
         func layoutSubtree(_ node: Node, inherited: LayoutContext, isCentral: Bool = false) -> SubtreeLayout {
@@ -143,9 +165,9 @@ struct TreeLayout {
                 }
                 avoidObstacles(node, style: context.style, spacing: spacing, in: &layout)
             }
-            for boundary in boundaries[node.id] ?? [] {
-                let rect = TreeLayout(spacing: spacing).padded(layout.bounds, hasLabel: boundary.hasLabel)
-                layout.boundaryRects[boundary.id] = rect
+            for reservation in reservations[node.id] ?? [] {
+                let rect = TreeLayout(spacing: spacing).padded(layout.bounds, hasLabel: reservation.hasLabel)
+                layout.boundaryRects[BoundaryPiece(boundaryID: reservation.boundaryID, memberID: node.id)] = rect
                 layout.bounds = layout.bounds.union(rect)
             }
             return layout
@@ -165,8 +187,9 @@ struct TreeLayout {
                     all.insert(current.id)
                     if isAuto {
                         if let frame = layout.frames[current.id] { auto = auto.union(frame) }
-                        for boundary in boundaries[current.id] ?? [] {
-                            if let rect = layout.boundaryRects[boundary.id] { auto = auto.union(rect) }
+                        for reservation in reservations[current.id] ?? [] {
+                            let piece = BoundaryPiece(boundaryID: reservation.boundaryID, memberID: current.id)
+                            if let rect = layout.boundaryRects[piece] { auto = auto.union(rect) }
                         }
                     }
                     guard !current.isCollapsed else { return }
@@ -184,7 +207,7 @@ struct TreeLayout {
             case .orgChartDown:
                 avoidance = ObstacleAvoidance(axis: .horizontal, allowsBackward: true, gap: spacing.rowGap)
             }
-            avoidance.resolve(&layout, nodeID: node.id, blocks: blocks, boundaryNode: boundaryNode)
+            avoidance.resolve(&layout, nodeID: node.id, blocks: blocks)
         }
 
         /// Places a freely positioned child subtree with its node centered at
