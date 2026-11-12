@@ -147,3 +147,5 @@ Final report: what works, what to test manually on real iPad, known gaps.
 
 ## Queue (after feedback batch 1)
 - [x] WP7 Topic links (user 2026-11-12): `Node.link` = web URL | link to another topic in this map (| file later). Link icon BEFORE the topic title. Context menu: Add/Edit Link… (⌘K), "Go to" (opens URL in browser / selects+scrolls to target topic, with back navigation), Remove Link. Cmd+click on a linked topic = Go to. Undoable, JSON optional field, tests.
+- [ ] WP8 Tasks (user 2026-11-12): convert topic to task (checkbox before title, done = strikethrough/dim; optional priority + due date). Auto "Tasks" floating panel on the canvas (virtual, derived from tasks, not a real node; its position persisted) listing all OPEN tasks with checkboxes, click = jump to topic, check = complete (undoable). Appears when ≥1 open task, disappears when none.
+- [ ] WP9 Sample map (user 2026-11-12): "MindMap Features.mindmap" describing this app with ALL its features, showcasing them (layout styles, shapes, themes, links, notes, drawing, files, relationships, boundaries, floating, tasks). Saved in Samples/ and opened on Mac.
