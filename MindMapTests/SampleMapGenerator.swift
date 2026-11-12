@@ -61,6 +61,13 @@ enum FeaturesSample {
             "⌘-scroll / pinch — Zoom",
             "Esc — Cancel Pick / Deselect",
         ])
+        let hkSelection = group("Selection", [
+            "⌘-click topic — Add / Remove from Selection",
+            "⇧-click topic — Add Range",
+            "⌘A — Select All",
+            "⇧/⌘-drag empty canvas — Select Area",
+            "Esc — Keep Only the Primary Topic",
+        ])
         let hkView = group("View & Collapse", [
             "⌘/ — Collapse / Expand Topic",
             "⌥⌘1…4 — Collapse to Level 1–4",
@@ -68,7 +75,7 @@ enum FeaturesSample {
         ])
         let hkLinks = group("Links", [
             "⌘K — Add/Edit Link",
-            "⌘-click topic — Go to Link",
+            "Click link icon — Go to Link",
             "⌘[ — Back",
             "Return / Esc — Save / Cancel Link",
         ])
@@ -94,7 +101,7 @@ enum FeaturesSample {
             "⌘O — Open…",
         ])
         let hotkeys = Node(text: "Hotkeys", layoutStyle: .treeDown,
-                           children: [hkEditing, hkNavigation, hkView, hkLinks, hkTasks, hkAttachments, hkItems,
+                           children: [hkEditing, hkNavigation, hkSelection, hkView, hkLinks, hkTasks, hkAttachments, hkItems,
                                       hkDocuments],
                            attachments: [note("Hotkeys", """
                            # Hotkeys
@@ -241,7 +248,7 @@ enum FeaturesSample {
             Node(text: "MindMap Roadmap (other map)",
                  link: .map(MapReference(relativePath: roadmapFileName, displayName: "MindMap Roadmap",
                                          targetTopicID: roadmapTarget))),
-            Node(text: "⌘-click or icon — Go to; ⌘[ — Back"),
+            Node(text: "Click the link icon — Go to; ⌘[ — Back"),
         ], attachments: [note("Links", """
         # Links
 
@@ -251,12 +258,14 @@ enum FeaturesSample {
         - **Topic** — jumps to another topic of this map and expands it; **⌘[** or the Back pill returns.
         - **Map** — opens another `.mindmap` in a new tab (Mac) / window (iPad), optionally at a topic. Stored as a relative path, so maps in one iCloud folder keep working.
 
-        ⌘-click a linked topic or click its link icon to follow it.
+        Click (tap) the link icon before the title to follow it, or right-click → **Link ▸ Go to**.
+        ⌘-click on a linked topic only selects it (multi-selection), like on any topic.
+        The **Link ▸** menu (Add/Edit Link… ⌘K, Go to, Copy Link, Locate…, Remove Link) sits next to **Task ▸**.
         """)])
 
         // Tasks.
         let tasks = Node(text: "Tasks", layoutStyle: .leftMap, shape: .capsule, link: .topic(hkTasks.id), children: [
-            Node(text: "Convert to Task (Topic menu)"),
+            Node(text: "Task ▸ Convert to Task"),
             Node(text: "Priority !!! / !! / !"),
             Node(text: "Due date: Today, Tomorrow, …"),
             Node(text: "Tasks panel = all open tasks"),
@@ -264,8 +273,8 @@ enum FeaturesSample {
         ], attachments: [note("Tasks", """
         # Tasks
 
-        1. Right-click a topic → **Convert to Task** (a checkbox appears before the title).
-        2. Set **Priority** and **Due Date** in the same menu; **⌘Return** marks it done.
+        1. Right-click a topic → **Task ▸ Convert to Task** (a checkbox appears before the title).
+        2. Set **Priority** and **Due Date** in the same **Task ▸** menu; **⌘Return** marks it done. With several topics selected, Task ▸ applies to all of them.
         3. The **Tasks** panel on the canvas lists every open task: click a row to jump, tick to complete. Drag its header to move it.
 
         See the tasks under "Known gaps / Roadmap".
@@ -292,7 +301,7 @@ enum FeaturesSample {
                         children: [
                             Node(text: "Copy / paste & duplicate topics", task: TaskInfo(priority: .high, dueDate: day(3))),
                             Node(text: "Multi-line topic editor", task: TaskInfo(priority: .high, dueDate: day(7))),
-                            Node(text: "Boundaries around sibling ranges", task: TaskInfo(priority: .medium, dueDate: day(14))),
+                            Node(text: "Boundaries around any topics", task: TaskInfo(isDone: true, completedAt: day(-1))),
                             Node(text: "iCloud container (needs a team)", task: TaskInfo(priority: .medium)),
                             Node(text: "iPad: empty-canvas context menu", task: TaskInfo(priority: .low, dueDate: day(21))),
                             Node(text: "Drag-reorder attachment icons", task: TaskInfo(priority: .low)),
@@ -305,7 +314,7 @@ enum FeaturesSample {
                         From REPORT.md. Open items are tasks — they appear in the Tasks panel.
 
                         - Topic editor is single-line (text wraps, no manual line breaks).
-                        - Boundaries only around one subtree (no multi-select).
+                        - Multi-select: ⌘-click / ⇧-click / ⌘A / area drag; a boundary can enclose any selected topics.
                         - No copy/paste or duplicate of topics yet.
                         - iCloud container needs a developer team.
                         - Device-only checks (Pencil, hardware keyboard, trackpad) are manual.
@@ -359,7 +368,6 @@ enum FeaturesSample {
         """)
         let next = Node(text: "Next", children: [
             Node(text: "Copy / paste topics"),
-            Node(text: "Multi-select"),
             Node(text: "Multi-line editor"),
         ])
         let root = Node(text: "MindMap Roadmap", layoutStyle: .rightMap, children: [
@@ -367,6 +375,7 @@ enum FeaturesSample {
                 Node(text: "Stage 1 — tree editor"),
                 Node(text: "Stage 2 — attachments"),
                 Node(text: "Links, tasks, map links"),
+                Node(text: "Multi-select"),
             ]),
             next,
             Node(text: "Later", children: [
@@ -455,7 +464,7 @@ struct SampleMapGeneratorTests {
         let map = try MindMapPackage.read(FileWrapper(url: featuresURL, options: .immediate))
         // Every feature is present.
         #expect(map.root.children.count == 10)
-        #expect(map.allTasks.count == 8 && map.openTaskCount == 6)
+        #expect(map.allTasks.count == 8 && map.openTaskCount == 5)
         #expect(map.relationships.count == 3 && map.boundaries.count == 2 && map.floatingTopics.count == 1)
         let all = allNodes(map)
         #expect(Set(all.compactMap(\.layoutStyle)) == Set(LayoutStyle.allCases.filter { $0 != .balancedMap }))

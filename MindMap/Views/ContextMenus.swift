@@ -22,10 +22,6 @@ struct NodeContextMenu: View {
         let info = editor.scene.nodes[id]
         let isMainRoot = id == editor.model.root.id
         let isFloatingRoot = editor.model.map.isFloatingRoot(id)
-        if editor.link(of: id) != nil {
-            GoToLinkButton(editor: editor, id: id)
-            Divider()
-        }
         Button("Rename", systemImage: "pencil") { editor.beginEditing(id) }
         Button("Add Child Topic", systemImage: "arrow.turn.down.right") {
             editor.select(id)
@@ -53,11 +49,7 @@ struct NodeContextMenu: View {
             OutlineMenuItems(editor: editor)
         }
         Divider()
-        TaskMenuItems(editor: editor, id: id)
-        Divider()
-        AttachmentMenuItems(editor: editor, id: id)
-        Divider()
-        LinkMenuItems(editor: editor, id: id)
+        TopicSubmenusView(facts: editor.menuFacts(for: id)) { editor.performMenuAction($0, on: id) }
         Divider()
         Button("Relationship", systemImage: "arrow.triangle.turn.up.right.diamond") {
             editor.beginRelationship(from: id)
@@ -102,16 +94,9 @@ struct MultiTopicMenuItems: View {
             }
         }
         Divider()
-        if nodes.contains(where: { $0.task == nil }) {
-            Button("Convert to Task", systemImage: "checkmark.circle") { editor.convertToTask(id) }
-        }
-        if let task = reference?.task {
-            Button(task.isDone ? "Mark as Not Done" : "Mark as Done",
-                   systemImage: task.isDone ? "circle" : "checkmark.circle") { editor.toggleTargetsDone(id) }
-        }
-        if nodes.contains(where: { $0.task != nil }) {
-            Button("Convert to Topic", systemImage: "circle.slash") { editor.convertToTopic(id) }
-        }
+        // Task ▸ applies to all; Link / Note / Attachments ▸ are disabled
+        // (one topic only).
+        TopicSubmenusView(facts: editor.menuFacts(for: id)) { editor.performMenuAction($0, on: id) }
         Divider()
         Button("Add Boundary", systemImage: "square.dashed") { editor.addBoundaryFromSelection(id) }
             .disabled(editor.model.map.movableTopics(ids).isEmpty)
@@ -154,138 +139,17 @@ struct OutlineMenuItems: View {
     }
 }
 
-/// Notes / attachments of a topic: Add Note / Handwritten Note / Attach
-/// File… / Paste File, then each attachment with
-/// Open, Move and Remove (icons on the topic open them directly).
-struct AttachmentMenuItems: View {
-    let editor: EditorController
-    let id: UUID
-
-    var body: some View {
-        let attachments = editor.attachments(of: id)
-        Button("Add Note", systemImage: "note.text.badge.plus") { editor.addNote(to: id) }
-        Button("Add Handwritten Note", systemImage: "pencil.and.scribble") { editor.addDrawing(to: id) }
-        Button("Attach File…", systemImage: "paperclip") { editor.beginAttachFile(to: id) }
-        Button("Paste File", systemImage: "doc.on.clipboard") {
-            editor.select(id)
-            editor.pasteFiles(to: id)
-        }
-        ForEach(Array(attachments.enumerated()), id: \.element.id) { index, attachment in
-            Menu(attachment.title.isEmpty ? attachment.kind.displayName : attachment.title,
-                 systemImage: attachment.kind.systemImage) {
-                Button("Open", systemImage: "arrow.up.forward.square") {
-                    editor.select(id)
-                    editor.openAttachment(attachment.id)
-                }
-                if attachments.count > 1 {
-                    Button("Move Left", systemImage: "arrow.left") { editor.moveAttachment(attachment.id, by: -1) }
-                        .disabled(index == 0)
-                    Button("Move Right", systemImage: "arrow.right") { editor.moveAttachment(attachment.id, by: 1) }
-                        .disabled(index == attachments.count - 1)
-                }
-                Divider()
-                Button("Remove", systemImage: "trash", role: .destructive) { editor.removeAttachment(attachment.id) }
-            }
-        }
-    }
-}
-
-/// First, prominent item of a linked topic's menu: "Go to “target”".
-struct GoToLinkButton: View {
-    let editor: EditorController
-    let id: UUID
-
-    var body: some View {
-        Button { editor.goToLink(of: id) } label: {
-            Label { Text(title).bold() } icon: { Image(systemName: icon) }
-        }
-    }
-
-    private var icon: String {
-        switch editor.link(of: id) {
-        case .web: return "safari"
-        case .map: return "macwindow.badge.plus"
-        default: return "arrow.right.circle"
-        }
-    }
-
-    private var title: String {
-        switch editor.model.map.resolvedLink(of: id) {
-        case let .web(url): return "Go to “\(Self.short(LinkURL.displayString(url)))”"
-        case let .topic(target):
-            let text = LinkCandidate.displayText(editor.model.map.node(withID: target)?.text ?? "")
-            return "Go to “\(Self.short(text))”"
-        case .brokenTopic: return "Go to (Deleted Topic)"
-        case let .map(reference): return "Open “\(Self.short(reference.displayName))”"
-        case nil: return "Go to"
-        }
-    }
-
-    private static func short(_ text: String) -> String {
-        text.count > 40 ? String(text.prefix(39)) + "…" : text
-    }
-}
-
-/// Add / Edit Link… (⌘K), Locate… (missing map file), Copy Link, Remove Link.
-struct LinkMenuItems: View {
-    let editor: EditorController
-    let id: UUID
-
-    var body: some View {
-        let link = editor.link(of: id)
-        Button(link == nil ? "Add Link…" : "Edit Link…", systemImage: "link") { editor.beginEditLink(id) }
-        if link != nil {
-            if link?.mapReference != nil, editor.resolvedMapURL(of: id) == nil {
-                // Missing map file: relink (also offered when Go to fails).
-                Button("Locate…", systemImage: "magnifyingglass") { editor.beginLocateMap(id) }
-            }
-            Button("Copy Link", systemImage: "doc.on.doc") { editor.copyLink(id) }
-                .disabled(editor.model.map.resolvedLink(of: id)?.isBroken ?? true)
-            Button("Remove Link", systemImage: "xmark.circle") { editor.removeLink(id) }
-        }
-    }
-}
-
-/// Task items: Convert to Task, or Mark as Done / Not Done (⌘⏎), Priority,
-/// Due Date (quick picks, Choose Date…, Clear) and Convert to Topic.
+/// Tasks panel row menu: Show Topic, then the items of Task ▸ (the same
+/// entries as the topic menus; Mark as Done keeps the row lingering).
 struct TaskMenuItems: View {
     let editor: EditorController
     let id: UUID
-    /// Tasks panel rows: "Show Topic" first.
-    var includesGoTo = false
 
     var body: some View {
-        if includesGoTo {
-            Button("Show Topic", systemImage: "scope") { editor.showTask(id) }
-            Divider()
-        }
-        if let task = editor.task(of: id) {
-            Button(task.isDone ? "Mark as Not Done" : "Mark as Done",
-                   systemImage: task.isDone ? "circle" : "checkmark.circle") {
-                if includesGoTo { editor.togglePanelTask(id) } else { editor.toggleTargetsDone(id) }
-            }
-            Menu("Priority", systemImage: "exclamationmark.circle") {
-                ForEach(TaskPriority.allCases, id: \.self) { priority in
-                    CheckItem("\(priority.title)  \(priority.mark)", checked: task.priority == priority) {
-                        editor.setTaskPriority(priority, for: id)
-                    }
-                }
-                Divider()
-                CheckItem("None", checked: task.priority == nil) { editor.setTaskPriority(nil, for: id) }
-            }
-            Menu("Due Date", systemImage: "calendar") {
-                ForEach(DueQuickPick.allCases, id: \.self) { pick in
-                    Button(pick.title) { editor.setTaskDue(pick, for: id) }
-                }
-                Divider()
-                Button("Choose Date…") { editor.beginDueDatePicker(id) }
-                if task.dueDate != nil {
-                    Button("Clear Due Date", role: .destructive) { editor.setTaskDueDate(nil, for: id) }
-                }
-            }
-            Button("Convert to Topic", systemImage: "circle.slash") { editor.convertToTopic(id) }
-        } else {
-            Button("Convert to Task", systemImage: "checkmark.circle") { editor.convertToTask(id) }
+        Button("Show Topic", systemImage: "scope") { editor.showTask(id) }
+        Divider()
+        TopicMenuEntriesView(entries: TopicMenus.taskEntries(editor.menuFacts(for: id))) { action in
+            if action == .toggleDone { editor.togglePanelTask(id) } else { editor.performMenuAction(action, on: id) }
         }
     }
 }

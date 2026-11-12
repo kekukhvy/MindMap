@@ -78,16 +78,27 @@ extension EditorController {
         model.toggleTaskDone(target, now: now(), undoManager: undoManager)
     }
 
+    /// Priority of `id` (or of every task of the selection it belongs to).
     func setTaskPriority(_ priority: TaskPriority?, for id: UUID? = nil) {
         guard let target = id ?? selectedID else { return }
         commitEditing()
-        model.setTaskPriority(priority, for: target, undoManager: undoManager)
+        let ids = targets(for: target)
+        if ids.count > 1 {
+            model.setTasksPriority(ids, priority, undoManager: undoManager)
+        } else {
+            model.setTaskPriority(priority, for: target, undoManager: undoManager)
+        }
     }
 
     func setTaskDueDate(_ date: Date?, for id: UUID? = nil) {
         guard let target = id ?? selectedID else { return }
         commitEditing()
-        model.setTaskDueDate(date, for: target, undoManager: undoManager)
+        let ids = targets(for: target)
+        if ids.count > 1 {
+            model.setTasksDueDate(ids, date, undoManager: undoManager)
+        } else {
+            model.setTaskDueDate(date, for: target, undoManager: undoManager)
+        }
     }
 
     func setTaskDue(_ pick: DueQuickPick, for id: UUID? = nil) {

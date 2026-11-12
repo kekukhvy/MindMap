@@ -260,7 +260,8 @@ final class EditorController {
                                   canGoBack: backTargetID != nil,
                                   selectionIsTask: selected?.task != nil,
                                   selectionIsDoneTask: selected?.task?.isDone == true,
-                                  selectionCount: selectedIDs.count)
+                                  selectionCount: selectedIDs.count,
+                                  menu: selected == nil ? TopicMenuFacts() : selectedID.map(menuFacts(for:)) ?? TopicMenuFacts())
     }
 
     // MARK: Editing state
@@ -358,4 +359,6 @@ struct EditorCommandState: Equatable {
     var selectionIsDoneTask: Bool = false
     /// Selected topics (> 1 = multi-selection).
     var selectionCount: Int = 0
+    /// Task / Link / Note / Attachments submenus of the selection.
+    var menu = TopicMenuFacts()
 }

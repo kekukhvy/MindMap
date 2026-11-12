@@ -167,6 +167,33 @@ extension MindMapModel {
         return perform(edits, actionName: done ? "Complete Tasks" : "Reopen Tasks", undoManager: undoManager)
     }
 
+    /// Sets / clears the priority of every task of `ids` (plain topics
+    /// stay topics), one step.
+    @discardableResult
+    func setTasksPriority(_ ids: [UUID], _ priority: TaskPriority?, undoManager: UndoManager?) -> Bool {
+        let edits = map.composedEdits(for: map.documentOrder(ids)) { map, id in
+            guard var task = map.node(withID: id)?.task, task.priority != priority else { return [] }
+            task.priority = priority
+            return try map.setTaskEdits(task, for: id)
+        }
+        guard !edits.isEmpty else { return false }
+        return perform(edits, actionName: priority == nil ? "Clear Priority" : "Set Priority", undoManager: undoManager)
+    }
+
+    /// Sets (start of that day) / clears the due day of every task of `ids`, one step.
+    @discardableResult
+    func setTasksDueDate(_ ids: [UUID], _ date: Date?, calendar: Calendar = .current,
+                         undoManager: UndoManager?) -> Bool {
+        let day = date.map { calendar.startOfDay(for: $0) }
+        let edits = map.composedEdits(for: map.documentOrder(ids)) { map, id in
+            guard var task = map.node(withID: id)?.task, task.dueDate != day else { return [] }
+            task.dueDate = day
+            return try map.setTaskEdits(task, for: id)
+        }
+        guard !edits.isEmpty else { return false }
+        return perform(edits, actionName: date == nil ? "Clear Due Date" : "Set Due Date", undoManager: undoManager)
+    }
+
     // MARK: Boundaries over arbitrary topics
 
     /// Boundary around `members` (any topics but the central one); returns its id.

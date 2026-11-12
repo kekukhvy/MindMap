@@ -66,52 +66,11 @@ struct MindMapCommands: Commands {
             Button("Boundary") { editor?.perform(.addBoundary) }
                 .keyboardShortcut("b", modifiers: .command)
                 .disabled(!hasNodeSelection || onlyMainRoot)
-            Button(state?.selectionHasNote == true ? "Open Note" : "Add Note") { editor?.perform(.note) }
-                .keyboardShortcut("n", modifiers: [.command, .shift])
-                .disabled(!hasNodeSelection)
-            Button(state?.selectionHasDrawing == true ? "Open Handwritten Note" : "Add Handwritten Note") {
-                editor?.perform(.handwrittenNote)
-            }
-            .keyboardShortcut("d", modifiers: [.command, .shift])
-            .disabled(!hasNodeSelection)
-            Button("Attach File…") { editor?.perform(.attachFile) }
-                .keyboardShortcut("a", modifiers: [.command, .shift])
-                .disabled(!hasNodeSelection)
             Divider()
-            Button(state?.selectionIsTask == true ? "Convert to Topic" : "Convert to Task") {
-                if state?.selectionIsTask == true { editor?.convertToTopic() } else { editor?.convertToTask() }
-            }
-            .disabled(!hasNodeSelection)
-            Button(state?.selectionIsDoneTask == true ? "Mark as Not Done" : "Mark as Done") {
-                editor?.perform(.toggleTaskDone)
-            }
-            .keyboardShortcut(.return, modifiers: .command)
-            .disabled(!hasNodeSelection || state?.selectionIsTask != true)
-            Menu("Priority") {
-                ForEach(TaskPriority.allCases, id: \.self) { priority in
-                    Button("\(priority.title)  \(priority.mark)") { editor?.setTaskPriority(priority) }
-                }
-                Divider()
-                Button("None") { editor?.setTaskPriority(nil) }
-            }
-            .disabled(!hasNodeSelection || state?.selectionIsTask != true)
-            Menu("Due Date") {
-                ForEach(DueQuickPick.allCases, id: \.self) { pick in
-                    Button(pick.title) { editor?.setTaskDue(pick) }
-                }
-                Divider()
-                Button("Choose Date…") { editor?.beginDueDatePicker() }
-                Button("Clear Due Date") { editor?.setTaskDueDate(nil) }
-            }
-            .disabled(!hasNodeSelection || state?.selectionIsTask != true)
-            Divider()
-            Button(state?.selectionHasLink == true ? "Edit Link…" : "Add Link…") { editor?.perform(.editLink) }
-                .keyboardShortcut("k", modifiers: .command)
-                .disabled(!hasNodeSelection)
-            Button("Go to Link") { editor?.goToLink() }
-                .disabled(!hasNodeSelection || state?.selectionHasLink != true)
-            Button("Remove Link") { editor?.removeLink() }
-                .disabled(!hasNodeSelection || state?.selectionHasLink != true)
+            // Task ▸ Link ▸ Note ▸ Attachments ▸ — the same submenus as the
+            // topic context menu (`TopicMenus`), shortcuts registered here.
+            TopicSubmenusView(facts: hasNodeSelection ? state?.menu ?? TopicMenuFacts() : TopicMenuFacts(),
+                              showsShortcuts: true) { editor?.performMenuAction($0) }
             Button("Back") { editor?.perform(.goBack) }
                 .keyboardShortcut("[", modifiers: .command)
                 .disabled(!canAct || state?.canGoBack != true)

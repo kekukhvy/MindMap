@@ -325,16 +325,24 @@ extension EditorController {
         case .selectAll:
             selectAllTopics()
         case .note:
-            guard let id = selectedID, scene.nodes[id] != nil else { return false }
+            // One topic only (the Link / Note / Attachments submenus are
+            // disabled for a multi-selection).
+            guard let id = selectedID, scene.nodes[id] != nil, !isMultiSelection else { return false }
             openOrAddNote(id)
         case .handwrittenNote:
-            guard let id = selectedID, scene.nodes[id] != nil else { return false }
+            // One topic only (the Link / Note / Attachments submenus are
+            // disabled for a multi-selection).
+            guard let id = selectedID, scene.nodes[id] != nil, !isMultiSelection else { return false }
             openOrAddDrawing(id)
         case .attachFile:
-            guard let id = selectedID, scene.nodes[id] != nil else { return false }
+            // One topic only (the Link / Note / Attachments submenus are
+            // disabled for a multi-selection).
+            guard let id = selectedID, scene.nodes[id] != nil, !isMultiSelection else { return false }
             beginAttachFile(to: id)
         case .editLink:
-            guard let id = selectedID, scene.nodes[id] != nil else { return false }
+            // One topic only (the Link / Note / Attachments submenus are
+            // disabled for a multi-selection).
+            guard let id = selectedID, scene.nodes[id] != nil, !isMultiSelection else { return false }
             beginEditLink(id)
         case .goBack:
             guard backTargetID != nil else { return false }

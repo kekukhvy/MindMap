@@ -158,7 +158,7 @@ private struct TaskPanelRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { editor.showTask(entry.id) }
-        .contextMenu { TaskMenuItems(editor: editor, id: entry.id, includesGoTo: true) }
+        .contextMenu { TaskMenuItems(editor: editor, id: entry.id) }
         .help(entry.ancestors.isEmpty ? entry.text : (entry.ancestors + [entry.text]).joined(separator: " › "))
     }
 }

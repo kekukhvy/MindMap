@@ -22,6 +22,8 @@ enum GestureHelp {
             Row(systemImage: "hand.tap.fill", gesture: "Double-tap a topic", action: "Rename it"),
             Row(systemImage: "plus.circle.fill", gesture: "Tap +", action: "Add a child topic"),
             Row(systemImage: "hand.point.up.left", gesture: "Long-press a topic", action: "All topic actions"),
+            Row(systemImage: "link", gesture: "Tap a link icon",
+                action: "Open the link (web page, topic or map); also Link › Go to in the menu"),
             Row(systemImage: "arrow.up.and.down.and.arrow.left.and.right", gesture: "Drag a topic",
                 action: "Move it onto another topic, between siblings or anywhere"),
             Row(systemImage: "hand.draw", gesture: "Drag empty canvas", action: "Pan"),

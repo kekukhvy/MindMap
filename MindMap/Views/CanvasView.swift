@@ -278,22 +278,18 @@ struct CanvasView: View {
                     editor.addChild()
                 }
                 .onHover { inside in editor.setHovered(id, inside) }
-                .help(info.link?.tooltip ?? "")
+                .help(info.link?.topicHelp ?? "")
                 .simultaneousGesture(TapGesture().onEnded {
                     if editor.completePick(id) { return }
-                    // Cmd+click a linked topic = Go to (plain click selects);
-                    // on other topics Cmd+click toggles, Shift+click adds.
-                    if Self.isCommandClick, editor.editingID != id, info.link != nil, !editor.tapsToggleSelection {
-                        editor.goToLink(of: id)
-                        isFocused = true
-                        return
-                    }
+                    // Cmd+click always toggles multi-selection (also on
+                    // linked topics), Shift+click adds. Links open only via
+                    // the link icon or the Link menu.
                     editor.clickTopic(id, command: Self.isCommandClick, shift: Self.isShiftClick)
                     if editor.editingID == nil { isFocused = true }
                 })
                 #else
                 .onHover { inside in editor.setHovered(id, inside) }
-                .help(info.link?.tooltip ?? "")
+                .help(info.link?.topicHelp ?? "")
                 // iPad: tap = select + action palette, double-tap = rename
                 // (`EditorController.touchTapTopic`; one tap recognizer, so
                 // the first tap is never delayed).

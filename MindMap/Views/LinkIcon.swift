@@ -43,6 +43,16 @@ struct LinkSummary: Equatable {
         }
     }
 
+    /// Hover text of the link icon: the target + how to follow it.
+    var iconHelp: String {
+        isBroken ? tooltip : "\(tooltip)\nClick to open"
+    }
+
+    /// Hover text of a linked topic: ⌘-click selects, only the icon opens.
+    var topicHelp: String {
+        "\(tooltip)\nClick the link icon to open"
+    }
+
     /// "Open map “Plan” in a new tab — Projects/Plan.mindmap".
     static func mapTooltip(_ reference: MapReference) -> String {
         #if os(macOS)
@@ -65,7 +75,9 @@ enum LinkIconMetrics {
 }
 
 /// The link icon drawn inside a topic before its title, in the text color.
-/// Tap / click = Go to (opens the URL or jumps to the linked topic).
+/// Tap / click = Go to (opens the URL or jumps to the linked topic). The
+/// only pointer gesture that follows a link: ⌘-click on the topic toggles
+/// the multi-selection.
 struct LinkIconView: View {
     let link: LinkSummary
     let fontSize: CGFloat
@@ -86,7 +98,7 @@ struct LinkIconView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(link.tooltip)
+        .help(link.iconHelp)
         .accessibilityLabel(accessibilityLabel)
         .padding(.trailing, LinkIconMetrics.trailingGap(fontSize: fontSize) * scale)
     }

@@ -13,8 +13,8 @@
     "attachments" : [
       {
         "createdAt" : 816134400,
-        "fileName" : "928C7B23-DEF8-4E4C-983D-36FFBA1EBCE3.md",
-        "id" : "928C7B23-DEF8-4E4C-983D-36FFBA1EBCE3",
+        "fileName" : "0CAF5C0F-E7A8-48B8-95A4-57DD740291F0.md",
+        "id" : "0CAF5C0F-E7A8-48B8-95A4-57DD740291F0",
         "kind" : "markdown",
         "modifiedAt" : 816134400,
         "title" : "Roadmap"
@@ -34,7 +34,7 @@
 
             ],
             "colorTag" : "none",
-            "id" : "E9546670-B9B8-4AB8-99D9-D7EC08836EA2",
+            "id" : "2EA2D4C8-570C-48F5-8144-8FC130675279",
             "isCollapsed" : false,
             "text" : "Stage 1 — tree editor"
           },
@@ -46,7 +46,7 @@
 
             ],
             "colorTag" : "none",
-            "id" : "EDC0CD94-C0F9-4BC1-81B5-0237105D0450",
+            "id" : "7FF501B8-7F7B-41F3-81A3-E44557FEE885",
             "isCollapsed" : false,
             "text" : "Stage 2 — attachments"
           },
@@ -58,13 +58,25 @@
 
             ],
             "colorTag" : "none",
-            "id" : "FBA59CEE-07F6-421C-AE98-67D83E14EAF7",
+            "id" : "7AE4BD6E-B726-4BA8-A864-EFCAB36BD1E5",
             "isCollapsed" : false,
             "text" : "Links, tasks, map links"
+          },
+          {
+            "attachments" : [
+
+            ],
+            "children" : [
+
+            ],
+            "colorTag" : "none",
+            "id" : "6F38C4C6-0A53-4C75-B63D-4E3994EA233B",
+            "isCollapsed" : false,
+            "text" : "Multi-select"
           }
         ],
         "colorTag" : "none",
-        "id" : "1050A30B-5794-4574-BC5D-0A6425F9EE10",
+        "id" : "65EB6770-404A-4B48-B4DD-ACD91A8C5115",
         "isCollapsed" : false,
         "text" : "Done"
       },
@@ -81,7 +93,7 @@
 
             ],
             "colorTag" : "none",
-            "id" : "7BC34700-2D65-4493-9950-48D3ACC6AC0F",
+            "id" : "2B815B4E-9A79-4A8C-A1EF-04677C9A8E21",
             "isCollapsed" : false,
             "text" : "Copy \/ paste topics"
           },
@@ -93,25 +105,13 @@
 
             ],
             "colorTag" : "none",
-            "id" : "FE3E8F73-F4E9-44BB-98A7-B67532471AD5",
-            "isCollapsed" : false,
-            "text" : "Multi-select"
-          },
-          {
-            "attachments" : [
-
-            ],
-            "children" : [
-
-            ],
-            "colorTag" : "none",
-            "id" : "7F37AA72-CB1D-44EE-A73C-AEEFF579C670",
+            "id" : "88FAD56B-5342-4211-B8F6-62037836139E",
             "isCollapsed" : false,
             "text" : "Multi-line editor"
           }
         ],
         "colorTag" : "none",
-        "id" : "9C159BEA-2FD9-42BA-B9E2-AE4C1AE4EB1B",
+        "id" : "2BBFEE43-B0B4-4708-B11A-DA8E30045E17",
         "isCollapsed" : false,
         "text" : "Next"
       },
@@ -128,7 +128,7 @@
 
             ],
             "colorTag" : "none",
-            "id" : "C743CF32-C6F1-44F6-99E5-6C5D0D84C98E",
+            "id" : "4B3AA68E-10F0-49B4-B397-42683CF6B963",
             "isCollapsed" : false,
             "text" : "Presentation mode"
           },
@@ -140,7 +140,7 @@
 
             ],
             "colorTag" : "none",
-            "id" : "8812878A-CDF5-4259-A953-6F505E5410EB",
+            "id" : "3255E76E-F104-4DC0-9E29-17D91BE457CC",
             "isCollapsed" : false,
             "text" : "Export PNG \/ PDF"
           },
@@ -152,13 +152,13 @@
 
             ],
             "colorTag" : "none",
-            "id" : "CE7FC90A-D191-476F-BDF9-3080AAB7B698",
+            "id" : "A5006F8A-6146-43AF-9BBB-26DC133A01FC",
             "isCollapsed" : false,
             "text" : "Search"
           }
         ],
         "colorTag" : "none",
-        "id" : "45169152-1B1B-421E-A46A-9F8884833AE0",
+        "id" : "64C2BED5-7455-43A8-AA67-81BA1E8240AD",
         "isCollapsed" : false,
         "text" : "Later"
       },
@@ -170,7 +170,7 @@
 
         ],
         "colorTag" : "none",
-        "id" : "F2A3D522-8BCD-4BB4-8902-3214C18C2209",
+        "id" : "F76EA46E-3C99-4195-9254-75D0BDE3CFEF",
         "isCollapsed" : false,
         "link" : {
           "kind" : "map",
@@ -181,7 +181,7 @@
       }
     ],
     "colorTag" : "none",
-    "id" : "775A6C40-C2B8-4CB1-9B1F-123E38AB4110",
+    "id" : "648D8EFD-9D3E-4C2A-A89C-F95131DEE1CD",
     "isCollapsed" : false,
     "layoutStyle" : "rightMap",
     "text" : "MindMap Roadmap"
