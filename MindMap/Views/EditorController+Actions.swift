@@ -180,6 +180,15 @@ extension EditorController {
 
     // MARK: Format
 
+    /// Sets the layout of a topic's children (nil = inherit); the scene is
+    /// rebuilt from the new map at once and the topic stays in view.
+    func setLayoutStyle(_ style: LayoutStyle?, for id: UUID? = nil) {
+        guard let id = id ?? selectedID else { return }
+        commitEditing()
+        guard model.setLayoutStyle(style, for: id, undoManager: undoManager) else { return }
+        reveal(id)
+    }
+
     /// Clears color tag and custom color (one undo step).
     func resetColor(_ id: UUID, wholeBranch: Bool) {
         let map = model.map

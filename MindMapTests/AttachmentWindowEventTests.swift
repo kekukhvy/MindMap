@@ -78,5 +78,72 @@ struct AttachmentWindowEventTests {
         try await harness.wait(800)
         #expect(!window.isVisible)
     }
+
+    /// A new note opens as a normal window (not a tab / full screen): window
+    /// controls, resizable with a minimum, default ~640x720, Done + Esc
+    /// close it, and the next note opens with the remembered frame.
+    @Test func noteWindowIsNormalResizableAndClosable() async throws {
+        let topic = Node(text: "Topic")
+        let map = MindMap(root: Node(text: "Central", layoutStyle: .rightMap, children: [topic]))
+        let key = AttachmentWindowChrome.frameKey(for: .markdown)
+        let savedBefore = UserDefaults.standard.string(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
+        defer { UserDefaults.standard.set(savedBefore, forKey: key) }
+        let harness = try await CanvasEventHarness(realDocumentWith: map)
+        defer { harness.close() }
+
+        func openNote() async throws -> NSWindow {
+            let before = Set(NSApp.windows.map(ObjectIdentifier.init))
+            harness.editor.addNote(to: topic.id)
+            for _ in 0..<30 {
+                try await harness.wait(100)
+                if let window = NSApp.windows.first(where: {
+                    !before.contains(ObjectIdentifier($0)) && $0.isVisible && textView(in: $0.contentView) != nil
+                }) {
+                    try await harness.wait(900)
+                    return window
+                }
+            }
+            throw CancellationError()
+        }
+
+        let window = try await openNote()
+        let mask = window.styleMask
+        #expect(mask.contains(.titled) && mask.contains(.closable) && mask.contains(.miniaturizable)
+                && mask.contains(.resizable) && !mask.contains(.fullScreen))
+        #expect(window.tabbingMode == .disallowed && (window.tabbedWindows?.count ?? 0) <= 1)
+        #expect(window.collectionBehavior.contains(.fullScreenAuxiliary))
+        #expect(!window.collectionBehavior.contains(.fullScreenPrimary))
+        #expect(!window.isZoomed)
+        #expect(abs(window.frame.width - 640) < 2 && abs(window.frame.height - 720) < 60)
+        #expect(window.contentMinSize == AttachmentWindowChrome.minSize)
+        let visible = try #require(window.screen?.visibleFrame)
+        #expect(visible.contains(window.frame))
+        #expect(window.standardWindowButton(.closeButton)?.isHidden == false)
+        #expect(window.standardWindowButton(.miniaturizeButton)?.isEnabled == true)
+
+        // User resizes it; Esc in the text closes it; the next note reuses the frame.
+        let resized = CGRect(x: visible.minX + 40, y: visible.minY + 30, width: 700, height: 600)
+        window.setFrame(resized, display: true)
+        NotificationCenter.default.post(name: NSWindow.didEndLiveResizeNotification, object: window)
+        // Delivered straight to the window (the inactive test host cannot
+        // make it key; patching its class breaks SwiftUI's toolbar KVO).
+        let text = try #require(textView(in: window.contentView))
+        window.makeFirstResponder(text)
+        try await harness.wait(200)
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            let event = try #require(NSEvent.keyEvent(
+                with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, characters: "\u{1b}",
+                charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
+            window.sendEvent(event)
+            try await harness.wait(50)
+        }
+        try await harness.wait(800)
+        #expect(!window.isVisible)
+        let second = try await openNote()
+        #expect(second.frame == resized)
+        second.close()
+    }
 }
 #endif

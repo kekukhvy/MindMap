@@ -20,7 +20,7 @@ struct CanvasView: View {
                 background
                 ZStack(alignment: .topLeading) {
                     BoundariesLayer(editor: editor, viewport: viewport)
-                    ConnectorsLayer(connectors: scene.connectors, viewport: viewport)
+                    ConnectorsLayer(connectors: editor.drawnConnectors, viewport: viewport)
                     ForEach(scene.order, id: \.self) { id in
                         node(id, scene: scene, viewport: viewport)
                     }

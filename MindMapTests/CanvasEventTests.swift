@@ -112,13 +112,13 @@ final class CanvasEventHarness {
 
     func send(_ type: NSEvent.EventType, at point: CGPoint, clicks: Int = 1,
               modifiers: NSEvent.ModifierFlags = []) async throws {
-        time += 0.016
+        time = max(time + 0.001, ProcessInfo.processInfo.systemUptime)
         // The canvas fills the content view below the toolbar (top inset).
         let canvasHeight = editor.viewSize.height
         let location = CGPoint(x: point.x, y: canvasHeight - point.y)
         let event = NSEvent.mouseEvent(with: type, location: location, modifierFlags: modifiers, timestamp: time,
                                        windowNumber: window.windowNumber, context: nil, eventNumber: 0,
-                                       clickCount: clicks, pressure: type == .leftMouseUp ? 0 : 1)!
+                                       clickCount: clicks, pressure: type == .leftMouseDown || type == .leftMouseDragged ? 1 : 0)!
         if queued { NSApp.postEvent(event, atStart: false) } else { NSApp.sendEvent(event) }
         try await wait(16)
     }
@@ -129,6 +129,41 @@ final class CanvasEventHarness {
             try await send(.leftMouseUp, at: point, clicks: index)
         }
         try await wait(500)
+    }
+
+    /// Click(s) with human timing: ~90 ms press, ~140 ms between clicks,
+    /// and the next action follows after `settle` ms (a quick typist).
+    func humanClick(_ point: CGPoint, count: Int = 1, settle: Int = 150) async throws {
+        try await send(.mouseMoved, at: point)
+        for index in 1...count {
+            try await send(.leftMouseDown, at: point, clicks: index)
+            try await wait(90)
+            try await send(.leftMouseUp, at: point, clicks: index)
+            if index < count { try await wait(140) }
+        }
+        try await wait(settle)
+    }
+
+    /// Types `text` as hardware key presses (key down/up per character),
+    /// delivered like real keyboard input to the window's first responder.
+    func typeText(_ text: String) async throws {
+        for character in text {
+            try await key(String(character), keyCode: 0)
+        }
+    }
+
+    /// One key press: Return = "\r" (keyCode 36), Tab = "\t" (48), Esc = "\u{1b}" (53).
+    func key(_ characters: String, keyCode: UInt16) async throws {
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            time = max(time + 0.001, ProcessInfo.processInfo.systemUptime)
+            let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: time,
+                                         windowNumber: window.windowNumber, context: nil, characters: characters,
+                                         charactersIgnoringModifiers: characters, isARepeat: false,
+                                         keyCode: keyCode)!
+            if queued { NSApp.postEvent(event, atStart: false) } else { NSApp.sendEvent(event) }
+            try await wait(16)
+        }
+        try await wait(60)
     }
 
     /// Press at `from`, move in steps to `to`; `check` runs before release.
@@ -212,6 +247,42 @@ struct CanvasEventTests {
         #expect(!harness.undo.canUndo)
     }
 
+    /// While dragging, the branch line follows the topic: from the hovered
+    /// drop target, or from the current parent over empty space; the
+    /// topic's normal line is hidden meanwhile.
+    @Test(arguments: [false, true]) func dragDrawsLiveConnector(real: Bool) async throws {
+        let (map, root, a, b, c) = makeMap()
+        let harness = try await harness(map, real)
+        defer { harness.close() }
+        let editor = harness.editor
+        var overTarget: (parent: UUID?, start: Bool, end: Bool, hidden: Bool)?
+        try await harness.drag(from: harness.center(of: a), to: harness.center(of: b)) {
+            guard let drag = editor.drag, let line = editor.dragConnector, let ghost = editor.ghostFrame(for: drag),
+                  let target = editor.scene.layout.frames[b] else { return }
+            overTarget = (editor.prospectiveParent(for: drag),
+                          target.insetBy(dx: -0.5, dy: -0.5).contains(line.geometry.start)
+                              && !target.insetBy(dx: 0.5, dy: 0.5).contains(line.geometry.start),
+                          ghost.insetBy(dx: -0.5, dy: -0.5).contains(line.geometry.end),
+                          !editor.drawnConnectors.contains { $0.childID == a })
+        }
+        #expect(overTarget?.parent == b)
+        #expect(overTarget?.start == true && overTarget?.end == true && overTarget?.hidden == true)
+        #expect(editor.dragConnector == nil && editor.drawnConnectors.count == editor.scene.connectors.count)
+
+        let start = harness.center(of: c)
+        var free: (parent: UUID?, start: Bool, followsPointer: Bool)?
+        try await harness.drag(from: start, to: CGPoint(x: start.x + 120, y: start.y + 160)) {
+            guard let drag = editor.drag, let line = editor.dragConnector, let ghost = editor.ghostFrame(for: drag),
+                  let rootFrame = editor.scene.layout.frames[root] else { return }
+            let pointer = editor.viewport.toMap(CGPoint(x: start.x + 120, y: start.y + 160))
+            free = (editor.prospectiveParent(for: drag), rootFrame.insetBy(dx: -0.5, dy: -0.5)
+                        .contains(line.geometry.start),
+                    ghost.insetBy(dx: -0.5, dy: -0.5).contains(line.geometry.end)
+                        && abs(ghost.midX - pointer.x) < 2 && abs(ghost.midY - pointer.y) < 2)
+        }
+        #expect(free?.parent == root && free?.start == true && free?.followsPointer == true)
+    }
+
     /// Real window only: the Option state comes from the app's event monitor.
     @Test(arguments: [true]) func optionDragOverTopicMovesFreely(real: Bool) async throws {
         let (map, root, a, b, _) = makeMap()
@@ -259,6 +330,57 @@ struct CanvasEventTests {
         #expect(editor.model.map.node(withID: a)?.children.count == 1)
         #expect(editor.selectedID == child)
         #expect(editor.editingID == child)
+    }
+
+    /// The new topic's field is first responder with its placeholder text
+    /// selected: typing right after the double-click replaces it.
+    @Test(arguments: [false, true]) func doubleClickThenTypingNamesNewChild(real: Bool) async throws {
+        let (map, _, a, _, _) = makeMap()
+        let harness = try await harness(map, real)
+        defer { harness.close() }
+        let editor = harness.editor
+        try await harness.humanClick(harness.center(of: a), count: 2)
+        let child = try #require(editor.model.map.node(withID: a)?.children.first?.id)
+        #expect(editor.editingID == child)
+        try await harness.typeText("abc")
+        #expect(editor.draftText == "abc")
+        try await harness.key("\r", keyCode: 36)
+        #expect(editor.editingID == nil)
+        #expect(editor.model.map.node(withID: child)?.text == "abc")
+    }
+
+    /// Tab (child) and Return (sibling) on a selected topic: typing names the
+    /// new topic immediately, and Tab while naming chains another child.
+    @Test(arguments: [false, true]) func keyboardCreationThenTypingNamesTopic(real: Bool) async throws {
+        let (map, root, a, b, _) = makeMap()
+        let harness = try await harness(map, real)
+        defer { harness.close() }
+        let editor = harness.editor
+        // A topic named first (its editor came and went), as in real use.
+        try await harness.humanClick(harness.center(of: b), count: 2)
+        try await harness.typeText("first")
+        try await harness.key("\r", keyCode: 36)
+        #expect(editor.model.map.node(withID: b)?.children.first?.text == "first")
+        try await harness.humanClick(harness.center(of: a))
+        #expect(editor.selectedID == a)
+        try await harness.key("\t", keyCode: 48)
+        let child = try #require(editor.model.map.node(withID: a)?.children.first?.id)
+        #expect(editor.editingID == child)
+        try await harness.typeText("kid")
+        try await harness.key("\r", keyCode: 36)
+        #expect(editor.model.map.node(withID: child)?.text == "kid")
+        try await harness.key("\r", keyCode: 36)
+        let sibling = try #require(editor.model.map.node(withID: a)?.children.last?.id)
+        #expect(sibling != child && editor.editingID == sibling)
+        try await harness.typeText("sib")
+        try await harness.key("\t", keyCode: 48)
+        #expect(editor.model.map.node(withID: sibling)?.text == "sib")
+        let grandchild = try #require(editor.model.map.node(withID: sibling)?.children.first?.id)
+        #expect(editor.editingID == grandchild)
+        try await harness.typeText("deep")
+        try await harness.key("\r", keyCode: 36)
+        #expect(editor.model.map.node(withID: grandchild)?.text == "deep")
+        _ = root
     }
 
     @Test(arguments: [false, true]) func doubleClickEmptyCanvasAddsFloatingTopic(real: Bool) async throws {

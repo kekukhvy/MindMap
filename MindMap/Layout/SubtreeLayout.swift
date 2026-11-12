@@ -10,6 +10,10 @@ struct SubtreeLayout {
     /// Boundary outlines by boundary id.
     var boundaryRects: [UUID: CGRect]
     var bounds: CGRect
+    /// Extents of freely positioned subtrees inside this one (not in
+    /// `bounds`): auto-laid sibling subtrees at every ancestor level are
+    /// shifted out of their way (`ObstacleAvoidance`).
+    var obstacles: [LayoutObstacle]
 
     init(id: UUID, size: CGSize) {
         let frame = CGRect(origin: .zero, size: size)
@@ -17,6 +21,7 @@ struct SubtreeLayout {
         connectors = []
         boundaryRects = [:]
         bounds = frame
+        obstacles = []
     }
 
     /// Adds `child` translated by (dx, dy); `unionBounds: false` keeps it
@@ -29,6 +34,7 @@ struct SubtreeLayout {
             boundaryRects[id] = rect.offsetBy(dx: dx, dy: dy)
         }
         connectors += child.connectors.map { $0.offsetBy(dx: dx, dy: dy) }
+        obstacles += child.obstacles.map { $0.offsetBy(dx: dx, dy: dy) }
         if unionBounds { bounds = bounds.union(child.bounds.offsetBy(dx: dx, dy: dy)) }
     }
 
@@ -37,6 +43,7 @@ struct SubtreeLayout {
         copy.frames = frames.mapValues { $0.offsetBy(dx: dx, dy: dy) }
         copy.boundaryRects = boundaryRects.mapValues { $0.offsetBy(dx: dx, dy: dy) }
         copy.connectors = connectors.map { $0.offsetBy(dx: dx, dy: dy) }
+        copy.obstacles = obstacles.map { $0.offsetBy(dx: dx, dy: dy) }
         copy.bounds = bounds.offsetBy(dx: dx, dy: dy)
         return copy
     }
@@ -47,4 +54,14 @@ struct ChildSubtree {
     var id: UUID
     var layout: SubtreeLayout
     var nodeFrame: CGRect { layout.frames[id] ?? .zero }
+}
+
+/// Area taken by a freely positioned subtree (`id` = its root topic).
+struct LayoutObstacle: Equatable {
+    var id: UUID
+    var rect: CGRect
+
+    func offsetBy(dx: CGFloat, dy: CGFloat) -> LayoutObstacle {
+        LayoutObstacle(id: id, rect: rect.offsetBy(dx: dx, dy: dy))
+    }
 }

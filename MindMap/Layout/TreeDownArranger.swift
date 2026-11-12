@@ -1,9 +1,11 @@
 import CoreGraphics
 import Foundation
 
-/// MindManager "tree chart": children stacked one under another below the
-/// parent, indented towards the branch direction, with (default) elbow
-/// connectors starting at the parent's lower-left (lower-right when mirrored).
+/// MindManager "tree chart" / XMind "Tree Chart (right)": children stacked
+/// one under another below the parent, indented towards the branch
+/// direction, hanging off a vertical rail that drops from the parent's
+/// lower-left (lower-right when mirrored) with short elbows. The children's
+/// own branches grow sideways like a logic chart (unless they set a style).
 struct TreeDownArranger: SubtreeArranger {
     func arrange(
         _ node: Node,
@@ -14,7 +16,7 @@ struct TreeDownArranger: SubtreeArranger {
     ) -> SubtreeLayout {
         var result = SubtreeLayout(id: node.id, size: nodeSize)
         let isRight = context.direction == .right
-        let childContext = context.passingDown(style: .treeDown, direction: context.direction)
+        let childContext = context.horizontal(context.direction)
         let railX = isRight ? spacing.treeIndent / 2 : nodeSize.width - spacing.treeIndent / 2
         var cursorY = nodeSize.height + spacing.levelGap
         for child in node.children {

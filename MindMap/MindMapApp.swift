@@ -18,7 +18,8 @@ struct MindMapApp: App {
         WindowGroup("Note", for: AttachmentWindowID.self) { $windowID in
             AttachmentWindow(windowID: windowID)
         }
-        .defaultSize(width: 560, height: 640)
+        .defaultSize(width: 640, height: 720)
+        .windowResizability(.contentMinSize)
         .commandsRemoved()
     }
     #else

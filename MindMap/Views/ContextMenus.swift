@@ -25,6 +25,7 @@ struct NodeContextMenu: View {
             editor.addSibling()
         }
         .disabled(info?.isTreeRoot ?? true)
+        LayoutStyleMenu(editor: editor, id: id)
         if info?.hasChildren == true {
             Button(info?.isCollapsed == true ? "Expand" : "Collapse",
                    systemImage: info?.isCollapsed == true ? "plus.circle" : "minus.circle") {
@@ -55,7 +56,7 @@ struct NodeContextMenu: View {
             Button("Detach as Floating", systemImage: "rectangle.dashed") { editor.detachAsFloating(id) }
         }
         Divider()
-        NodeFormatMenus(editor: editor, id: id)
+        NodeFormatMenus(editor: editor, id: id, includesLayout: false)
         if !isMainRoot {
             Divider()
             Button("Delete", systemImage: "trash", role: .destructive) {

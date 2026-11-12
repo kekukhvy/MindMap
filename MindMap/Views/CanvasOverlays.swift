@@ -9,10 +9,26 @@ struct CanvasOverlays: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            dragLine
             rubberBand
             insertionIndicator
             controlHandles
             LabelEditorOverlay(editor: editor, viewport: viewport)
+        }
+    }
+
+    // MARK: Live branch line of a dragged topic
+
+    @ViewBuilder private var dragLine: some View {
+        if let connector = editor.dragConnector {
+            let geometry = connector.geometry.transformed(by: viewport)
+            ConnectorShape(geometry: geometry)
+                .stroke(Color(hex: connector.colorHex), style: StrokeStyle(
+                    lineWidth: geometry.startWidth, lineCap: .round, lineJoin: .round,
+                    dash: ConnectorGeometry.dashPattern(geometry.dash, width: geometry.startWidth)
+                ))
+                .allowsHitTesting(false)
+                .transaction { $0.animation = nil }
         }
     }
 

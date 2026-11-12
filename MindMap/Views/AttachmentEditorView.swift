@@ -36,11 +36,15 @@ struct AttachmentEditorView: View {
 }
 
 #if os(iOS)
-/// iPad: large sheet with Done (handwriting: presented as a full-screen cover).
+/// iPad: resizable sheet (medium / large detents, drag indicator) with a
+/// Done button; handwriting is a full-screen cover with the same Done.
 struct AttachmentSheet: View {
     let model: MindMapModel
     let attachmentID: UUID
     let undoManager: UndoManager?
+    /// Handwriting: full-screen cover (no detents, no swipe-down while writing).
+    var fullScreen = false
+    @State private var detent: PresentationDetent = .large
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -53,8 +57,9 @@ struct AttachmentSheet: View {
                     }
                 }
         }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.hidden)
+        .presentationDetents(fullScreen ? [.large] : [.medium, .large], selection: $detent)
+        .presentationDragIndicator(fullScreen ? .hidden : .visible)
+        .presentationContentInteraction(.scrolls)
         .modifier(PageSizedSheet())
     }
 }
@@ -85,6 +90,10 @@ struct AttachmentWindow: View {
         windowID.flatMap { registry.entry(for: $0.documentID) }
     }
 
+    private var kind: AttachmentKind? {
+        windowID.flatMap { entry?.model?.attachment($0.attachmentID)?.kind }
+    }
+
     var body: some View {
         Group {
             if let windowID, let entry, let model = entry.model {
@@ -101,7 +110,17 @@ struct AttachmentWindow: View {
                 .navigationTitle("Note")
             }
         }
-        .frame(minWidth: 380, idealWidth: 560, minHeight: 320, idealHeight: 640)
+        .frame(minWidth: AttachmentWindowChrome.minSize.width, idealWidth: 640,
+               minHeight: AttachmentWindowChrome.minSize.height, idealHeight: 720)
+        .toolbar {
+            // Visible close button; Esc closes too.
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .help("Close this window (Esc)")
+            }
+        }
+        .background(AttachmentWindowConfigurator(kind: kind))
         .onAppear { wasConnected = entry != nil }
         .onChange(of: entry != nil) { _, connected in
             if connected {

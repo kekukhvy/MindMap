@@ -42,7 +42,9 @@ struct TreeLayout {
         // Single-subtree boundaries reserve space inside the subtree layout,
         // so neighbours keep clear of them.
         let subtreeBoundaries = Dictionary(grouping: map.boundaries.filter { $0.siblingIDs.isEmpty }, by: \.nodeID)
-        let engine = Engine(spacing: spacing, size: size, boundaries: subtreeBoundaries)
+        var boundaryNode: [UUID: UUID] = [:]
+        for boundary in map.boundaries { boundaryNode[boundary.id] = boundary.nodeID }
+        let engine = Engine(spacing: spacing, size: size, boundaries: subtreeBoundaries, boundaryNode: boundaryNode)
 
         let rootSize = size(map.root.id)
         var all = engine.layoutSubtree(map.root, inherited: .root, isCentral: true)
@@ -106,6 +108,8 @@ struct TreeLayout {
         let spacing: LayoutSpacing
         let size: (UUID) -> CGSize
         let boundaries: [UUID: [Boundary]]
+        /// Boundary id -> its topic.
+        let boundaryNode: [UUID: UUID]
 
         /// - Parameter isCentral: the main tree's root (uses the wider root gaps).
         func layoutSubtree(_ node: Node, inherited: LayoutContext, isCentral: Bool = false) -> SubtreeLayout {
@@ -137,6 +141,7 @@ struct TreeLayout {
                                     context: context, into: &layout)
                     }
                 }
+                avoidObstacles(node, style: context.style, spacing: spacing, in: &layout)
             }
             for boundary in boundaries[node.id] ?? [] {
                 let rect = TreeLayout(spacing: spacing).padded(layout.bounds, hasLabel: boundary.hasLabel)
@@ -144,6 +149,42 @@ struct TreeLayout {
                 layout.bounds = layout.bounds.union(rect)
             }
             return layout
+        }
+
+        /// Slides the node's auto-laid child subtrees off freely positioned
+        /// subtrees (its own manual children and deeper manual topics).
+        private func avoidObstacles(_ node: Node, style: LayoutStyle, spacing: LayoutSpacing,
+                                    in layout: inout SubtreeLayout) {
+            guard !layout.obstacles.isEmpty else { return }
+            let stacked = node.children.filter { $0.manualPosition == nil }
+            guard !stacked.isEmpty else { return }
+            let blocks = stacked.map { child -> ObstacleAvoidance.Block in
+                var all = Set<UUID>()
+                var auto = CGRect.null
+                func visit(_ current: Node, isAuto: Bool) {
+                    all.insert(current.id)
+                    if isAuto {
+                        if let frame = layout.frames[current.id] { auto = auto.union(frame) }
+                        for boundary in boundaries[current.id] ?? [] {
+                            if let rect = layout.boundaryRects[boundary.id] { auto = auto.union(rect) }
+                        }
+                    }
+                    guard !current.isCollapsed else { return }
+                    for kid in current.children { visit(kid, isAuto: isAuto && kid.manualPosition == nil) }
+                }
+                visit(child, isAuto: true)
+                return ObstacleAvoidance.Block(childID: child.id, ids: all, rect: auto)
+            }
+            let avoidance: ObstacleAvoidance
+            switch style {
+            case .balancedMap, .rightMap, .leftMap:
+                avoidance = ObstacleAvoidance(axis: .vertical, allowsBackward: true, gap: spacing.vertical)
+            case .treeDown:
+                avoidance = ObstacleAvoidance(axis: .vertical, allowsBackward: false, gap: spacing.vertical)
+            case .orgChartDown:
+                avoidance = ObstacleAvoidance(axis: .horizontal, allowsBackward: true, gap: spacing.rowGap)
+            }
+            avoidance.resolve(&layout, nodeID: node.id, blocks: blocks, boundaryNode: boundaryNode)
         }
 
         /// Places a freely positioned child subtree with its node centered at
@@ -164,6 +205,10 @@ struct TreeLayout {
             let dx = parentSize.width / 2 + offset.x - childSize.width / 2
             let dy = parentSize.height / 2 + offset.y - childSize.height / 2
             layout.merge(sub, dx: dx, dy: dy, unionBounds: false)
+            let extent = sub.boundaryRects.values.reduce(sub.frames.values.reduce(CGRect.null) { $0.union($1) }) {
+                $0.union($1)
+            }
+            layout.obstacles.append(LayoutObstacle(id: child.id, rect: extent.offsetBy(dx: dx, dy: dy)))
             let frame = CGRect(origin: CGPoint(x: dx, y: dy), size: childSize)
             let parent = CGRect(origin: .zero, size: parentSize)
             let start: CGPoint, end: CGPoint, axis: ConnectorAxis

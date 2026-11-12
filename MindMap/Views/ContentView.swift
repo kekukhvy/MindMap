@@ -41,7 +41,8 @@ struct ContentView: View {
                 AttachmentSheet(model: model, attachmentID: request.attachmentID, undoManager: undoManager)
             }
             .fullScreenCover(item: presentedAttachment(fullScreen: true)) { request in
-                AttachmentSheet(model: model, attachmentID: request.attachmentID, undoManager: undoManager)
+                AttachmentSheet(model: model, attachmentID: request.attachmentID, undoManager: undoManager,
+                                fullScreen: true)
             }
             #else
             .onChange(of: editor.presentedAttachment) { _, request in
@@ -64,6 +65,9 @@ struct ContentView: View {
                 OpenDocumentRegistry.shared.register(model, undoManager: undoManager)
                 #if DEBUG
                 DebugLaunchActions.run(editor)
+                #if os(macOS)
+                DebugFocusProbe.run(editor)
+                #endif
                 #endif
             }
             .onDisappear { OpenDocumentRegistry.shared.unregister(model) }

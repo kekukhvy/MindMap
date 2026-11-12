@@ -35,12 +35,32 @@ struct NodeEditorField: View {
             .onChange(of: isFocused) { _, focused in
                 if !focused { editor.commitEditing(ifEditing: nodeID) }
             }
-            .task {
-                isFocused = true
-                try? await Task.sleep(for: .milliseconds(30))
-                applyInitialSelection(selectAll: editor.editSelectsAll)
-            }
+            .task { await acquireFocus() }
     }
+
+    /// Makes the field first responder right away (typing replaces the
+    /// selected placeholder). A focus request made while the canvas is still
+    /// handling the key press / click that created the topic can be dropped
+    /// by SwiftUI (the canvas stays first responder, keys are lost), so the
+    /// request repeats until the field really has focus.
+    private func acquireFocus() async {
+        for _ in 0..<40 {
+            isFocused = true
+            try? await Task.sleep(for: .milliseconds(25))
+            if Task.isCancelled { return }
+            if isFocused { break }
+        }
+        #if DEBUG
+        NodeEditorField.debugFocusLog.append(isFocused)
+        #endif
+        guard isFocused else { return }
+        applyInitialSelection(selectAll: editor.editSelectsAll)
+    }
+
+    #if DEBUG
+    /// Focus outcome of each editor (real-app focus probe).
+    @MainActor static var debugFocusLog: [Bool] = []
+    #endif
 
     private func applyInitialSelection(selectAll: Bool) {
         #if os(macOS)

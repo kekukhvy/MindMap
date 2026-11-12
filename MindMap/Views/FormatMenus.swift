@@ -22,11 +22,58 @@ struct CheckItem: View {
 extension LayoutStyle {
     var title: String {
         switch self {
-        case .balancedMap: return "Mind Map (Balanced)"
-        case .rightMap: return "Logic Chart Right"
-        case .leftMap: return "Logic Chart Left"
-        case .treeDown: return "Tree Chart"
+        case .balancedMap: return "Map"
+        case .rightMap: return "Logic Right"
+        case .leftMap: return "Logic Left"
+        case .treeDown: return "Tree Down"
         case .orgChartDown: return "Org Chart"
+        }
+    }
+
+    /// Small menu icon (SF Symbol).
+    var systemImage: String {
+        switch self {
+        case .balancedMap: return "arrow.left.and.right"
+        case .rightMap: return "arrow.right"
+        case .leftMap: return "arrow.left"
+        case .treeDown: return "list.bullet.indent"
+        case .orgChartDown: return "rectangle.3.group"
+        }
+    }
+
+    /// One-line explanation (help tags).
+    var summary: String {
+        switch self {
+        case .balancedMap: return "Branches on both sides"
+        case .rightMap: return "All branches to the right"
+        case .leftMap: return "All branches to the left"
+        case .treeDown: return "Topics hang below, one under another"
+        case .orgChartDown: return "Topics in a row below"
+        }
+    }
+}
+
+/// "Layout" submenu for one topic: Inherit + one item per style with its
+/// icon and a checkmark on the current choice (inline picker). Choosing a
+/// style re-lays out the topic's children at once (one undo step).
+struct LayoutStyleMenu: View {
+    let editor: EditorController
+    let id: UUID
+
+    var body: some View {
+        let current = editor.model.map.node(withID: id)?.layoutStyle
+        Menu {
+            Picker("Layout", selection: Binding(get: { current }, set: { editor.setLayoutStyle($0, for: id) })) {
+                Label("Inherit from Parent", systemImage: "arrow.turn.left.up").tag(LayoutStyle?.none)
+                ForEach(LayoutStyle.allCases, id: \.self) { style in
+                    Label(style.title, systemImage: style.systemImage)
+                        .tag(LayoutStyle?.some(style))
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Label("Layout", systemImage: (current ?? .treeDown).systemImage)
         }
     }
 }
@@ -63,6 +110,8 @@ extension LineDash {
 struct NodeFormatMenus: View {
     let editor: EditorController
     let id: UUID
+    /// The context menu shows Layout higher up, on its own.
+    var includesLayout = true
 
     private var model: MindMapModel { editor.model }
     private var undo: UndoManager? { editor.undoManager }
@@ -70,25 +119,11 @@ struct NodeFormatMenus: View {
 
     var body: some View {
         if let node {
-            layoutMenu(node)
+            if includesLayout { LayoutStyleMenu(editor: editor, id: id) }
             shapeMenu(node)
             borderMenu(node)
             colorMenu(node)
             lineMenu(node)
-        }
-    }
-
-    private func layoutMenu(_ node: Node) -> some View {
-        Menu("Layout") {
-            CheckItem("Inherit", checked: node.layoutStyle == nil) {
-                model.setLayoutStyle(nil, for: id, undoManager: undo)
-            }
-            Divider()
-            ForEach(LayoutStyle.allCases, id: \.self) { style in
-                CheckItem(style.title, checked: node.layoutStyle == style) {
-                    model.setLayoutStyle(style, for: id, undoManager: undo)
-                }
-            }
         }
     }
 
