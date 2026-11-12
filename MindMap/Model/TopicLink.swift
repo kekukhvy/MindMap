@@ -3,7 +3,8 @@ import Foundation
 /// Where a topic links to: a web URL, another topic of the same map (main
 /// tree or floating) or another map file (WP10). JSON:
 /// `{"kind":"web","url":"https://…"}` / `{"kind":"topic","topicID":"<UUID>"}`
-/// / `{"kind":"map","path":"Other.mindmap","bookmark":"<base64>","name":"Other","topicID":"<UUID>"}`.
+/// / `{"kind":"map","path":"Other.mindmap","bookmark":"<base64>","name":"Other","topicID":"<UUID>"}`
+/// (library map, WP14: `{"kind":"map","library":"<map UUID>","name":"Other"}`).
 /// A link this version does not understand (newer kind, bad value) is kept
 /// verbatim as `.unknown` — written back unchanged on save, but treated as
 /// "no link" everywhere else (`MindMap.link(of:)`).
@@ -14,7 +15,7 @@ enum TopicLink: Equatable, Hashable, Codable {
     case unknown(JSONValue)
 
     private enum CodingKeys: String, CodingKey {
-        case kind, url, topicID, path, bookmark, name
+        case kind, url, topicID, path, bookmark, name, library
     }
 
     private enum Kind: String, Codable {
@@ -41,7 +42,8 @@ enum TopicLink: Equatable, Hashable, Codable {
             let reference = MapReference(relativePath: try c.decodeIfPresent(String.self, forKey: .path),
                                          bookmark: try c.decodeIfPresent(Data.self, forKey: .bookmark),
                                          displayName: try c.decodeIfPresent(String.self, forKey: .name),
-                                         targetTopicID: try c.decodeIfPresent(UUID.self, forKey: .topicID))
+                                         targetTopicID: try c.decodeIfPresent(UUID.self, forKey: .topicID),
+                                         libraryID: try c.decodeIfPresent(UUID.self, forKey: .library))
             guard reference.isUsable else {
                 throw DecodingError.dataCorruptedError(forKey: .path, in: c, debugDescription: "No path or bookmark")
             }
@@ -68,6 +70,7 @@ enum TopicLink: Equatable, Hashable, Codable {
             try c.encodeIfPresent(reference.bookmark, forKey: .bookmark)
             try c.encode(reference.displayName, forKey: .name)
             try c.encodeIfPresent(reference.targetTopicID, forKey: .topicID)
+            try c.encodeIfPresent(reference.libraryID, forKey: .library)
         case .unknown:
             break
         }

@@ -49,6 +49,11 @@ struct DocumentWindow: View {
             Button("Cancel", role: .cancel) {}
         }
         .onOpenURL { url in session.open(url) }
+        #if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: LibraryDebugHook.openRequest)) { note in
+            if let url = note.object as? URL { session.open(url) }
+        }
+        #endif
         .task {
             session.adopt(undoManager)
             session.onOpen = { bookmark in sceneBookmark = bookmark }

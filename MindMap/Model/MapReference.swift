@@ -4,8 +4,10 @@ import Foundation
 /// the linking document's folder first (works for a folder of maps synced
 /// via iCloud Drive / copied to another device), then by bookmark (this
 /// device; file moved or renamed; security scope on macOS).
+/// A map of the iCloud library (WP14) is found by its ID instead
+/// (`libraryID`; works on every device of the account).
 /// JSON (inside a link): `"path"`, `"bookmark"` (base64), `"name"`,
-/// `"topicID"`.
+/// `"topicID"`, `"library"` (map UUID).
 struct MapReference: Equatable, Hashable {
     /// "Other.mindmap", "Projects/Plan.mindmap", "../Shared/Ideas.mindmap";
     /// nil while the linking document was never saved.
@@ -15,20 +17,27 @@ struct MapReference: Equatable, Hashable {
     var displayName: String
     /// Topic to select and reveal when the map opens.
     var targetTopicID: UUID?
+    /// Library map (WP14): resolved through the library cache by ID.
+    var libraryID: UUID?
 
-    init(relativePath: String?, bookmark: Data? = nil, displayName: String? = nil, targetTopicID: UUID? = nil) {
+    init(relativePath: String?, bookmark: Data? = nil, displayName: String? = nil, targetTopicID: UUID? = nil,
+         libraryID: UUID? = nil) {
         self.relativePath = relativePath
         self.bookmark = bookmark
         self.displayName = displayName ?? relativePath.map(MapPaths.displayName(ofPath:)) ?? "Map"
         self.targetTopicID = targetTopicID
+        self.libraryID = libraryID
     }
 
-    /// Something to find the file with.
-    var isUsable: Bool { relativePath?.isEmpty == false || bookmark != nil }
+    /// Something to find the map with.
+    var isUsable: Bool { relativePath?.isEmpty == false || bookmark != nil || libraryID != nil }
 
     /// "Plan.mindmap" / "Projects/Plan.mindmap" for tooltips; the name when
-    /// only a bookmark is known.
-    var pathDescription: String { relativePath ?? displayName + "." + MapPaths.fileExtension }
+    /// only a bookmark is known; "iCloud Library" for a library map.
+    var pathDescription: String {
+        if libraryID != nil { return "iCloud Library" }
+        return relativePath ?? displayName + "." + MapPaths.fileExtension
+    }
 }
 
 /// Pure path helpers for map links.

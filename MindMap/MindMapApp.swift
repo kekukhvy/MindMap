@@ -6,6 +6,11 @@ import SwiftUI
 /// document instead (`DocumentWindow`) and lands directly in the editor.
 @main
 struct MindMapApp: App {
+    init() {
+        // iCloud map library (WP14): cache bookkeeping + CloudKit sync.
+        LibraryService.startAtLaunch()
+    }
+
     #if os(macOS)
     @NSApplicationDelegateAdaptor(MacAppDelegate.self) private var appDelegate
 

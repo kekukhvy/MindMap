@@ -4,9 +4,12 @@ set -euo pipefail
 SRC="${1:-$(cd "$(dirname "$0")/../.." && pwd)}"
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 DD="$SRC/build/DD-release"
-xcodebuild -project "$SRC/MindMap.xcodeproj" -scheme MindMap -configuration Release \
+# Team-signed (iCloud/CloudKit) when a Mac provisioning profile exists, else a local ad-hoc build
+# without CloudKit (see Tools/xcb/xcb.sh).
+"$SRC/Tools/xcb/xcb.sh" -project "$SRC/MindMap.xcodeproj" -scheme MindMap -configuration Release \
   -destination 'platform=macOS' -derivedDataPath "$DD" build -quiet
 APP="$DD/Build/Products/Release/MindMap.app"
+codesign --verify --deep --strict "$APP"
 STAGE=$(mktemp -d)
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"

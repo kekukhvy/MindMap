@@ -47,8 +47,17 @@ struct MapLinkResolver {
 
     var coder: BookmarkCoding = MapBookmarkCoder()
     var exists: (URL) -> Bool = LastDocumentStore.itemExists
+    /// Library map ID -> its cached package (WP14).
+    var libraryPackage: (UUID) -> URL? = { LibraryCache.shared.packageURL(for: $0) }
+    /// Package URL -> library map ID (nil = an ordinary file).
+    var libraryMapID: (URL) -> UUID? = { LibraryCache.shared.mapID(containing: $0) }
 
     func resolve(_ reference: MapReference, documentURL: URL?) -> Resolution {
+        if let id = reference.libraryID {
+            // `.library(mapID)`: by ID; path / bookmark only as a fallback.
+            if let url = libraryPackage(id) { return .found(url, refreshed: nil) }
+            guard reference.relativePath != nil || reference.bookmark != nil else { return .missing }
+        }
         let bookmarked = reference.bookmark.flatMap { try? coder.resolve($0) }
         if let documentURL, let path = reference.relativePath,
            let candidate = MapPaths.resolve(path, from: documentURL), exists(candidate) {
@@ -76,7 +85,11 @@ struct MapLinkResolver {
     /// Reference to `url` from a document at `documentURL` (nil = never
     /// saved: bookmark only; the relative path is added once it is saved).
     func reference(to url: URL, from documentURL: URL?, targetTopicID: UUID? = nil) -> MapReference {
-        MapReference(relativePath: documentURL.flatMap { MapPaths.relativePath(from: $0, to: url) },
+        if let id = libraryMapID(url) {
+            return MapReference(relativePath: nil, displayName: MapPaths.displayName(of: url),
+                                targetTopicID: targetTopicID, libraryID: id)
+        }
+        return MapReference(relativePath: documentURL.flatMap { MapPaths.relativePath(from: $0, to: url) },
                      bookmark: try? coder.bookmark(for: url),
                      displayName: MapPaths.displayName(of: url),
                      targetTopicID: targetTopicID)
@@ -87,7 +100,7 @@ struct MapLinkResolver {
     /// resolved through the bookmark.
     func relativePathUpdates(for links: [(id: UUID, reference: MapReference)], documentURL: URL) -> [UUID: MapReference] {
         var updates: [UUID: MapReference] = [:]
-        for (id, reference) in links {
+        for (id, reference) in links where reference.libraryID == nil {
             if let path = reference.relativePath, let candidate = MapPaths.resolve(path, from: documentURL),
                exists(candidate) {
                 continue

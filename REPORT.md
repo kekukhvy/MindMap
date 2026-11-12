@@ -439,12 +439,28 @@ Stage 2 (вложения) завершён и ждёт вашей провер�
 5. Правый клик → Note ▸ Lock Note, открыть заметку — Face ID; закрыть заметку — она снова заблокирована.
 6. На втором устройстве с той же командой и iCloud Keychain открыть заблокированную карту.
 
+## WP14a — библиотека карт в iCloud (CloudKit), часть 1: движок и модель (2026-11-12)
+Интерфейса пока нет (он в WP14b), есть только отладочный хук. Что сделано:
+- **Подпись.** Проект подписан командой YS72WYPK4V (Apple Development, автоматическая подпись) на обеих платформах — и на macOS тоже (раньше там было «Sign to Run Locally», поэтому ключи замков WP12 не синхронизировались с Mac). Entitlements: `Config/MindMap-macOS.entitlements` (sandbox, выбранные файлы, сеть, контейнер `iCloud.com.kekukh.MindMap`, CloudKit, push, окружение Development, общая группа Keychain `<Team>.com.kekukh.MindMap`) и `Config/MindMap-iOS.entitlements` (то же без sandbox). В Info.plist добавлен фоновый режим remote-notification.
+- **Без аккаунта в Xcode macOS-сборка с подписью невозможна** (`No Accounts`). Поэтому есть обёртка `Tools/xcb/xcb.sh`: если профиля для Mac нет, она собирает локально без подписи (`Config/MindMap-macOS-local.entitlements`, CloudKit выключен). Через неё же работает `make_dmg.sh`. Приложение в таком режиме пишет «iCloud Sync unavailable — this build is not signed for iCloud» и работает как раньше.
+- **Хранилище.** Протокол `MapStore`: `FileMapStore` (обычные `.mindmap`) и `LibraryMapStore` (библиотека). Карта библиотеки — это обычный пакет `.mindmap` в Application Support (`Library/Maps/<UUID>/<Название>.mindmap`), поэтому её открывает тот же редактор, со всеми вложениями, замками и ссылками. Проверено в настоящем приложении: созданная карта открылась как обычный документ.
+- **Синхронизация.** CKSyncEngine, личная база, зона «Maps». Запись Map (название, дата, признак шифрования, map.json как CKAsset, хэши вложений) и запись Attachment для каждого файла. Работает офлайн; изменения отправляются после сохранения (с задержкой 2 с), загрузка при запуске, при возврате в приложение и по push.
+- **Конфликты.** Слияние по темам с базовой версией: разные темы — обе правки сохраняются; один и тот же текст — остаётся более новый, а старый текст появляется соседней темой «… (conflicting edit)» (видно сразу, удаляется одной клавишей); удаление против правки — тема остаётся; вложения — по имени файла, при одновременной правке побеждает более новая версия. Заблокированную карту без ключа слить нельзя: более новая версия остаётся, другая становится отдельной картой «Locked Map (conflict copy)».
+- **Замок.** У заблокированной карты в iCloud уходят только `lock.json`, `map.json.enc` и `*.enc`, без названия. Тест ищет текст темы, заметки и названия в загруженных байтах — совпадений нет.
+- **Ссылки на карты** (WP10) теперь могут указывать на карту библиотеки по её ID (`"library"` в JSON) — работает на любом устройстве.
+- **Настройка** `storageMode` (`library` / `files`): если пользователь выбрал сам — хранится в UserDefaults; если нет — library при доступном iCloud, иначе files.
+- Тесты: 21 новый (`LibraryTests.swift`: имитация CloudKit на двух «устройствах»). Всего macOS 394 и iPad 369, все зелёные, 0 ошибок и предупреждений.
+
+**Что нужно от вас (один раз):** Xcode → Settings → Accounts → добавить Apple ID (kekukhvy@gmail.com). Затем открыть проект → цель MindMap → Signing & Capabilities: команда YS72WYPK4V; в разделе iCloud отметить контейнер `iCloud.com.kekukh.MindMap` (если его нет — «+» и ввести это имя). Один раз собрать в Xcode для Mac и для iPad. После этого `Tools/xcb/xcb.sh` и `make_dmg.sh` будут собирать подписанную версию с работающим iCloud.
+
+**Проверить вручную (после подписи):** отладочный хук `MINDMAP_DEBUG_LIBRARY=create` создаёт карту «Library Test» и пишет отчёт в `<container>/tmp/library-report.txt`; на втором устройстве карта должна появиться в `Application Support/MindMap/Library/Maps`. Обязательно проверить синхронизацию ключей замков WP12 между Mac и iPad.
+
 ## Сборка и запуск
 Xcode установлен, но не выбран — всегда указывать `DEVELOPER_DIR`:
 ```sh
-export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-xcodebuild -project MindMap.xcodeproj -scheme MindMap -destination 'platform=macOS' test
-xcodebuild -project MindMap.xcodeproj -scheme MindMap -destination 'generic/platform=iOS Simulator' build
-xcodebuild -project MindMap.xcodeproj -scheme MindMap -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5),OS=latest' test
+# обёртка: DEVELOPER_DIR + подпись (локальная сборка без CloudKit, если нет профиля для Mac)
+Tools/xcb/xcb.sh -project MindMap.xcodeproj -scheme MindMap -destination 'platform=macOS' test
+Tools/xcb/xcb.sh -project MindMap.xcodeproj -scheme MindMap -destination 'generic/platform=iOS Simulator' build
+Tools/xcb/xcb.sh -project MindMap.xcodeproj -scheme MindMap -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5),OS=latest' test
 ```
-Запуск: открыть `MindMap.xcodeproj` в Xcode, схема `MindMap`, выбрать «My Mac» или iPad и нажать Run. Для запуска на устройстве указать свою команду подписи в Signing & Capabilities вместо ad-hoc. На Mac новая карта создаётся через File → New, на iPad — через кнопку с папкой → New Map.
+Запуск: открыть `MindMap.xcodeproj` в Xcode, схема `MindMap`, выбрать «My Mac» или iPad и нажать Run. Подпись — команда YS72WYPK4V (нужен Apple ID в Xcode → Settings → Accounts). На Mac новая карта создаётся через File → New, на iPad — через кнопку с папкой → New Map.

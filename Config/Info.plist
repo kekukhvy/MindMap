@@ -40,6 +40,8 @@
 			</dict>
 		</dict>
 	</array>
+	<key>MindMapCloudKitContainer</key>
+	<string>$(MINDMAP_CLOUDKIT_CONTAINER)</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>MindMap uses Face ID to unlock locked maps and notes.</string>
 	<key>NSUserActivityTypes</key>
@@ -50,6 +52,10 @@
 	<true/>
 	<key>UISupportsDocumentBrowser</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>NSUbiquitousContainers</key>
