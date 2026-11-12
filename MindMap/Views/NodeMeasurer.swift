@@ -26,19 +26,25 @@ final class NodeMeasurer {
 
     private var cache: [Key: CGSize] = [:]
 
-    func textSize(_ text: String, fontSize: CGFloat, weight: TopicWeight) -> CGSize {
+    /// - Parameter minWidth: lower bound (topic text keeps a clickable width;
+    ///   short badge texts such as "!" pass 0).
+    func textSize(_ text: String, fontSize: CGFloat, weight: TopicWeight,
+                  minWidth: CGFloat = NodeMeasurer.minTextWidth) -> CGSize {
         let key = Key(text: text, fontSize: fontSize, weight: weight)
-        if let cached = cache[key] { return cached }
-        let font = PlatformFont.systemFont(ofSize: fontSize, weight: NodeMeasurer.platformWeight(weight))
-        let rect = NodeMeasurer.bounds(text.isEmpty ? " " : text, font: font)
-        let maxHeight = ceil(NodeMeasurer.bounds(
-            Array(repeating: "X", count: NodeMeasurer.maxLines).joined(separator: "\n"), font: font).height)
-        // +2: slack so SwiftUI never wraps a line the measurement kept whole.
-        let size = CGSize(width: max(ceil(rect.width) + 2, NodeMeasurer.minTextWidth),
-                          height: min(ceil(rect.height), maxHeight))
-        if cache.count > 10_000 { cache.removeAll() }
-        cache[key] = size
-        return size
+        let raw: CGSize
+        if let cached = cache[key] {
+            raw = cached
+        } else {
+            let font = PlatformFont.systemFont(ofSize: fontSize, weight: NodeMeasurer.platformWeight(weight))
+            let rect = NodeMeasurer.bounds(text.isEmpty ? " " : text, font: font)
+            let maxHeight = ceil(NodeMeasurer.bounds(
+                Array(repeating: "X", count: NodeMeasurer.maxLines).joined(separator: "\n"), font: font).height)
+            // +2: slack so SwiftUI never wraps a line the measurement kept whole.
+            raw = CGSize(width: ceil(rect.width) + 2, height: min(ceil(rect.height), maxHeight))
+            if cache.count > 10_000 { cache.removeAll() }
+            cache[key] = raw
+        }
+        return CGSize(width: max(raw.width, minWidth), height: raw.height)
     }
 
     private static func bounds(_ text: String, font: PlatformFont) -> CGRect {
@@ -50,18 +56,24 @@ final class NodeMeasurer {
         )
     }
 
-    /// Link icon (leading) + text + attachment icon row (trailing) + shape padding.
+    /// Task checkbox + priority, link icon (leading) + text + due chip +
+    /// attachment icon row (trailing) + shape padding.
     func nodeSize(text: String, appearance: NodeAppearance, attachments: [AttachmentSummary] = [],
-                  hasLink: Bool = false) -> CGSize {
+                  hasLink: Bool = false, task: TaskSummary? = nil) -> CGSize {
         let fontSize = appearance.fontSize
         let text = textSize(text, fontSize: appearance.fontSize, weight: appearance.weight)
         let items = AttachmentIconRow.items(attachments)
         let icons = AttachmentIconRow.width(items, fontSize: fontSize)
         let link = hasLink ? LinkIconMetrics.width(fontSize: fontSize) : 0
+        let taskWidth = task.map {
+            TaskBadgeMetrics.leadingWidth($0, fontSize: fontSize) + TaskBadgeMetrics.trailingWidth($0, fontSize: fontSize)
+        } ?? 0
         var height = text.height
         if !items.isEmpty { height = max(height, AttachmentIconRow.iconSize(fontSize: fontSize)) }
         if hasLink { height = max(height, LinkIconMetrics.iconSize(fontSize: fontSize)) }
-        return CGSize(width: link + text.width + icons + 2 * appearance.paddingH, height: height + 2 * appearance.paddingV)
+        if let task { height = max(height, TaskBadgeMetrics.minHeight(task, fontSize: fontSize)) }
+        return CGSize(width: taskWidth + link + text.width + icons + 2 * appearance.paddingH,
+                      height: height + 2 * appearance.paddingV)
     }
 
     private static func platformWeight(_ weight: TopicWeight) -> PlatformFont.Weight {

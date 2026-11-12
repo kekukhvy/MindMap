@@ -150,5 +150,9 @@ struct InsertMenuItems: View {
             if let selected { editor.beginEditLink(selected) }
         }
         .disabled(selected == nil)
+        Button("Task", systemImage: "checkmark.circle") {
+            if let selected { editor.convertToTask(selected) }
+        }
+        .disabled(selected == nil || selected.map { editor.task(of: $0) != nil } == true)
     }
 }

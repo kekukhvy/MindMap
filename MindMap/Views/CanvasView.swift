@@ -29,6 +29,11 @@ struct CanvasView: View {
                     }
                     editingDragHandle(scene: scene, viewport: viewport)
                     RelationshipsLayer(editor: editor, viewport: viewport)
+                    // Virtual Tasks card (not a topic / not in the layout).
+                    if let panel = editor.taskPanel {
+                        TasksPanelView(editor: editor, panel: panel, viewport: viewport)
+                            .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                    }
                 }
                 .animation(.snappy(duration: 0.25), value: editor.model.map)
                 CanvasOverlays(editor: editor, viewport: viewport)
@@ -170,7 +175,15 @@ struct CanvasView: View {
                          editor.select(id)
                          editor.openAttachment(attachmentID)
                      },
-                     onFollowLink: { editor.goToLink(of: id) })
+                     onFollowLink: { editor.goToLink(of: id) },
+                     onToggleTask: {
+                         // Checkbox: toggles (one undo step) and selects the
+                         // topic, like any click on it; never starts a drag.
+                         editor.lastCheckboxClick = (id, Date())
+                         editor.select(id)
+                         editor.toggleTaskDone(id)
+                         isFocused = true
+                     })
                 .frame(width: screen.width, height: screen.height)
                 .contentShape(Rectangle())
                 .opacity(drag == nil ? 1 : 0.75)
@@ -181,7 +194,8 @@ struct CanvasView: View {
                 // Double-click / double-tap = new child (being named); rename via
                 // the context menu, Space, F2 or typing.
                 .onTapGesture(count: 2) {
-                    guard editor.pickMode == nil, editor.editingID != id else { return }
+                    guard editor.pickMode == nil, editor.editingID != id,
+                          !editor.isRecentCheckboxClick(on: id) else { return }
                     editor.select(id)
                     editor.addChild()
                 }
@@ -206,7 +220,15 @@ struct CanvasView: View {
                 .contextMenu {
                     NodeContextMenu(editor: editor, id: id)
                 }
+                .popover(isPresented: dueDatePickerBinding(id), arrowEdge: .bottom) {
+                    DueDatePicker(editor: editor, id: id)
+                }
         }
+    }
+
+    private func dueDatePickerBinding(_ id: UUID) -> Binding<Bool> {
+        Binding(get: { editor.dueDatePickerID == id },
+                set: { if !$0, editor.dueDatePickerID == id { editor.dueDatePickerID = nil } })
     }
 
     @ViewBuilder

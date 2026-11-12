@@ -214,7 +214,7 @@ extension EditorController {
     // MARK: Viewport
 
     func zoomToFit() {
-        viewport = .fitting(scene.layout.bounds, in: viewSize)
+        viewport = .fitting(contentBoundsIncludingPanel, in: viewSize)
     }
 
     func zoom(by factor: CGFloat, around anchor: CGPoint? = nil) {
@@ -283,6 +283,9 @@ extension EditorController {
         case .goBack:
             guard backTargetID != nil else { return false }
             goBack()
+        case .toggleTaskDone:
+            guard let id = selectedID, scene.nodes[id] != nil, task(of: id) != nil else { return false }
+            toggleTaskDone(id)
         case let .collapseToLevel(level): collapseToLevel(level)
         case .expandAll: expandAll()
         case .cancel:

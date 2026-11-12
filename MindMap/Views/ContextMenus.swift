@@ -46,6 +46,8 @@ struct NodeContextMenu: View {
             OutlineMenuItems(editor: editor)
         }
         Divider()
+        TaskMenuItems(editor: editor, id: id)
+        Divider()
         AttachmentMenuItems(editor: editor, id: id)
         Divider()
         LinkMenuItems(editor: editor, id: id)
@@ -181,6 +183,50 @@ struct LinkMenuItems: View {
             Button("Copy Link", systemImage: "doc.on.doc") { editor.copyLink(id) }
                 .disabled(editor.model.map.resolvedLink(of: id)?.isBroken ?? true)
             Button("Remove Link", systemImage: "xmark.circle") { editor.removeLink(id) }
+        }
+    }
+}
+
+/// Task items: Convert to Task, or Mark as Done / Not Done (⌘⏎), Priority,
+/// Due Date (quick picks, Choose Date…, Clear) and Convert to Topic.
+struct TaskMenuItems: View {
+    let editor: EditorController
+    let id: UUID
+    /// Tasks panel rows: "Show Topic" first.
+    var includesGoTo = false
+
+    var body: some View {
+        if includesGoTo {
+            Button("Show Topic", systemImage: "scope") { editor.showTask(id) }
+            Divider()
+        }
+        if let task = editor.task(of: id) {
+            Button(task.isDone ? "Mark as Not Done" : "Mark as Done",
+                   systemImage: task.isDone ? "circle" : "checkmark.circle") {
+                if includesGoTo { editor.togglePanelTask(id) } else { editor.toggleTaskDone(id) }
+            }
+            Menu("Priority", systemImage: "exclamationmark.circle") {
+                ForEach(TaskPriority.allCases, id: \.self) { priority in
+                    CheckItem("\(priority.title)  \(priority.mark)", checked: task.priority == priority) {
+                        editor.setTaskPriority(priority, for: id)
+                    }
+                }
+                Divider()
+                CheckItem("None", checked: task.priority == nil) { editor.setTaskPriority(nil, for: id) }
+            }
+            Menu("Due Date", systemImage: "calendar") {
+                ForEach(DueQuickPick.allCases, id: \.self) { pick in
+                    Button(pick.title) { editor.setTaskDue(pick, for: id) }
+                }
+                Divider()
+                Button("Choose Date…") { editor.beginDueDatePicker(id) }
+                if task.dueDate != nil {
+                    Button("Clear Due Date", role: .destructive) { editor.setTaskDueDate(nil, for: id) }
+                }
+            }
+            Button("Convert to Topic", systemImage: "circle.slash") { editor.convertToTopic(id) }
+        } else {
+            Button("Convert to Task", systemImage: "checkmark.circle") { editor.convertToTask(id) }
         }
     }
 }

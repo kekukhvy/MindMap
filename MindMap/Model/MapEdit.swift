@@ -17,6 +17,8 @@ enum MapEdit: Equatable {
     case insertBoundary(Boundary, index: Int)
     case removeBoundary(id: UUID)
     case updateBoundary(Boundary)
+    /// Replaces the Tasks panel state (position / collapsed).
+    case setTaskPanel(TaskPanelState?)
 }
 
 extension MindMap {
@@ -82,6 +84,11 @@ extension MindMap {
             let old = boundaries[index]
             boundaries[index] = boundary
             return .updateBoundary(old)
+
+        case let .setTaskPanel(state):
+            let old = taskPanel
+            taskPanel = state
+            return .setTaskPanel(old)
         }
     }
 

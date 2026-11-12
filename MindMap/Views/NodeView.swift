@@ -14,6 +14,8 @@ struct NodeView: View {
     var onOpenAttachment: (UUID) -> Void = { _ in }
     /// Tap on the link icon (Go to).
     var onFollowLink: () -> Void = {}
+    /// Tap on the task checkbox (toggle done).
+    var onToggleTask: () -> Void = {}
 
     /// XMind-like selection ring color (fixed: the canvas is always light).
     static let selectionBlue = Color(hex: "#2E7CF6")
@@ -36,15 +38,34 @@ struct NodeView: View {
 
     private var textColor: Color { Color(hex: appearance.textColorHex) }
 
-    /// Link icon, text (or the inline editor), attachment icons; the
-    /// measurer reserves the icons' width (`LinkIconMetrics`, `AttachmentIconRow`).
+    private var isDone: Bool { info.task?.isDone == true }
+
+    /// Task checkbox, link icon, priority mark, text (or the inline editor),
+    /// due chip, attachment icons; the measurer reserves their width
+    /// (`TaskBadgeMetrics`, `LinkIconMetrics`, `AttachmentIconRow`).
     private var content: some View {
         HStack(spacing: 0) {
+            if let task = info.task {
+                TaskCheckboxView(isDone: task.isDone,
+                                 size: TaskBadgeMetrics.checkboxSize(fontSize: appearance.fontSize) * scale,
+                                 color: textColor, action: onToggleTask)
+                    .padding(.trailing, TaskBadgeMetrics.gap(fontSize: appearance.fontSize) * scale)
+            }
             if let link = info.link {
                 LinkIconView(link: link, fontSize: appearance.fontSize, scale: scale, color: textColor,
                              onFollow: onFollowLink)
             }
+            if let task = info.task, let priority = task.priority {
+                PriorityMarkView(priority: priority, width: task.priorityWidth, fontSize: appearance.fontSize,
+                                 scale: scale, dimmed: task.isDone)
+                    .padding(.trailing, TaskBadgeMetrics.gap(fontSize: appearance.fontSize) * 0.5 * scale)
+            }
             text
+            if let task = info.task, let due = task.due {
+                DueChipView(label: due, isDone: task.isDone, fontSize: appearance.fontSize, scale: scale,
+                            textColor: textColor)
+                    .padding(.leading, TaskBadgeMetrics.gap(fontSize: appearance.fontSize) * scale)
+            }
             if !info.attachments.isEmpty {
                 AttachmentIconsView(attachments: info.attachments, fontSize: appearance.fontSize, scale: scale,
                                     color: textColor.opacity(0.75), onOpen: onOpenAttachment)
@@ -58,7 +79,8 @@ struct NodeView: View {
         } else {
             Text(info.text)
                 .font(font)
-                .foregroundStyle(textColor)
+                .foregroundStyle(textColor.opacity(isDone ? 0.5 : 1))
+                .strikethrough(isDone, color: textColor.opacity(0.5))
                 .multilineTextAlignment(.center)
                 .lineLimit(NodeMeasurer.maxLines)
                 .truncationMode(.tail)

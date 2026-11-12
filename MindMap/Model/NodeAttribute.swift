@@ -16,6 +16,7 @@ enum NodeAttribute: Equatable {
     case lineDash(LineDash?)
     case manualPosition(CGPoint?)
     case link(TopicLink?)
+    case task(TaskInfo?)
     /// The whole attachment list (add/remove/rename/reorder = one set).
     case attachments([Attachment])
 
@@ -34,6 +35,7 @@ enum NodeAttribute: Equatable {
         case .lineDash: return .lineDash(node.lineDash)
         case .manualPosition: return .manualPosition(node.manualPosition)
         case .link: return .link(node.link)
+        case .task: return .task(node.task)
         case .attachments: return .attachments(node.attachments)
         }
     }
@@ -52,6 +54,7 @@ enum NodeAttribute: Equatable {
         case let .lineDash(v): node.lineDash = v
         case let .manualPosition(v): node.manualPosition = v
         case let .link(v): node.link = v
+        case let .task(v): node.task = v
         case let .attachments(v): node.attachments = v
         }
     }

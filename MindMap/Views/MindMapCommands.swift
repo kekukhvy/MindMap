@@ -76,6 +76,33 @@ struct MindMapCommands: Commands {
                 .keyboardShortcut("a", modifiers: [.command, .shift])
                 .disabled(!hasNodeSelection)
             Divider()
+            Button(state?.selectionIsTask == true ? "Convert to Topic" : "Convert to Task") {
+                if state?.selectionIsTask == true { editor?.convertToTopic() } else { editor?.convertToTask() }
+            }
+            .disabled(!hasNodeSelection)
+            Button(state?.selectionIsDoneTask == true ? "Mark as Not Done" : "Mark as Done") {
+                editor?.perform(.toggleTaskDone)
+            }
+            .keyboardShortcut(.return, modifiers: .command)
+            .disabled(!hasNodeSelection || state?.selectionIsTask != true)
+            Menu("Priority") {
+                ForEach(TaskPriority.allCases, id: \.self) { priority in
+                    Button("\(priority.title)  \(priority.mark)") { editor?.setTaskPriority(priority) }
+                }
+                Divider()
+                Button("None") { editor?.setTaskPriority(nil) }
+            }
+            .disabled(!hasNodeSelection || state?.selectionIsTask != true)
+            Menu("Due Date") {
+                ForEach(DueQuickPick.allCases, id: \.self) { pick in
+                    Button(pick.title) { editor?.setTaskDue(pick) }
+                }
+                Divider()
+                Button("Choose Date…") { editor?.beginDueDatePicker() }
+                Button("Clear Due Date") { editor?.setTaskDueDate(nil) }
+            }
+            .disabled(!hasNodeSelection || state?.selectionIsTask != true)
+            Divider()
             Button(state?.selectionHasLink == true ? "Edit Link…" : "Add Link…") { editor?.perform(.editLink) }
                 .keyboardShortcut("k", modifiers: .command)
                 .disabled(!hasNodeSelection)

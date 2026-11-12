@@ -11,13 +11,16 @@ struct MindMap: Equatable, Codable {
     var floatingTopics: [FloatingTopic]
     var relationships: [Relationship]
     var boundaries: [Boundary]
+    /// Position / collapse of the virtual Tasks panel (nil = defaults).
+    var taskPanel: TaskPanelState?
 
     init(
         root: Node = Node(text: "Central Topic"),
         theme: ColorTheme = .rainbow,
         floatingTopics: [FloatingTopic] = [],
         relationships: [Relationship] = [],
-        boundaries: [Boundary] = []
+        boundaries: [Boundary] = [],
+        taskPanel: TaskPanelState? = nil
     ) {
         self.formatVersion = MindMap.currentFormatVersion
         self.root = root
@@ -25,10 +28,11 @@ struct MindMap: Equatable, Codable {
         self.floatingTopics = floatingTopics
         self.relationships = relationships
         self.boundaries = boundaries
+        self.taskPanel = taskPanel
     }
 
     private enum CodingKeys: String, CodingKey {
-        case formatVersion, root, theme, floatingTopics, relationships, boundaries
+        case formatVersion, root, theme, floatingTopics, relationships, boundaries, taskPanel
     }
 
     init(from decoder: Decoder) throws {
@@ -39,5 +43,6 @@ struct MindMap: Equatable, Codable {
         floatingTopics = try c.decodeIfPresent([FloatingTopic].self, forKey: .floatingTopics) ?? []
         relationships = try c.decodeIfPresent([Relationship].self, forKey: .relationships) ?? []
         boundaries = try c.decodeIfPresent([Boundary].self, forKey: .boundaries) ?? []
+        taskPanel = (try? c.decodeIfPresent(TaskPanelState.self, forKey: .taskPanel)) ?? nil
     }
 }

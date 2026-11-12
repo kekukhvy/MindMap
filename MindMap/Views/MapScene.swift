@@ -24,6 +24,8 @@ struct MapScene {
         var attachments: [AttachmentSummary] = []
         /// Link icon before the title (web URL / topic link, maybe broken).
         var link: LinkSummary?
+        /// Task checkbox / priority / due chip (nil = plain topic).
+        var task: TaskSummary?
     }
 
     struct StyledConnector: Identifiable {
@@ -51,7 +53,9 @@ struct MapScene {
     }
 
     /// - Parameter editing: node being edited and its draft text (sizes follow the draft).
-    static func build(map: MindMap, measurer: NodeMeasurer, editing: (id: UUID, text: String)?) -> MapScene {
+    /// - Parameter now: "today" for due chips (overdue / Today / Tomorrow).
+    static func build(map: MindMap, measurer: NodeMeasurer, editing: (id: UUID, text: String)?,
+                      now: Date = Date()) -> MapScene {
         let colors = ColorResolver.effectiveColors(in: map)
         var infos: [UUID: NodeInfo] = [:]
         var order: [UUID] = []
@@ -64,7 +68,10 @@ struct MapScene {
                                       hasChildren: !node.children.isEmpty, isCollapsed: node.isCollapsed,
                                       isTreeRoot: isTreeRoot, badgeEdge: .trailing,
                                       attachments: node.attachments.map(AttachmentSummary.init),
-                                      link: node.link == nil ? nil : LinkSummary(of: node, in: map))
+                                      link: node.link == nil ? nil : LinkSummary(of: node, in: map),
+                                      task: node.task.map {
+                                          TaskSummary($0, now: now, measurer: measurer, fontSize: appearance.fontSize)
+                                      })
             order.append(node.id)
             guard !node.isCollapsed else { return }
             for child in node.children { visit(child, level: level + 1, isTreeRoot: false) }
@@ -75,7 +82,7 @@ struct MapScene {
         let layout = TreeLayout().layout(map) { id in
             guard let info = infos[id] else { return CGSize(width: 40, height: 20) }
             return measurer.nodeSize(text: info.text, appearance: info.appearance, attachments: info.attachments,
-                                     hasLink: info.link != nil)
+                                     hasLink: info.link != nil, task: info.task)
         }
         let navigator = SelectionNavigator(layout: layout)
         for id in order {

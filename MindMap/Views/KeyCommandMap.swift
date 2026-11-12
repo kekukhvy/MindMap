@@ -20,6 +20,8 @@ enum EditorCommand: Equatable {
     case editLink
     /// Cmd+[: back to the topic before the last topic-link jump.
     case goBack
+    /// Cmd+Return: mark the selected task done / not done.
+    case toggleTaskDone
     /// Esc: cancel relationship/attach picking, or deselect a relationship/boundary.
     case cancel
 
@@ -55,6 +57,7 @@ enum KeyCommandMap {
             default: break
             }
         }
+        if key == .return, modifiers == .command { return .toggleTaskDone }
         if modifiers.contains(.command), !modifiers.contains(.option) {
             switch key.character.lowercased() {
             case "z": return modifiers.contains(.shift) ? .redo : .undo

@@ -123,13 +123,31 @@ final class EditorController {
     var linkMessage: String?
     /// Topics to return to with Back (⌘[) after following topic links.
     var navigationHistory = TopicNavigationHistory()
+    /// Tasks panel: "Show Completed" (view state, not saved).
+    var taskPanelShowsCompleted = false
+    /// Tasks panel: list every row instead of the first `TaskPanelLayout.maxRows`.
+    var taskPanelShowsAll = false
+    /// Tasks just completed from the panel, still shown (checked) until they fade out.
+    var lingeringTaskIDs: Set<UUID> = []
+    /// How long a completed row stays in the panel before fading out.
+    @ObservationIgnored var taskLingerDelay: TimeInterval = 1.2
+    /// Live translation (screen points) while the panel header is dragged.
+    var taskPanelDrag: CGSize?
+    /// Last click on a topic's checkbox: a second click soon after must not
+    /// count as a double-click on the topic (which adds a child).
+    @ObservationIgnored var lastCheckboxClick: (id: UUID, time: Date)?
+    /// Topic whose due-day picker popover is shown.
+    var dueDatePickerID: UUID?
     /// Opens web links (default browser); replaced by tests.
     @ObservationIgnored var openURL: (URL) -> Void = EditorController.openInBrowser
     private(set) var canUndo = false
     private(set) var canRedo = false
 
     @ObservationIgnored let measurer = NodeMeasurer()
-    @ObservationIgnored private var cachedScene: (map: MindMap, editing: UUID?, draft: String, scene: MapScene)?
+    @ObservationIgnored private var cachedScene: (map: MindMap, editing: UUID?, draft: String, day: Date,
+                                                  scene: MapScene)?
+    /// Current time (due chips, completion stamps); replaced by tests.
+    @ObservationIgnored var now: () -> Date = Date.init
     @ObservationIgnored private var didPlaceViewport = false
 
     init(model: MindMapModel) {
@@ -151,11 +169,15 @@ final class EditorController {
         let map = model.map
         let editing = editingID
         let draft = editing == nil ? "" : draftText
-        if let cachedScene, cachedScene.editing == editing, cachedScene.draft == draft, cachedScene.map == map {
+        let now = now()
+        // Due chips say "Today" / overdue: rebuild when the day changes.
+        let day = Calendar.current.startOfDay(for: now)
+        if let cachedScene, cachedScene.editing == editing, cachedScene.draft == draft, cachedScene.day == day,
+           cachedScene.map == map {
             return cachedScene.scene
         }
-        let scene = MapScene.build(map: map, measurer: measurer, editing: editing.map { ($0, draft) })
-        cachedScene = (map, editing, draft, scene)
+        let scene = MapScene.build(map: map, measurer: measurer, editing: editing.map { ($0, draft) }, now: now)
+        cachedScene = (map, editing, draft, day, scene)
         return scene
     }
 
@@ -170,7 +192,9 @@ final class EditorController {
                                   selectionHasNote: selected?.attachments.contains { $0.kind == .markdown } ?? false,
                                   selectionHasDrawing: selected?.attachments.contains { $0.kind == .drawing } ?? false,
                                   selectionHasLink: selected?.link != nil,
-                                  canGoBack: backTargetID != nil)
+                                  canGoBack: backTargetID != nil,
+                                  selectionIsTask: selected?.task != nil,
+                                  selectionIsDoneTask: selected?.task?.isDone == true)
     }
 
     // MARK: Editing state
@@ -254,4 +278,6 @@ struct EditorCommandState: Equatable {
     var selectionHasDrawing: Bool = false
     var selectionHasLink: Bool = false
     var canGoBack: Bool = false
+    var selectionIsTask: Bool = false
+    var selectionIsDoneTask: Bool = false
 }
