@@ -16,6 +16,13 @@ final class MindMapModel {
         self.map = map
     }
 
+    /// Replaces the whole map without undo (document reverted to the file's
+    /// contents, e.g. changed on another device). Callers clear the undo stack.
+    func replaceMap(_ map: MindMap) {
+        lastStep = nil
+        self.map = map
+    }
+
     #if DEBUG
     /// Test hook: replaces the whole map without undo (in-app event tests).
     func debugReplaceMap(_ map: MindMap) { self.map = map }
