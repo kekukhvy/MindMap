@@ -55,7 +55,7 @@ struct MarkdownNoteEditor: View {
             if !focused { commitTitle() }
         }
         .onDisappear(perform: commitTitle)
-        .onReceive(undoChanges) { _ in refreshUndoState() }
+        .onReceive(UndoManager.changes(of: undoManager)) { _ in refreshUndoState() }
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
@@ -97,18 +97,5 @@ struct MarkdownNoteEditor: View {
         let undo = undoManager?.canUndo ?? false, redo = undoManager?.canRedo ?? false
         if undo != canUndo { canUndo = undo }
         if redo != canRedo { canRedo = redo }
-    }
-
-    private var undoChanges: AnyPublisher<Notification, Never> {
-        let center = NotificationCenter.default
-        return Publishers.MergeMany(
-            center.publisher(for: .NSUndoManagerDidCloseUndoGroup),
-            center.publisher(for: .NSUndoManagerDidUndoChange),
-            center.publisher(for: .NSUndoManagerDidRedoChange),
-            center.publisher(for: .NSUndoManagerCheckpoint)
-        )
-        .filter { [weak undoManager] in $0.object as AnyObject? === undoManager }
-        .receive(on: RunLoop.main)
-        .eraseToAnyPublisher()
     }
 }

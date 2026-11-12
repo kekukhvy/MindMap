@@ -26,7 +26,7 @@ extension AttachmentKind {
     var displayName: String {
         switch self {
         case .markdown: return "Note"
-        case .drawing: return "Drawing"
+        case .drawing: return "Handwritten Note"
         case .file: return "File"
         }
     }

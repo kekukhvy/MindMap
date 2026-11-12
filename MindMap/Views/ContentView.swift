@@ -15,18 +15,13 @@ struct ContentView: View {
         _editor = State(initialValue: EditorController(model: model))
     }
 
-    private var undoChanges: AnyPublisher<Notification, Never> {
-        let center = NotificationCenter.default
-        return Publishers.MergeMany(
-            center.publisher(for: .NSUndoManagerDidCloseUndoGroup),
-            center.publisher(for: .NSUndoManagerDidUndoChange),
-            center.publisher(for: .NSUndoManagerDidRedoChange),
-            center.publisher(for: .NSUndoManagerCheckpoint)
-        )
-        .filter { [weak undoManager] in $0.object as AnyObject? === undoManager }
-        .receive(on: RunLoop.main)
-        .eraseToAnyPublisher()
+    #if os(iOS)
+    /// Handwriting opens full screen, other attachments in a page sheet.
+    private func presentedAttachment(fullScreen: Bool) -> Binding<AttachmentRequest?> {
+        Binding(get: { editor.presentedAttachment.flatMap { $0.fullScreen == fullScreen ? $0 : nil } },
+                set: { editor.presentedAttachment = $0 })
     }
+    #endif
 
     var body: some View {
         CanvasView(editor: editor)
@@ -41,7 +36,10 @@ struct ContentView: View {
                 ColorPickerSheet(request: request) { hex in editor.applyColorSheet(request, hex: hex) }
             }
             #if os(iOS)
-            .sheet(item: $editor.presentedAttachment) { request in
+            .sheet(item: presentedAttachment(fullScreen: false)) { request in
+                AttachmentSheet(model: model, attachmentID: request.attachmentID, undoManager: undoManager)
+            }
+            .fullScreenCover(item: presentedAttachment(fullScreen: true)) { request in
                 AttachmentSheet(model: model, attachmentID: request.attachmentID, undoManager: undoManager)
             }
             #else
@@ -66,7 +64,7 @@ struct ContentView: View {
                 OpenDocumentRegistry.shared.register(model, undoManager: manager)
             }
             .onChange(of: model.map) { _, _ in editor.validateSelection() }
-            .onReceive(undoChanges) { _ in editor.refreshUndoState() }
+            .onReceive(UndoManager.changes(of: undoManager)) { _ in editor.refreshUndoState() }
     }
 }
 

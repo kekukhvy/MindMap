@@ -10,6 +10,8 @@ enum EditorCommand: Equatable {
     case addRelationship, addBoundary
     /// Cmd+Shift+N: open the selected topic's note, or add one (XMind).
     case note
+    /// Cmd+Shift+D: open the selected topic's handwritten note, or add one.
+    case handwrittenNote
     /// Cmd+Option+1...4: show topics down to that level; Cmd+Option+0: expand all.
     case collapseToLevel(Int), expandAll
     /// Esc: cancel relationship/attach picking, or deselect a relationship/boundary.
@@ -57,6 +59,7 @@ enum KeyCommandMap {
             case "b" where !modifiers.contains(.shift): return .addBoundary
             case "l" where !modifiers.contains(.shift): return .addRelationship
             case "n" where modifiers.contains(.shift): return .note
+            case "d" where modifiers.contains(.shift): return .handwrittenNote
             default: return nil
             }
         }

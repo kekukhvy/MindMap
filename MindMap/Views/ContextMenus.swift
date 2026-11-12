@@ -104,6 +104,7 @@ struct AttachmentMenuItems: View {
     var body: some View {
         let attachments = editor.attachments(of: id)
         Button("Add Note", systemImage: "note.text.badge.plus") { editor.addNote(to: id) }
+        Button("Add Handwritten Note", systemImage: "pencil.and.scribble") { editor.addDrawing(to: id) }
         ForEach(Array(attachments.enumerated()), id: \.element.id) { index, attachment in
             Menu(attachment.title.isEmpty ? attachment.kind.displayName : attachment.title,
                  systemImage: attachment.kind.systemImage) {

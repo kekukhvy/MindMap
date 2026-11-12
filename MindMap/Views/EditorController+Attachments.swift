@@ -13,8 +13,32 @@ extension EditorController {
     /// Shows the attachment: sheet on iPad, its own window on macOS.
     func openAttachment(_ attachmentID: UUID) {
         commitEditing()
-        guard model.attachment(attachmentID) != nil else { return }
-        presentedAttachment = AttachmentRequest(attachmentID: attachmentID)
+        guard let attachment = model.attachment(attachmentID) else { return }
+        presentedAttachment = AttachmentRequest(attachmentID: attachmentID, fullScreen: attachment.kind == .drawing)
+    }
+
+    func firstDrawing(of id: UUID) -> Attachment? {
+        attachments(of: id).first { $0.kind == .drawing }
+    }
+
+    /// Adds a new, empty handwritten note to `id` (default: selection) and opens it.
+    func addDrawing(to id: UUID? = nil) {
+        commitEditing()
+        guard let target = id ?? selectedID, model.map.node(withID: target) != nil,
+              let drawing = model.addDrawing(to: target, undoManager: undoManager) else { return }
+        select(target)
+        openAttachment(drawing)
+    }
+
+    /// Cmd+Shift+D: opens the topic's first handwritten note, else adds one.
+    func openOrAddDrawing(_ id: UUID? = nil) {
+        guard let target = id ?? selectedID else { return }
+        if let drawing = firstDrawing(of: target) {
+            select(target)
+            openAttachment(drawing.id)
+        } else {
+            addDrawing(to: target)
+        }
     }
 
     /// Adds a new Markdown note to `id` (default: selection) and opens it.

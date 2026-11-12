@@ -262,6 +262,9 @@ extension EditorController {
         case .note:
             guard let id = selectedID, scene.nodes[id] != nil else { return false }
             openOrAddNote(id)
+        case .handwrittenNote:
+            guard let id = selectedID, scene.nodes[id] != nil else { return false }
+            openOrAddDrawing(id)
         case let .collapseToLevel(level): collapseToLevel(level)
         case .expandAll: expandAll()
         case .cancel:

@@ -46,9 +46,24 @@ extension MindMapModel {
                              undoManager: undoManager) ? attachment.id : nil
     }
 
+    /// New, empty handwritten note (PencilKit drawing) on `nodeID`.
+    @discardableResult
+    func addDrawing(to nodeID: UUID, content: Data? = nil, undoManager: UndoManager?) -> UUID? {
+        guard let node = map.node(withID: nodeID) else { return nil }
+        let count = node.attachments.filter { $0.kind == .drawing }.count
+        let attachment = Attachment(kind: .drawing, title: HandwrittenNote.defaultTitle(index: count))
+        return addAttachment(attachment, to: nodeID, content: content ?? HandwrittenNote.emptyData,
+                             actionName: "Add Handwritten Note", undoManager: undoManager) ? attachment.id : nil
+    }
+
     @discardableResult
     func removeAttachment(_ id: UUID, undoManager: UndoManager?) -> Bool {
-        let name = attachment(id)?.kind == .markdown ? "Remove Note" : "Remove Attachment"
+        let name: String
+        switch attachment(id)?.kind {
+        case .markdown: name = "Remove Note"
+        case .drawing: name = "Remove Handwritten Note"
+        default: name = "Remove Attachment"
+        }
         guard let edits = try? map.removeAttachmentEdits(id), !edits.isEmpty else { return false }
         return perform(edits, actionName: name, undoManager: undoManager)
     }
@@ -69,14 +84,15 @@ extension MindMapModel {
 
     /// New content for an attachment's file. Registers an undo step (which
     /// marks the document dirty) and bumps `modifiedAt`; further edits within
-    /// `contentCoalesceInterval` of each other join that step.
+    /// `contentCoalesceInterval` of each other join that step unless
+    /// `coalescing` is false (drawings: the editor batches strokes itself).
     @discardableResult
     func setAttachmentContent(_ data: Data, for attachmentID: UUID, actionName: String = "Edit Note",
-                              undoManager: UndoManager?, now: Date = Date()) -> Bool {
+                              coalescing: Bool = true, undoManager: UndoManager?, now: Date = Date()) -> Bool {
         guard let attachment = attachment(attachmentID), Attachment.isValidFileName(attachment.fileName),
               attachmentStore.data(for: attachment.fileName) != data else { return false }
         let fileName = attachment.fileName
-        if let undoManager, let last = lastContentStep, last.fileName == fileName,
+        if coalescing, let undoManager, let last = lastContentStep, last.fileName == fileName,
            last.manager == ObjectIdentifier(undoManager), !undoManager.isUndoing, !undoManager.isRedoing,
            !undoManager.canRedo, undoManager.undoActionName == actionName,
            now.timeIntervalSince(last.time) < Self.contentCoalesceInterval {

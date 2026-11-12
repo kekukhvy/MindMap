@@ -60,6 +60,8 @@ struct ColorSheetRequest: Identifiable {
 struct AttachmentRequest: Identifiable, Equatable {
     let id = UUID()
     var attachmentID: UUID
+    /// iPad: full-screen cover (handwriting) instead of a page sheet.
+    var fullScreen = false
 }
 
 /// UI state of one open map: selection, inline editing, viewport, drag.
@@ -139,7 +141,8 @@ final class EditorController {
                                   selectionHasChildren: selected?.hasChildren ?? false,
                                   selectionIsCollapsed: selected?.isCollapsed ?? false,
                                   selectionIsFreelyPositioned: selectedID.map(isFreelyPositioned) ?? false,
-                                  selectionHasNote: selected?.attachments.contains { $0.kind == .markdown } ?? false)
+                                  selectionHasNote: selected?.attachments.contains { $0.kind == .markdown } ?? false,
+                                  selectionHasDrawing: selected?.attachments.contains { $0.kind == .drawing } ?? false)
     }
 
     // MARK: Editing state
@@ -220,4 +223,5 @@ struct EditorCommandState: Equatable {
     var selectionIsCollapsed: Bool
     var selectionIsFreelyPositioned: Bool
     var selectionHasNote: Bool = false
+    var selectionHasDrawing: Bool = false
 }

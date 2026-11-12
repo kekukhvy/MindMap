@@ -117,7 +117,8 @@ private struct ItemColorMenu: View {
     }
 }
 
-/// Insert items (toolbar, menus): floating topic, relationship, boundary.
+/// Insert items (toolbar, menus): floating topic, relationship, boundary,
+/// note and handwritten note on the selected topic.
 struct InsertMenuItems: View {
     let editor: EditorController
 
@@ -132,5 +133,14 @@ struct InsertMenuItems: View {
             if let selected { editor.addBoundary(around: selected) }
         }
         .disabled(selected == nil || selected == editor.model.root.id)
+        Divider()
+        Button("Note", systemImage: "note.text.badge.plus") {
+            if let selected { editor.addNote(to: selected) }
+        }
+        .disabled(selected == nil)
+        Button("Handwritten Note", systemImage: "pencil.and.scribble") {
+            if let selected { editor.addDrawing(to: selected) }
+        }
+        .disabled(selected == nil)
     }
 }

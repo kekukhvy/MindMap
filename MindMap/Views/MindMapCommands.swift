@@ -67,6 +67,11 @@ struct MindMapCommands: Commands {
             Button(state?.selectionHasNote == true ? "Open Note" : "Add Note") { editor?.perform(.note) }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 .disabled(!hasNodeSelection)
+            Button(state?.selectionHasDrawing == true ? "Open Handwritten Note" : "Add Handwritten Note") {
+                editor?.perform(.handwrittenNote)
+            }
+            .keyboardShortcut("d", modifiers: [.command, .shift])
+            .disabled(!hasNodeSelection)
             Divider()
             Button("Delete") { editor?.perform(.delete) }
                 .plainKeyShortcut(.delete)

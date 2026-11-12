@@ -3,7 +3,7 @@ import SwiftUI
 /// Viewer/editor of one attachment, chosen by kind. Shown in a sheet on
 /// iPad (`AttachmentSheet`) and in its own window on macOS
 /// (`AttachmentWindow`); both edit the document's model and store.
-/// WP5 (drawing) and WP6 (file) plug their views into `body`.
+/// WP6 (file) plugs its view into `body`.
 struct AttachmentEditorView: View {
     let model: MindMapModel
     let attachmentID: UUID
@@ -15,7 +15,9 @@ struct AttachmentEditorView: View {
                 switch attachment.kind {
                 case .markdown:
                     MarkdownNoteEditor(model: model, attachment: attachment, undoManager: undoManager)
-                case .drawing, .file:
+                case .drawing:
+                    DrawingNoteEditor(model: model, attachment: attachment, undoManager: undoManager)
+                case .file:
                     ContentUnavailableView(attachment.title.isEmpty ? attachment.kind.displayName : attachment.title,
                                            systemImage: attachment.kind.systemImage,
                                            description: Text("This kind of attachment cannot be opened yet."))
@@ -37,7 +39,7 @@ struct AttachmentEditorView: View {
 }
 
 #if os(iOS)
-/// iPad: large sheet with Done.
+/// iPad: large sheet with Done (handwriting: presented as a full-screen cover).
 struct AttachmentSheet: View {
     let model: MindMapModel
     let attachmentID: UUID
