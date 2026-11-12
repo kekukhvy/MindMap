@@ -99,7 +99,7 @@ struct AttachmentIconsView: View {
                         icon(kind)
                     }
                     .buttonStyle(.plain)
-                    .help(attachments.first { $0.id == id }?.title ?? kind.displayName)
+                    .help(tooltip(kind, id: id, collapsed: attachments.count > AttachmentIconRow.maxIcons))
                     .accessibilityLabel("Open \(kind.displayName)")
                 case let .count(n):
                     Menu {
@@ -125,6 +125,14 @@ struct AttachmentIconsView: View {
             }
         }
         .padding(.leading, AttachmentIconRow.leadingGap(fontSize: fontSize) * scale)
+    }
+
+    /// macOS hover text: the file name / note title; when the row is
+    /// collapsed (one icon per kind) all titles of that kind.
+    private func tooltip(_ kind: AttachmentKind, id: UUID, collapsed: Bool) -> String {
+        let titles = (collapsed ? attachments.filter { $0.kind == kind } : attachments.filter { $0.id == id })
+            .map { $0.title.isEmpty ? kind.displayName : $0.title }
+        return titles.isEmpty ? kind.displayName : titles.joined(separator: "\n")
     }
 
     private func icon(_ kind: AttachmentKind) -> some View {

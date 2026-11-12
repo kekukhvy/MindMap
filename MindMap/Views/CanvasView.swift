@@ -44,6 +44,8 @@ struct CanvasView: View {
             .coordinateSpace(.named(CanvasView.space))
             .clipped()
             .contentShape(Rectangle())
+            // Files from Finder / Files / other apps: onto a topic = attach.
+            .onDrop(of: [.item], delegate: FileDropDelegate(editor: editor))
             .simultaneousGesture(magnify)
             .onAppear { editor.updateViewSize(proxy.size) }
             .onChange(of: proxy.size) { _, size in editor.updateViewSize(size) }
@@ -51,6 +53,10 @@ struct CanvasView: View {
         .focusable(interactions: .edit)
         .focusEffectDisabled()
         .focused($isFocused)
+        #if os(macOS)
+        // Cmd+V with files / images on the clipboard attaches them.
+        .onPasteCommand(of: [.fileURL, .image, .pdf]) { _ in editor.pasteFiles() }
+        #endif
         // Published only while the canvas (or its inline editor) has focus, so
         // plain-key menu shortcuts never steal keys from other text inputs.
         .focusedValue(\.mindMapCommandState, editor.commandState)
@@ -146,7 +152,8 @@ struct CanvasView: View {
             let screen = viewport.toScreen(frame)
             let drag = editor.drag?.id == id ? editor.drag : nil
             NodeView(info: info, scale: viewport.scale, isSelected: editor.selectedID == id,
-                     isDropTarget: editor.drag?.parentTargetID == id || editor.pickHoverID == id,
+                     isDropTarget: editor.drag?.parentTargetID == id || editor.pickHoverID == id
+                         || editor.fileDropTargetID == id,
                      editor: editor.editingID == id ? editor : nil, nodeID: id,
                      onOpenAttachment: { attachmentID in
                          editor.select(id)

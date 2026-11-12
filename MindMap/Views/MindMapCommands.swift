@@ -72,6 +72,9 @@ struct MindMapCommands: Commands {
             }
             .keyboardShortcut("d", modifiers: [.command, .shift])
             .disabled(!hasNodeSelection)
+            Button("Attach File…") { editor?.perform(.attachFile) }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .disabled(!hasNodeSelection)
             Divider()
             Button("Delete") { editor?.perform(.delete) }
                 .plainKeyShortcut(.delete)

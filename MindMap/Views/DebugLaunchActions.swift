@@ -16,6 +16,10 @@ typealias DebugInkColor = UIColor
 ///   pre-seeded with `DebugDrawing.sample()` (full-screen canvas on iPad);
 ///   `=undo` also adds a big "Draw" step 3 s after opening and undoes it 3 s
 ///   later (checks that the open canvas follows store changes).
+/// - `MINDMAP_DEBUG_FILE=icon` attaches a generated "Project Brief.pdf" and
+///   "Mockup.png" to topic "Files"; `=sheet` opens the PDF (sheet on iPad,
+///   window on macOS), `=image` the PNG, `=picker` shows the Attach File…
+///   picker, `=many` adds 3 more files (collapsed icon row + count badge).
 /// (simctl: `SIMCTL_CHILD_MINDMAP_DEBUG_NOTE=sheet xcrun simctl launch ...`.)
 enum DebugLaunchActions {
     nonisolated(unsafe) private static var didRun = false
@@ -26,6 +30,9 @@ enum DebugLaunchActions {
         if let mode = environment["MINDMAP_DEBUG_NOTE"] {
             didRun = true
             seedNote(editor, open: mode == "sheet")
+        } else if let mode = environment["MINDMAP_DEBUG_FILE"] {
+            didRun = true
+            seedFiles(editor, mode: mode)
         } else if let mode = environment["MINDMAP_DEBUG_DRAWING"] {
             didRun = true
             seedDrawing(editor, open: mode == "sheet" || mode == "undo", exerciseUndo: mode == "undo")
@@ -52,6 +59,35 @@ enum DebugLaunchActions {
         editor.select(topic)
         guard open, let note else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { editor.openAttachment(note) }
+    }
+
+    private static func seedFiles(_ editor: EditorController, mode: String) {
+        let model = editor.model
+        guard let topic = topic("Files", editor) else { return }
+        var files = model.map.node(withID: topic)?.attachments.filter { $0.kind == .file } ?? []
+        if files.isEmpty, let folder = try? DebugSampleFiles.folder() {
+            var urls = [try? DebugSampleFiles.writePDF(in: folder), try? DebugSampleFiles.writePNG(in: folder)]
+            if mode == "many" {
+                urls.append(try? DebugSampleFiles.writePDF(named: "Budget 2027.pdf", in: folder))
+                urls.append(try? DebugSampleFiles.writePNG(named: "Whiteboard photo.png", in: folder))
+                urls.append(try? DebugSampleFiles.writePDF(named: "Contract.pdf", in: folder))
+            }
+            for url in urls.compactMap({ $0 }) {
+                _ = try? model.importFile(at: url, to: topic, undoManager: editor.undoManager)
+            }
+            files = model.map.node(withID: topic)?.attachments.filter { $0.kind == .file } ?? []
+        }
+        editor.select(topic)
+        switch mode {
+        case "sheet", "image":
+            let wanted = mode == "image" ? "png" : "pdf"
+            guard let file = files.first(where: { $0.fileName.hasSuffix("." + wanted) }) else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { editor.openAttachment(file.id) }
+        case "picker":
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { editor.beginAttachFile(to: topic) }
+        default:
+            break
+        }
     }
 
     private static func seedDrawing(_ editor: EditorController, open: Bool, exerciseUndo: Bool) {

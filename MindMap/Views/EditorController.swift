@@ -99,6 +99,13 @@ final class EditorController {
     var colorSheet: ColorSheetRequest?
     /// Attachment to open now (ContentView presents it, then clears on macOS).
     var presentedAttachment: AttachmentRequest?
+    /// "Attach File…" picker shown; files go to `fileImportTarget`.
+    var isFileImporterPresented = false
+    @ObservationIgnored var fileImportTarget: UUID?
+    /// Topic under files being dragged over the canvas (highlighted).
+    var fileDropTargetID: UUID?
+    /// Message for files that could not be attached (alert).
+    var fileImportError: String?
     private(set) var canUndo = false
     private(set) var canRedo = false
 

@@ -95,7 +95,8 @@ struct OutlineMenuItems: View {
     }
 }
 
-/// Notes / attachments of a topic: Add Note, then each attachment with
+/// Notes / attachments of a topic: Add Note / Handwritten Note / Attach
+/// File… / Paste File, then each attachment with
 /// Open, Move and Remove (icons on the topic open them directly).
 struct AttachmentMenuItems: View {
     let editor: EditorController
@@ -105,6 +106,11 @@ struct AttachmentMenuItems: View {
         let attachments = editor.attachments(of: id)
         Button("Add Note", systemImage: "note.text.badge.plus") { editor.addNote(to: id) }
         Button("Add Handwritten Note", systemImage: "pencil.and.scribble") { editor.addDrawing(to: id) }
+        Button("Attach File…", systemImage: "paperclip") { editor.beginAttachFile(to: id) }
+        Button("Paste File", systemImage: "doc.on.clipboard") {
+            editor.select(id)
+            editor.pasteFiles(to: id)
+        }
         ForEach(Array(attachments.enumerated()), id: \.element.id) { index, attachment in
             Menu(attachment.title.isEmpty ? attachment.kind.displayName : attachment.title,
                  systemImage: attachment.kind.systemImage) {

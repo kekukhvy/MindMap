@@ -62,7 +62,8 @@ extension MindMapModel {
         switch attachment(id)?.kind {
         case .markdown: name = "Remove Note"
         case .drawing: name = "Remove Handwritten Note"
-        default: name = "Remove Attachment"
+        case .file: name = "Remove File"
+        case nil: name = "Remove Attachment"
         }
         guard let edits = try? map.removeAttachmentEdits(id), !edits.isEmpty else { return false }
         return perform(edits, actionName: name, undoManager: undoManager)

@@ -265,6 +265,9 @@ extension EditorController {
         case .handwrittenNote:
             guard let id = selectedID, scene.nodes[id] != nil else { return false }
             openOrAddDrawing(id)
+        case .attachFile:
+            guard let id = selectedID, scene.nodes[id] != nil else { return false }
+            beginAttachFile(to: id)
         case let .collapseToLevel(level): collapseToLevel(level)
         case .expandAll: expandAll()
         case .cancel:

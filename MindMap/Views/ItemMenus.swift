@@ -118,7 +118,7 @@ private struct ItemColorMenu: View {
 }
 
 /// Insert items (toolbar, menus): floating topic, relationship, boundary,
-/// note and handwritten note on the selected topic.
+/// note, handwritten note and file on the selected topic.
 struct InsertMenuItems: View {
     let editor: EditorController
 
@@ -140,6 +140,10 @@ struct InsertMenuItems: View {
         .disabled(selected == nil)
         Button("Handwritten Note", systemImage: "pencil.and.scribble") {
             if let selected { editor.addDrawing(to: selected) }
+        }
+        .disabled(selected == nil)
+        Button("Attach File…", systemImage: "paperclip") {
+            if let selected { editor.beginAttachFile(to: selected) }
         }
         .disabled(selected == nil)
     }

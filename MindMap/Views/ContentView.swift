@@ -1,5 +1,6 @@
 import Combine
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Editor window/scene for one document: canvas + toolbar + menu wiring.
 struct ContentView: View {
@@ -49,6 +50,14 @@ struct ContentView: View {
                 openWindow(value: AttachmentWindowID(documentID: model.documentID, attachmentID: request.attachmentID))
             }
             #endif
+            .fileImporter(isPresented: $editor.isFileImporterPresented, allowedContentTypes: [.item],
+                          allowsMultipleSelection: true) { result in editor.attachPickedFiles(result) }
+            .alert("Attach File", isPresented: Binding(get: { editor.fileImportError != nil },
+                                                      set: { if !$0 { editor.fileImportError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(editor.fileImportError ?? "")
+            }
             .onAppear {
                 editor.undoManager = undoManager
                 editor.refreshUndoState()

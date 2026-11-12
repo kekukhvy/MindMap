@@ -49,10 +49,12 @@ struct Attachment: Identifiable, Equatable, Codable {
         return ext.map { "\(id.uuidString).\($0)" } ?? id.uuidString
     }
 
-    /// A safe single path component inside `attachments/`.
+    /// A safe single path component inside `attachments/`: not hidden, no
+    /// separators / NUL, at most 255 UTF-8 bytes. Accepts every name this
+    /// app creates ("<UUID>", "<UUID>.<ext>", see `AttachmentFileName`).
     static func isValidFileName(_ name: String) -> Bool {
-        !name.isEmpty && !name.contains("/") && !name.contains(":") && name != "." && name != ".."
-            && !name.hasPrefix(".")
+        !name.isEmpty && !name.contains("/") && !name.contains(":") && !name.contains("\0")
+            && name != "." && name != ".." && !name.hasPrefix(".") && name.utf8.count <= 255
     }
 
     private enum CodingKeys: String, CodingKey {

@@ -12,6 +12,8 @@ enum EditorCommand: Equatable {
     case note
     /// Cmd+Shift+D: open the selected topic's handwritten note, or add one.
     case handwrittenNote
+    /// Cmd+Shift+A: attach files to the selected topic (file picker).
+    case attachFile
     /// Cmd+Option+1...4: show topics down to that level; Cmd+Option+0: expand all.
     case collapseToLevel(Int), expandAll
     /// Esc: cancel relationship/attach picking, or deselect a relationship/boundary.
@@ -60,6 +62,7 @@ enum KeyCommandMap {
             case "l" where !modifiers.contains(.shift): return .addRelationship
             case "n" where modifiers.contains(.shift): return .note
             case "d" where modifiers.contains(.shift): return .handwrittenNote
+            case "a" where modifiers.contains(.shift): return .attachFile
             default: return nil
             }
         }
