@@ -50,13 +50,18 @@ final class NodeMeasurer {
         )
     }
 
-    /// Text + attachment icon row (trailing) + shape padding.
-    func nodeSize(text: String, appearance: NodeAppearance, attachments: [AttachmentSummary] = []) -> CGSize {
+    /// Link icon (leading) + text + attachment icon row (trailing) + shape padding.
+    func nodeSize(text: String, appearance: NodeAppearance, attachments: [AttachmentSummary] = [],
+                  hasLink: Bool = false) -> CGSize {
+        let fontSize = appearance.fontSize
         let text = textSize(text, fontSize: appearance.fontSize, weight: appearance.weight)
         let items = AttachmentIconRow.items(attachments)
-        let icons = AttachmentIconRow.width(items, fontSize: appearance.fontSize)
-        let height = items.isEmpty ? text.height : max(text.height, AttachmentIconRow.iconSize(fontSize: appearance.fontSize))
-        return CGSize(width: text.width + icons + 2 * appearance.paddingH, height: height + 2 * appearance.paddingV)
+        let icons = AttachmentIconRow.width(items, fontSize: fontSize)
+        let link = hasLink ? LinkIconMetrics.width(fontSize: fontSize) : 0
+        var height = text.height
+        if !items.isEmpty { height = max(height, AttachmentIconRow.iconSize(fontSize: fontSize)) }
+        if hasLink { height = max(height, LinkIconMetrics.iconSize(fontSize: fontSize)) }
+        return CGSize(width: link + text.width + icons + 2 * appearance.paddingH, height: height + 2 * appearance.paddingV)
     }
 
     private static func platformWeight(_ weight: TopicWeight) -> PlatformFont.Weight {

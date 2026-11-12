@@ -76,6 +76,17 @@ struct MindMapCommands: Commands {
                 .keyboardShortcut("a", modifiers: [.command, .shift])
                 .disabled(!hasNodeSelection)
             Divider()
+            Button(state?.selectionHasLink == true ? "Edit Link…" : "Add Link…") { editor?.perform(.editLink) }
+                .keyboardShortcut("k", modifiers: .command)
+                .disabled(!hasNodeSelection)
+            Button("Go to Link") { editor?.goToLink() }
+                .disabled(!hasNodeSelection || state?.selectionHasLink != true)
+            Button("Remove Link") { editor?.removeLink() }
+                .disabled(!hasNodeSelection || state?.selectionHasLink != true)
+            Button("Back") { editor?.perform(.goBack) }
+                .keyboardShortcut("[", modifiers: .command)
+                .disabled(!canAct || state?.canGoBack != true)
+            Divider()
             Button("Delete") { editor?.perform(.delete) }
                 .plainKeyShortcut(.delete)
                 .disabled(!hasSelection || state?.selectionIsMainRoot == true)

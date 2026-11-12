@@ -16,6 +16,10 @@ enum EditorCommand: Equatable {
     case attachFile
     /// Cmd+Option+1...4: show topics down to that level; Cmd+Option+0: expand all.
     case collapseToLevel(Int), expandAll
+    /// Cmd+K: add / edit the selected topic's link.
+    case editLink
+    /// Cmd+[: back to the topic before the last topic-link jump.
+    case goBack
     /// Esc: cancel relationship/attach picking, or deselect a relationship/boundary.
     case cancel
 
@@ -63,6 +67,8 @@ enum KeyCommandMap {
             case "n" where modifiers.contains(.shift): return .note
             case "d" where modifiers.contains(.shift): return .handwrittenNote
             case "a" where modifiers.contains(.shift): return .attachFile
+            case "k" where !modifiers.contains(.shift): return .editLink
+            case "[" where !modifiers.contains(.shift): return .goBack
             default: return nil
             }
         }

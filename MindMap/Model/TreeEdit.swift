@@ -37,6 +37,8 @@ enum TreeEditError: Error, Equatable {
     case duplicateID
     case invalidRelationship
     case invalidBoundary
+    /// Topic link to itself or to a topic that does not exist.
+    case invalidLink
 }
 
 extension Node {

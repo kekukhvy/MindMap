@@ -15,6 +15,10 @@ struct NodeContextMenu: View {
         let info = editor.scene.nodes[id]
         let isMainRoot = id == editor.model.root.id
         let isFloatingRoot = editor.model.map.isFloatingRoot(id)
+        if editor.link(of: id) != nil {
+            GoToLinkButton(editor: editor, id: id)
+            Divider()
+        }
         Button("Rename", systemImage: "pencil") { editor.beginEditing(id) }
         Button("Add Child Topic", systemImage: "arrow.turn.down.right") {
             editor.select(id)
@@ -43,6 +47,8 @@ struct NodeContextMenu: View {
         }
         Divider()
         AttachmentMenuItems(editor: editor, id: id)
+        Divider()
+        LinkMenuItems(editor: editor, id: id)
         Divider()
         Button("Relationship", systemImage: "arrow.triangle.turn.up.right.diamond") {
             editor.beginRelationship(from: id)
@@ -128,6 +134,53 @@ struct AttachmentMenuItems: View {
                 Divider()
                 Button("Remove", systemImage: "trash", role: .destructive) { editor.removeAttachment(attachment.id) }
             }
+        }
+    }
+}
+
+/// First, prominent item of a linked topic's menu: "Go to “target”".
+struct GoToLinkButton: View {
+    let editor: EditorController
+    let id: UUID
+
+    var body: some View {
+        Button { editor.goToLink(of: id) } label: {
+            Label { Text(title).bold() } icon: { Image(systemName: icon) }
+        }
+    }
+
+    private var icon: String {
+        editor.link(of: id)?.webURL != nil ? "safari" : "arrow.right.circle"
+    }
+
+    private var title: String {
+        switch editor.model.map.resolvedLink(of: id) {
+        case let .web(url): return "Go to “\(Self.short(LinkURL.displayString(url)))”"
+        case let .topic(target):
+            let text = LinkCandidate.displayText(editor.model.map.node(withID: target)?.text ?? "")
+            return "Go to “\(Self.short(text))”"
+        case .brokenTopic: return "Go to (Deleted Topic)"
+        case nil: return "Go to"
+        }
+    }
+
+    private static func short(_ text: String) -> String {
+        text.count > 40 ? String(text.prefix(39)) + "…" : text
+    }
+}
+
+/// Add / Edit Link… (⌘K), Copy Link, Remove Link.
+struct LinkMenuItems: View {
+    let editor: EditorController
+    let id: UUID
+
+    var body: some View {
+        let link = editor.link(of: id)
+        Button(link == nil ? "Add Link…" : "Edit Link…", systemImage: "link") { editor.beginEditLink(id) }
+        if link != nil {
+            Button("Copy Link", systemImage: "doc.on.doc") { editor.copyLink(id) }
+                .disabled(editor.model.map.resolvedLink(of: id)?.isBroken ?? true)
+            Button("Remove Link", systemImage: "xmark.circle") { editor.removeLink(id) }
         }
     }
 }

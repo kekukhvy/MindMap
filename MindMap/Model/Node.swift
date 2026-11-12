@@ -27,6 +27,9 @@ struct Node: Identifiable, Equatable, Codable {
     /// parent's center (map points). nil = placed by the parent's layout.
     /// Ignored on tree roots (floating topics use `FloatingTopic.position`).
     var manualPosition: CGPoint?
+    /// Web URL or another topic of this map (icon before the title).
+    /// A topic link whose target was deleted stays as a "broken" link.
+    var link: TopicLink?
     var children: [Node]
     var attachments: [Attachment]
 
@@ -43,6 +46,7 @@ struct Node: Identifiable, Equatable, Codable {
         lineWidth: Double? = nil,
         lineDash: LineDash? = nil,
         manualPosition: CGPoint? = nil,
+        link: TopicLink? = nil,
         children: [Node] = [],
         attachments: [Attachment] = []
     ) {
@@ -58,13 +62,14 @@ struct Node: Identifiable, Equatable, Codable {
         self.lineWidth = lineWidth
         self.lineDash = lineDash
         self.manualPosition = manualPosition
+        self.link = link
         self.children = children
         self.attachments = attachments
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, text, isCollapsed, colorTag, customColor, layoutStyle, shape, borderStyle
-        case connectorStyle, lineWidth, lineDash, manualPosition, children, attachments
+        case connectorStyle, lineWidth, lineDash, manualPosition, link, children, attachments
     }
 
     /// Tolerant decoding: every field except `id` is optional in the file;
@@ -83,6 +88,7 @@ struct Node: Identifiable, Equatable, Codable {
         lineWidth = try c.decodeIfPresent(Double.self, forKey: .lineWidth)
         lineDash = (try? c.decodeIfPresent(LineDash.self, forKey: .lineDash)) ?? nil
         manualPosition = (try? c.decodeIfPresent(CGPoint.self, forKey: .manualPosition)) ?? nil
+        link = (try? c.decodeIfPresent(TopicLink.self, forKey: .link)) ?? nil
         children = try c.decodeIfPresent([Node].self, forKey: .children) ?? []
         attachments = try c.decodeIfPresent([Attachment].self, forKey: .attachments) ?? []
     }

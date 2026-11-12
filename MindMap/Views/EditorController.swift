@@ -20,10 +20,20 @@ struct NodeDrag: Equatable {
 enum PickMode: Equatable {
     case relationship(from: UUID)
     case attach(UUID)
+    /// Choosing the target of a topic link on the canvas.
+    case link(from: UUID)
 
     var sourceID: UUID {
         switch self {
-        case let .relationship(id), let .attach(id): return id
+        case let .relationship(id), let .attach(id), let .link(id): return id
+        }
+    }
+
+    /// Relationship / link picking draws a line from the source to the pointer.
+    var drawsRubberBand: Bool {
+        switch self {
+        case .relationship, .link: return true
+        case .attach: return false
         }
     }
 
@@ -31,6 +41,7 @@ enum PickMode: Equatable {
         switch self {
         case .relationship: return "Click the topic to connect to (Esc to cancel)"
         case .attach: return "Click the topic to attach to (Esc to cancel)"
+        case .link: return "Click the topic to link to (Esc to cancel)"
         }
     }
 }
@@ -106,6 +117,14 @@ final class EditorController {
     var fileDropTargetID: UUID?
     /// Message for files that could not be attached (alert).
     var fileImportError: String?
+    /// Link editor shown for a topic (sheet).
+    var linkEditor: LinkEditorRequest?
+    /// "Go to" notice (broken topic link), shown as an alert.
+    var linkMessage: String?
+    /// Topics to return to with Back (⌘[) after following topic links.
+    var navigationHistory = TopicNavigationHistory()
+    /// Opens web links (default browser); replaced by tests.
+    @ObservationIgnored var openURL: (URL) -> Void = EditorController.openInBrowser
     private(set) var canUndo = false
     private(set) var canRedo = false
 
@@ -149,7 +168,9 @@ final class EditorController {
                                   selectionIsCollapsed: selected?.isCollapsed ?? false,
                                   selectionIsFreelyPositioned: selectedID.map(isFreelyPositioned) ?? false,
                                   selectionHasNote: selected?.attachments.contains { $0.kind == .markdown } ?? false,
-                                  selectionHasDrawing: selected?.attachments.contains { $0.kind == .drawing } ?? false)
+                                  selectionHasDrawing: selected?.attachments.contains { $0.kind == .drawing } ?? false,
+                                  selectionHasLink: selected?.link != nil,
+                                  canGoBack: backTargetID != nil)
     }
 
     // MARK: Editing state
@@ -231,4 +252,6 @@ struct EditorCommandState: Equatable {
     var selectionIsFreelyPositioned: Bool
     var selectionHasNote: Bool = false
     var selectionHasDrawing: Bool = false
+    var selectionHasLink: Bool = false
+    var canGoBack: Bool = false
 }

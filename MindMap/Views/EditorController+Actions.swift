@@ -277,6 +277,12 @@ extension EditorController {
         case .attachFile:
             guard let id = selectedID, scene.nodes[id] != nil else { return false }
             beginAttachFile(to: id)
+        case .editLink:
+            guard let id = selectedID, scene.nodes[id] != nil else { return false }
+            beginEditLink(id)
+        case .goBack:
+            guard backTargetID != nil else { return false }
+            goBack()
         case let .collapseToLevel(level): collapseToLevel(level)
         case .expandAll: expandAll()
         case .cancel:

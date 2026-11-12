@@ -12,6 +12,8 @@ struct NodeView: View {
     let nodeID: UUID
     /// Tap on an attachment icon.
     var onOpenAttachment: (UUID) -> Void = { _ in }
+    /// Tap on the link icon (Go to).
+    var onFollowLink: () -> Void = {}
 
     /// XMind-like selection ring color (fixed: the canvas is always light).
     static let selectionBlue = Color(hex: "#2E7CF6")
@@ -34,10 +36,14 @@ struct NodeView: View {
 
     private var textColor: Color { Color(hex: appearance.textColorHex) }
 
-    /// Text (or the inline editor) followed by the attachment icons; the
-    /// measurer reserves their width (`AttachmentIconRow`).
+    /// Link icon, text (or the inline editor), attachment icons; the
+    /// measurer reserves the icons' width (`LinkIconMetrics`, `AttachmentIconRow`).
     private var content: some View {
         HStack(spacing: 0) {
+            if let link = info.link {
+                LinkIconView(link: link, fontSize: appearance.fontSize, scale: scale, color: textColor,
+                             onFollow: onFollowLink)
+            }
             text
             if !info.attachments.isEmpty {
                 AttachmentIconsView(attachments: info.attachments, fontSize: appearance.fontSize, scale: scale,

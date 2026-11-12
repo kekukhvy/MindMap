@@ -56,6 +56,19 @@ struct Viewport: Equatable {
         offset.y += Viewport.correction(min: screen.minY, max: screen.maxY, limit: size.height, margin: margin)
     }
 
+    /// Viewport for jumping to `rect` (Go to): unchanged if it is already
+    /// fully visible with `margin` at a readable zoom; otherwise `rect` is
+    /// centered, zooming in to at least `minScale` (never out).
+    func focusing(_ rect: CGRect, in size: CGSize, margin: CGFloat = 40, minScale: CGFloat = 0.6) -> Viewport {
+        guard size.width > 0, size.height > 0 else { return self }
+        let screen = toScreen(rect)
+        let visible = CGRect(origin: .zero, size: size).insetBy(dx: margin, dy: margin)
+        if scale >= minScale, visible.contains(screen) { return self }
+        let newScale = Viewport.clamp(max(scale, minScale))
+        let offset = CGPoint(x: size.width / 2 - rect.midX * newScale, y: size.height / 2 - rect.midY * newScale)
+        return Viewport(scale: newScale, offset: offset)
+    }
+
     private static func correction(min lower: CGFloat, max upper: CGFloat, limit: CGFloat, margin: CGFloat) -> CGFloat {
         if lower < margin { return margin - lower }
         if upper > limit - margin { return Swift.max(limit - margin - upper, margin - lower) }

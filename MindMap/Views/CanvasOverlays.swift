@@ -35,8 +35,8 @@ struct CanvasOverlays: View {
     // MARK: Rubber band while choosing a relationship target
 
     @ViewBuilder private var rubberBand: some View {
-        if case let .relationship(from)? = editor.pickMode, let pointer = editor.pickPointer,
-           let source = editor.scene.layout.frames[from] {
+        if let mode = editor.pickMode, mode.drawsRubberBand, let pointer = editor.pickPointer,
+           let source = editor.scene.layout.frames[mode.sourceID] {
             let target = editor.pickHoverID.flatMap { editor.scene.layout.frames[$0] }
             let start = viewport.toScreen(CGPoint(x: source.midX, y: source.midY))
             let end = target.map { viewport.toScreen(CGPoint(x: $0.midX, y: $0.midY)) } ?? pointer
@@ -126,6 +126,33 @@ struct PickBanner: View {
             .padding(.vertical, 8)
             .background(.regularMaterial, in: Capsule())
             .padding(.top, 10)
+        }
+    }
+}
+
+/// Floating "Back" pill while topic-link jumps can be retraced (⌘[).
+struct BackPill: View {
+    let editor: EditorController
+
+    var body: some View {
+        if let target = editor.backTargetID {
+            let full = LinkCandidate.displayText(editor.model.map.node(withID: target)?.text ?? "")
+            let text = full.count > 32 ? String(full.prefix(31)) + "…" : full
+            Button { editor.goBack() } label: {
+                Label("Back to “\(text)”", systemImage: "chevron.backward")
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.regularMaterial, in: Capsule())
+                    .overlay(Capsule().stroke(Color.primary.opacity(0.12)))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("Return to the previous topic (⌘[)")
+            .padding(.bottom, 16)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
     }
 }

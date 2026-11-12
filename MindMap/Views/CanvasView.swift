@@ -36,6 +36,7 @@ struct CanvasView: View {
             // White XMind paper in dark mode too: topic colors assume it.
             .environment(\.colorScheme, .light)
             .overlay(alignment: .top) { PickBanner(editor: editor) }
+            .overlay(alignment: .bottom) { BackPill(editor: editor) }
             .onContinuousHover(coordinateSpace: .named(CanvasView.space)) { phase in
                 guard editor.pickMode != nil else { return }
                 if case let .active(location) = phase { editor.pickPointer = location } else { editor.pickPointer = nil }
@@ -132,6 +133,16 @@ struct CanvasView: View {
         #endif
     }
 
+    /// Command held for the current click (macOS; synthesized events too).
+    private static var isCommandClick: Bool {
+        #if os(macOS)
+        NSApp.currentEvent?.modifierFlags.contains(.command) == true
+            || ScrollWheelHandler.lastMouseModifiers.contains(.command)
+        #else
+        false
+        #endif
+    }
+
     private var magnify: some Gesture {
         MagnifyGesture()
             .onChanged { value in
@@ -158,7 +169,8 @@ struct CanvasView: View {
                      onOpenAttachment: { attachmentID in
                          editor.select(id)
                          editor.openAttachment(attachmentID)
-                     })
+                     },
+                     onFollowLink: { editor.goToLink(of: id) })
                 .frame(width: screen.width, height: screen.height)
                 .contentShape(Rectangle())
                 .opacity(drag == nil ? 1 : 0.75)
@@ -174,8 +186,15 @@ struct CanvasView: View {
                     editor.addChild()
                 }
                 .onHover { inside in editor.setHovered(id, inside) }
+                .help(info.link?.tooltip ?? "")
                 .simultaneousGesture(TapGesture().onEnded {
                     if editor.completePick(id) { return }
+                    // Cmd+click a linked topic = Go to (plain click selects).
+                    if Self.isCommandClick, editor.editingID != id, info.link != nil {
+                        editor.goToLink(of: id)
+                        isFocused = true
+                        return
+                    }
                     if editor.editingID != id { editor.select(id) }
                     if editor.editingID == nil { isFocused = true }
                 })

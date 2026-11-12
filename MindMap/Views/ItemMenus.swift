@@ -146,5 +146,9 @@ struct InsertMenuItems: View {
             if let selected { editor.beginAttachFile(to: selected) }
         }
         .disabled(selected == nil)
+        Button("Link…", systemImage: "link") {
+            if let selected { editor.beginEditLink(selected) }
+        }
+        .disabled(selected == nil)
     }
 }

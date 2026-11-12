@@ -65,7 +65,7 @@ extension EditorController {
         beginPick(.relationship(from: id))
     }
 
-    private func beginPick(_ mode: PickMode) {
+    func beginPick(_ mode: PickMode) {
         commitEditing()
         select(mode.sourceID)
         pickPointer = nil
@@ -82,7 +82,7 @@ extension EditorController {
         guard let pickMode, let pickPointer else { return nil }
         let excluded: Set<UUID>
         switch pickMode {
-        case let .relationship(from): excluded = [from]
+        case let .relationship(from), let .link(from): excluded = [from]
         case let .attach(id): excluded = Set(model.map.node(withID: id)?.allIDs ?? [id])
         }
         return DropTargetFinder.target(at: viewport.toMap(pickPointer), frames: scene.layout.frames,
@@ -101,6 +101,10 @@ extension EditorController {
             selectItem(.relationship(id))
         case let .attach(id):
             if model.reparent(id, to: target, undoManager: undoManager) { select(id) }
+        case let .link(from):
+            guard target != from else { return true }
+            setLink(.topic(target), for: from)
+            select(from)
         }
         return true
     }

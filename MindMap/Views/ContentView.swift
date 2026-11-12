@@ -36,6 +36,15 @@ struct ContentView: View {
             .sheet(item: $editor.colorSheet) { request in
                 ColorPickerSheet(request: request) { hex in editor.applyColorSheet(request, hex: hex) }
             }
+            .sheet(item: $editor.linkEditor) { request in
+                LinkEditorSheet(editor: editor, nodeID: request.nodeID)
+            }
+            .alert("Go to", isPresented: Binding(get: { editor.linkMessage != nil },
+                                                set: { if !$0 { editor.linkMessage = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(editor.linkMessage ?? "")
+            }
             #if os(iOS)
             .sheet(item: presentedAttachment(fullScreen: false)) { request in
                 AttachmentSheet(model: model, attachmentID: request.attachmentID, undoManager: undoManager)
