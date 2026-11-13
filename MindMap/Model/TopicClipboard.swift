@@ -69,6 +69,7 @@ struct TopicClipboard: Codable, Equatable {
                 fresh.fileName = Attachment.defaultFileName(id: fresh.id, kind: attachment.kind,
                                                             originalExtension: ext.isEmpty ? nil : ext)
                 newFiles[fresh.fileName] = data
+                if attachment.kind == .markdown { renameImages(of: attachment, to: fresh, files: &newFiles) }
                 return fresh
             }
             result.children = node.children.map { copy($0, top: false) }
@@ -98,6 +99,19 @@ struct TopicClipboard: Codable, Equatable {
             return fresh
         }
         return Instance(topics: copies, relationships: relationships, boundaries: boundaries, files: newFiles)
+    }
+
+    /// A pasted note gets a new id: its images are stored under the new
+    /// prefix and the links in `files[fresh.fileName]` follow.
+    private func renameImages(of old: Attachment, to fresh: Attachment, files newFiles: inout [String: Data]) {
+        let oldPrefix = NoteImage.ownerPrefix(of: old.id)
+        var text = newFiles[fresh.fileName].map { MarkdownNote.text($0) }
+        for (name, data) in files where name.hasPrefix(oldPrefix) {
+            let newName = NoteImage.ownerPrefix(of: fresh.id) + name.dropFirst(oldPrefix.count)
+            newFiles[newName] = data
+            text = text?.replacingOccurrences(of: NoteImage.linkFolder + name, with: NoteImage.linkFolder + newName)
+        }
+        if let text { newFiles[fresh.fileName] = MarkdownNote.data(text) }
     }
 
     // MARK: Plain text
@@ -172,8 +186,9 @@ struct TopicClipboard: Codable, Equatable {
 extension MindMap {
     /// Clipboard of `ids` (central topic allowed: it is copied as a topic),
     /// ancestors win over their descendants; `content` gives attachment
-    /// bytes (nil = not copied).
-    func clipboard(for ids: [UUID], content: (Attachment) -> Data?) -> TopicClipboard? {
+    /// bytes (nil = not copied); `images` gives the image files of a note.
+    func clipboard(for ids: [UUID], content: (Attachment) -> Data?,
+                   images: (Attachment) -> [String: Data] = { _ in [:] }) -> TopicClipboard? {
         let wanted = Set(ids.filter(contains))
         guard !wanted.isEmpty else { return nil }
         var topics: [Node] = []
@@ -192,6 +207,7 @@ extension MindMap {
             inside.insert(node.id)
             for attachment in node.attachments where attachment.lockKeyID == nil {
                 if let data = content(attachment) { files[attachment.fileName] = data }
+                if attachment.kind == .markdown { files.merge(images(attachment)) { first, _ in first } }
             }
             node.children.forEach(gather)
         }

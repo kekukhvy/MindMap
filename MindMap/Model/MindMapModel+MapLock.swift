@@ -39,7 +39,7 @@ extension MindMapModel {
         breakCoalescing()
         if let sealed = lock.sealedPackage { return .sealed(sealed) }
         let map = map
-        let attachments = attachmentStore.prepareSave(referencing: map.referencedAttachmentFileNames)
+        let attachments = attachmentStore.prepareSave(for: map)
         if let config = lock.config {
             return .locked(map: map, attachments: attachments, config: config, cache: lock.sealCache)
         }

@@ -57,7 +57,7 @@ enum MindMapPackage {
     /// Package for a save of `map` with the store's pending/unchanged files.
     static func fileWrapper(for map: MindMap, store: AttachmentStore, existing: FileWrapper?) throws -> FileWrapper {
         try fileWrapper(for: map, existing: existing,
-                        attachments: store.prepareSave(referencing: map.referencedAttachmentFileNames))
+                        attachments: store.prepareSave(for: map))
     }
 
     static func encode(_ map: MindMap) throws -> Data {

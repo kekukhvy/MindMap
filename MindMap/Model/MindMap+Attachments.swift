@@ -21,6 +21,13 @@ extension MindMap {
         Set(allAttachments.map(\.fileName).filter(Attachment.isValidFileName))
     }
 
+    /// The names among `fileNames` that are images of a Markdown note of this
+    /// map (`NoteImage`): files to keep although no attachment lists them.
+    func noteImageNames<Names: Sequence>(in fileNames: Names) -> Set<String> where Names.Element == String {
+        let prefixes = allAttachments.filter { $0.kind == .markdown }.map { NoteImage.ownerPrefix(of: $0.id) }
+        return Set(fileNames.filter { name in prefixes.contains { name.hasPrefix($0) } })
+    }
+
     func attachmentListEdits(for nodeID: UUID, _ change: (inout [Attachment]) throws -> Void) throws -> [MapEdit] {
         guard let node = node(withID: nodeID) else { throw TreeEditError.nodeNotFound }
         var list = node.attachments

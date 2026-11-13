@@ -16,6 +16,8 @@ enum MarkdownBlock: Equatable {
     case rule
     case table(header: [String], alignments: [TableAlignment], rows: [[String]])
     case paragraph(String)
+    /// A line that is only `![alt](attachments/<file>)`.
+    case image(alt: String, fileName: String)
     case blank
 
     enum TableAlignment: Equatable {
@@ -72,12 +74,23 @@ enum MarkdownBlock: Equatable {
                     rest = rest.dropFirst().drop(while: { $0 == " " })
                 }
                 blocks.append(.quote(String(rest), level: level))
+            } else if let image = image(trimmed) {
+                blocks.append(image)
             } else {
                 blocks.append(.paragraph(trimmed))
             }
         }
         if let open = code { blocks.append(.code(open.lines.joined(separator: "\n"))) }
         return blocks
+    }
+
+    private static func image(_ line: String) -> MarkdownBlock? {
+        guard line.hasPrefix("!["), line.hasSuffix(")"), let close = line.range(of: "]("),
+              !line[close.upperBound...].dropLast().contains(")"),
+              let fileName = NoteImage.fileName(fromLinkTarget: String(line[close.upperBound...].dropLast())) else {
+            return nil
+        }
+        return .image(alt: String(line[line.index(line.startIndex, offsetBy: 2)..<close.lowerBound]), fileName: fileName)
     }
 
     /// Two spaces or one tab per nesting level.
@@ -181,6 +194,9 @@ enum MarkdownBlock: Equatable {
 
 struct MarkdownPreview: View {
     let text: String
+    /// Bytes of a file in `attachments/` (nil = unknown): images are drawn
+    /// from it, anything else stays its alt text.
+    var imageData: (String) -> Data? = { _ in nil }
 
     var body: some View {
         ScrollView {
@@ -228,9 +244,24 @@ struct MarkdownPreview: View {
             Divider().padding(.vertical, 4)
         case let .paragraph(text):
             inline(text)
+        case let .image(alt, fileName):
+            if let (image, size) = imageData(fileName).flatMap(Self.image(from:)) {
+                // Natural size, shrunk to the pane width.
+                image.resizable().scaledToFit().frame(maxWidth: size.width).accessibilityLabel(alt)
+            } else {
+                inline("![\(alt)](\(NoteImage.linkFolder)\(fileName))")
+            }
         case .blank:
             Color.clear.frame(height: 4)
         }
+    }
+
+    static func image(from data: Data) -> (Image, CGSize)? {
+        #if os(macOS)
+        NSImage(data: data).map { (Image(nsImage: $0), $0.size) }
+        #else
+        UIImage(data: data).map { (Image(uiImage: $0), $0.size) }
+        #endif
     }
 
     private func listRow(marker: Text, text: String, indent: Int) -> some View {

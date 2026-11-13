@@ -560,7 +560,8 @@ final class LibrarySync {
                                     remote: .init(map: remoteMap, modified: remote.modified))
         let localIsNewer = local.modified >= remote.modified
         var files: [String: URL] = [:]
-        for name in result.map.referencedAttachmentFileNames {
+        let imageNames = result.map.noteImageNames(in: Set(local.attachmentHashes.keys).union(remote.attachmentHashes.keys))
+        for name in result.map.referencedAttachmentFileNames.union(imageNames) {
             let l = local.attachmentHashes[name], r = remote.attachmentHashes[name], synced = meta.syncedAttachments[name]
             let useRemote: Bool
             switch (l, r) {

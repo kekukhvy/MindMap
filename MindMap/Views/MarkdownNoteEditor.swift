@@ -55,10 +55,11 @@ struct MarkdownNoteEditor: View {
                 .padding(.vertical, 10)
             Divider()
             if isPreview {
-                MarkdownPreview(text: text)
+                MarkdownPreview(text: text, imageData: { store.data(for: $0) })
             } else {
                 MarkdownTextView(text: $text, monospaced: monospaced, undoManager: undoManager, focusOnAppear: !locked,
-                                 isEditable: !locked, onEdit: save)
+                                 isEditable: !locked, onEdit: save,
+                                 imageLink: { model.addNoteImage($0, to: attachment.id) })
                     .overlay(alignment: .topLeading) {
                         if text.isEmpty, !locked {
                             Text(MarkdownTextView.placeholder)

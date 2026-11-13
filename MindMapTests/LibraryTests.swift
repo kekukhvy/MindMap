@@ -411,6 +411,33 @@ private func sharedMap(_ db: MockCloudDatabase) async throws -> (MockDevice, Moc
         #expect(db.attachmentRecords.count == 2)
     }
 
+    // AC-img-7
+    @Test func aNoteImageIsUploadedAndSurvivesAMerge() async throws {
+        let db = MockCloudDatabase()
+        let (a, b, id) = try await sharedMap(db)
+        var note = Attachment(kind: .markdown, title: "Shot")
+        note.fileName = "\(note.id.uuidString).md"
+        let image = NoteImage.fileName(noteID: note.id, fileExtension: "png")
+        let png = NoteImageTests.samplePNG()
+        var onA = try a.map(id)
+        onA.root.children[0].attachments = [note]
+        try a.save(onA, id: id, modified: t0, files: [note.fileName: Data("![](attachments/\(image))".utf8), image: png])
+        #expect(a.engine.pendingChanges.contains(.save(LibraryRecordID.attachment(map: id, fileName: image))))
+        // B changed another topic meanwhile: A's note arrives through a merge.
+        var onB = try b.map(id)
+        rename("Y", to: "Y from B", in: &onB)
+        try b.save(onB, id: id, modified: t0.addingTimeInterval(5))
+
+        try await a.syncNow()
+        try await b.syncNow()
+        try await a.syncNow()
+        for device in [a, b] {
+            #expect(try device.map(id).root.children[0].attachments.map(\.id) == [note.id])
+            #expect(device.attachmentData(id, image) == png)
+        }
+        #expect(db.attachmentRecords.count == 2)
+    }
+
     @Test func sameAttachmentEditedOnBothDevicesKeepsTheNewerFile() async throws {
         let db = MockCloudDatabase()
         let (a, b, id) = try await sharedMap(db)

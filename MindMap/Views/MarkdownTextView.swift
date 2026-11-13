@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Plain-text Markdown editor (no rich text, no smart quotes/dashes).
 /// The text view's own typing undo is off: every change is written to the
@@ -19,6 +20,9 @@ struct MarkdownTextView {
     /// update), so the document has the text even if the window closes at
     /// once (empty notes are removed on close).
     var onEdit: ((String) -> Void)?
+    /// A pasted / dropped image: stores it and returns the link to insert
+    /// (nil = refused, e.g. a locked note).
+    var imageLink: ((Data) -> String?)?
 
     final class Coordinator: NSObject {
         var parent: MarkdownTextView
@@ -55,6 +59,41 @@ import AppKit
 /// NSTextView routing Undo/Redo (Edit menu, Cmd+Z) to the document's manager.
 final class NoteTextView: NSTextView {
     weak var documentUndoManager: UndoManager?
+    var imageLink: ((Data) -> String?)?
+
+    /// Puts the image's link on its own line at `range` (the selection by default).
+    func insertImage(_ data: Data, at range: NSRange? = nil) {
+        guard isEditable, let link = imageLink?(data) else { return }
+        let result = NoteImage.inserting(link, into: string, selection: range ?? selectedRange())
+        string = result.text
+        setSelectedRange(NSRange(location: result.caret, length: 0))
+        didChangeText()
+    }
+
+    override func paste(_ sender: Any?) {
+        if isEditable, let data = NoteImagePasteboard.imageData(.general) {
+            insertImage(data)
+        } else {
+            super.paste(sender)
+        }
+    }
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        isEditable && NoteImagePasteboard.containsImage(sender.draggingPasteboard) ? .copy : super.draggingEntered(sender)
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        isEditable && NoteImagePasteboard.containsImage(sender.draggingPasteboard) ? .copy : super.draggingUpdated(sender)
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        guard isEditable, let data = NoteImagePasteboard.imageData(sender.draggingPasteboard) else {
+            return super.performDragOperation(sender)
+        }
+        let index = characterIndexForInsertion(at: convert(sender.draggingLocation, from: nil))
+        insertImage(data, at: NSRange(location: index, length: 0))
+        return true
+    }
 
     @objc func undo(_ sender: Any?) {
         if documentUndoManager?.canUndo == true { documentUndoManager?.undo() }
@@ -66,6 +105,8 @@ final class NoteTextView: NSTextView {
 
     override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
         switch item.action {
+        case #selector(paste(_:)) where isEditable && NoteImagePasteboard.containsImage(.general):
+            return true
         case #selector(undo(_:)):
             if let menuItem = item as? NSMenuItem, let manager = documentUndoManager {
                 menuItem.title = manager.undoMenuItemTitle
@@ -106,6 +147,7 @@ extension MarkdownTextView: NSViewRepresentable {
         textView.drawsBackground = false
         textView.string = text
         textView.delegate = context.coordinator
+        textView.registerForDraggedTypes(textView.registeredDraggedTypes + [.fileURL, .png, .tiff])
         scroll.documentView = textView
         apply(to: textView)
         return scroll
@@ -130,6 +172,7 @@ extension MarkdownTextView: NSViewRepresentable {
 
     private func apply(to textView: NoteTextView) {
         textView.documentUndoManager = undoManager
+        textView.imageLink = imageLink
         let size = Self.fontSize(monospaced: monospaced)
         let font = monospaced ? NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
             : NSFont.systemFont(ofSize: size)
@@ -152,8 +195,61 @@ import UIKit
 
 /// UITextView whose typing undo is not recorded; Cmd+Z / Cmd+Shift+Z act on
 /// the document's undo manager instead.
-final class NoteUITextView: UITextView {
+final class NoteUITextView: UITextView, UIDropInteractionDelegate {
     weak var documentUndoManager: UndoManager?
+    var imageLink: ((Data) -> String?)?
+
+    override init(frame: CGRect, textContainer: NSTextContainer?) {
+        super.init(frame: frame, textContainer: textContainer)
+        addInteraction(UIDropInteraction(delegate: self))
+    }
+
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Puts the image's link on its own line at `range` (the selection by default).
+    func insertImage(_ data: Data, at range: NSRange? = nil) {
+        guard isEditable, let link = imageLink?(data) else { return }
+        let result = NoteImage.inserting(link, into: text, selection: range ?? selectedRange)
+        text = result.text
+        selectedRange = NSRange(location: result.caret, length: 0)
+        delegate?.textViewDidChange?(self)
+    }
+
+    override func paste(_ sender: Any?) {
+        if isEditable, let data = NoteImagePasteboard.imageData {
+            insertImage(data)
+        } else {
+            super.paste(sender)
+        }
+    }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(paste(_:)), isEditable, NoteImagePasteboard.containsImage { return true }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, canHandle session: any UIDropSession) -> Bool {
+        isEditable && session.hasItemsConforming(toTypeIdentifiers: [UTType.image.identifier])
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, sessionDidUpdate session: any UIDropSession) -> UIDropProposal {
+        UIDropProposal(operation: .copy)
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, performDrop session: any UIDropSession) {
+        guard let provider = session.items.first(where: {
+            $0.itemProvider.hasItemConformingToTypeIdentifier(UTType.image.identifier)
+        })?.itemProvider else { return }
+        let point = session.location(in: self)
+        provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+            guard let data else { return }
+            DispatchQueue.main.async {
+                let position = self.closestPosition(to: point) ?? self.endOfDocument
+                let index = self.offset(from: self.beginningOfDocument, to: position)
+                self.insertImage(data, at: NSRange(location: index, length: 0))
+            }
+        }
+    }
     private let unusedUndoManager: UndoManager = {
         let manager = UndoManager()
         manager.disableUndoRegistration()
@@ -217,6 +313,7 @@ extension MarkdownTextView: UIViewRepresentable {
 
     private func apply(to textView: NoteUITextView) {
         textView.documentUndoManager = undoManager
+        textView.imageLink = imageLink
         let size = Self.fontSize(monospaced: monospaced)
         let font = monospaced ? UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
             : UIFont.systemFont(ofSize: size)

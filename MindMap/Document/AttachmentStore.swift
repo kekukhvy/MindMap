@@ -89,7 +89,7 @@ final class AttachmentStore {
         retained = [:]
         sensitiveNames = []
         scratchBacked = [:]
-        sessionNames = referenced
+        sessionNames = referenced.union(base.keys.filter { $0.contains(NoteImage.nameMarker) })
         for name in changed { revisions[name, default: 0] += 1 }
     }
 
@@ -101,6 +101,21 @@ final class AttachmentStore {
         if let blob = pending[fileName] { return blob.data }
         if let wrapper = base[fileName] { return wrapper.regularFileContents }
         return retained[fileName]?.data
+    }
+
+    /// Every file name this store knows (package, pending, retained).
+    private var knownNames: Set<String> {
+        Set(base.keys).union(pending.keys).union(retained.keys)
+    }
+
+    /// Image files (`NoteImage`) of the Markdown note `noteID`, with their bytes.
+    func noteImages(of noteID: UUID) -> [String: Data] {
+        let prefix = NoteImage.ownerPrefix(of: noteID)
+        var images: [String: Data] = [:]
+        for name in knownNames where name.hasPrefix(prefix) {
+            if let data = data(for: name) { images[name] = data }
+        }
+        return images
     }
 
     func contains(_ fileName: String) -> Bool {
@@ -243,6 +258,11 @@ final class AttachmentStore {
     /// Children of the `attachments/` folder to save: every referenced file
     /// (pending content as a new wrapper, unchanged files reused as-is),
     /// orphans left out. Afterwards the result is the new base.
+    /// The save of `map`: its attachments plus the images of its notes.
+    func prepareSave(for map: MindMap) -> [String: FileWrapper] {
+        prepareSave(referencing: map.referencedAttachmentFileNames.union(map.noteImageNames(in: knownNames)))
+    }
+
     func prepareSave(referencing names: Set<String>) -> [String: FileWrapper] {
         var children: [String: FileWrapper] = [:]
         var backed: [String: URL] = [:]

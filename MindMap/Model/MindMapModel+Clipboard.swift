@@ -3,10 +3,11 @@ import Foundation
 
 /// Copy / cut / paste of topics (one undo step each for cut and paste).
 extension MindMapModel {
-    /// Clipboard of `ids` with their attachment bytes (locked notes are not
+    /// Clipboard of `ids` with their attachment bytes and note images (locked notes are not
     /// copied: their key is bound to the note).
     func clipboard(for ids: [UUID]) -> TopicClipboard? {
-        map.clipboard(for: ids) { attachmentStore.data(for: $0.fileName) }
+        map.clipboard(for: ids, content: { attachmentStore.data(for: $0.fileName) },
+                      images: { attachmentStore.noteImages(of: $0.id) })
     }
 
     /// Deletes the copied topics of a cut (one "Cut Topic(s)" step).
