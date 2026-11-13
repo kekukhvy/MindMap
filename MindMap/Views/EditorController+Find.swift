@@ -16,13 +16,17 @@ extension EditorController {
     }
 
     /// Esc / close button: the full map comes back, the selected topic
-    /// stays where it is on screen.
+    /// stays where it is on screen. The matches go (⌘G has nothing to step
+    /// to); a selection the full map hides is dropped. The query stays.
     func closeFind() {
         isFindFieldFocused = false
         keepingOnScreen(selectedID) {
             isFindOpen = false
             findFilteredMap = nil
+            findMatches = []
+            findIndex = 0
         }
+        validateSelection()
     }
 
     /// Canvas key shortcuts apply: no topic or label is edited and the find

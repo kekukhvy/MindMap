@@ -37,7 +37,7 @@ struct FindBar: View {
             .onChange(of: editor.findFocusToken) { isFieldFocused = true }
             .onChange(of: isFieldFocused) { _, focused in editor.isFindFieldFocused = focused }
             .onDisappear { editor.isFindFieldFocused = false }
-            .onChange(of: editor.model.map) { editor.refreshFind() }
+            .onChange(of: editor.model.map) { editor.closeFind() }
             .onKeyPress(.escape) { editor.closeFind(); return .handled }
             .transition(.move(edge: .top).combined(with: .opacity))
         }

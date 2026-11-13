@@ -481,9 +481,10 @@ struct PencilCanvas: UIViewRepresentable {
             guard let canvas else { return }
             let shift = CGPoint(x: origin.x - newOrigin.x, y: origin.y - newOrigin.y)
             origin = newOrigin
+            let wasReloading = isReloading
             isReloading = true
             canvas.drawing = canvas.drawing.transformed(using: CGAffineTransform(translationX: shift.x, y: shift.y))
-            isReloading = false
+            isReloading = wasReloading
             let zoom = canvas.zoomScale
             canvas.contentOffset = CGPoint(x: canvas.contentOffset.x + shift.x * zoom,
                                            y: canvas.contentOffset.y + shift.y * zoom)

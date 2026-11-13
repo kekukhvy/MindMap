@@ -757,6 +757,45 @@ struct PencilNoteInteractionTests {
         settle()
     }
 
+    /// Redo of a stroke far left of the origin moves the content origin while
+    /// the canvas reloads: that reload is no edit (nothing pending, so no "Draw" commit
+    /// that would add an undo step and clear the redo steps).
+    // AC-review-1
+    @Test func redoOfAFarStrokeReloadsWithoutACommit() throws {
+        let model = MindMapModel(map: MindMap(root: Node(text: "Central")))
+        let undo = makeUndo()
+        let near = PKDrawing(strokes: [line(from: CGPoint(x: 100, y: 100), to: CGPoint(x: 600, y: 140))])
+        let id = try #require(model.addDrawing(to: model.root.id, content: near.dataRepresentation(), undoManager: undo))
+        let cover = Cover()
+        let window = try makeWindow(CoverHost(model: model, id: id, undo: undo, cover: cover))
+        defer { window.isHidden = true }
+        cover.isPresented = true
+        settle()
+        let presented = try #require(window.rootViewController?.presentedViewController)
+        let canvas = try #require(views(in: presented.view).compactMap { $0 as? PencilCanvasView }.first)
+        let coordinator = try #require(canvas.delegate as? PencilCanvas.Coordinator)
+        let far = EndlessCanvasGeometryTests.wideInk
+        var both = near
+        both.strokes.append(line(from: far.origin, to: CGPoint(x: far.maxX, y: far.minY + 200)))
+        #expect(model.setAttachmentContent(both.dataRepresentation(), for: id, actionName: "Draw",
+                                           coalescing: false, undoManager: undo))
+        undo.undo()
+        coordinator.reloadIfChanged()
+
+        undo.redo()
+        coordinator.reloadIfChanged()
+        #expect(signature(canvas.drawing).count == 2)
+        #expect(coordinator.pending == nil)
+        settle()  // longer than the commit delay
+        #expect(undo.undoActionName == "Draw")
+        #expect(!undo.canRedo)
+        undo.undo()
+        #expect(signature(drawing(model, id)) == signature(near))
+        #expect(undo.canRedo)
+        cover.isPresented = false
+        settle()
+    }
+
     @Test func mapPencilInteractionIsOffWhileANoteIsPresented() throws {
         let model = MindMapModel(map: MindMap(root: Node(text: "Central")))
         let editor = EditorController(model: model)
