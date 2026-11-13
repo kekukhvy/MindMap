@@ -26,7 +26,8 @@ struct TourPage: Identifiable {
                  caption: "Select several topics (⌘-click, or Select on iPad), draw a boundary around them and "
                     + "connect ideas with relationships.", image: "Tour5"),
         TourPage(id: 6, title: "Made for iPad and Pencil",
-                 caption: "Tap a topic for the action palette, write with Scribble, sketch notes with Apple Pencil.",
+                 caption: "Tap a topic to fold it and get the action palette, double-tap to add a child, "
+                    + "write on topics with Scribble, sketch notes with Apple Pencil.",
                  image: "Tour6"),
     ]
 }

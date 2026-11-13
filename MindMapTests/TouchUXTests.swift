@@ -162,6 +162,7 @@ struct PaletteStateTests {
         #expect(editor.touchTapTopic(f.launch, at: f.center(f.launch, in: editor), time: 1.1) == .toggled)
         deferred.flush()
         #expect(editor.selectedIDs == [f.research, f.launch])
+        #expect(editor.model.map.node(withID: f.research)?.isCollapsed == false) // Select mode never folds
         #expect(editor.visiblePalette == .selection)
         // Valid for many: Task, Boundary, Collapse (Research has children), Delete, More.
         #expect(editor.paletteItems.map(\.action) == [.task, .boundary, .collapse, .delete, .more])
@@ -203,33 +204,34 @@ struct TapDisambiguationTests {
         #expect(taps.classify(target: b, location: CGPoint(x: 40, y: 0), time: 1.85) == .single)
     }
 
-    @Test func doubleTapRenamesWithoutFlashingPalette() {
+    @Test func doubleTapAddsChildWithoutFlashingPalette() throws {
+        // WP16: double-tap = add a child inside (was rename in WP11).
         let f = TouchFixture()
         let (editor, undo, deferred) = f.editor()
         let point = f.center(f.design, in: editor)
         #expect(editor.touchTapTopic(f.design, at: point, time: 5) == .selected)
-        #expect(editor.touchTapTopic(f.design, at: point, time: 5.2) == .rename)
-        #expect(editor.editingID == f.design && editor.draftText == "Design" && editor.editSelectsAll)
+        #expect(editor.touchTapTopic(f.design, at: point, time: 5.2) == .addedChild)
+        let child = try #require(editor.editingID)
+        #expect(editor.model.map.parentID(of: child) == f.design && editor.editSelectsAll)
         deferred.flush() // the first tap's deferred show is stale now
         #expect(editor.visiblePalette == nil)
         // A tap on the edited topic belongs to the text field.
-        #expect(editor.touchTapTopic(f.design, at: point, time: 6) == .ignored)
-        editor.draftText = "Design 2"
+        #expect(editor.touchTapTopic(child, at: point, time: 6) == .ignored)
+        editor.draftText = "Sketches"
         editor.commitEditing()
-        #expect(editor.model.map.node(withID: f.design)?.text == "Design 2")
-        #expect(editor.model.root.children.count == 3) // iPad double-tap never adds a child
-        undo.undo()
         #expect(editor.model.map.node(withID: f.design)?.text == "Design")
+        undo.undo()
+        #expect(editor.model.map.node(withID: child) == nil)
     }
 
-    @Test func checkboxDoubleTapIsNotRename() {
+    @Test func checkboxDoubleTapIsNotAddChild() {
         let f = TouchFixture()
         let (editor, _, _) = f.editor()
         let point = f.center(f.design, in: editor)
         editor.touchTapTopic(f.design, at: point, time: 5)
-        editor.lastCheckboxClick = (f.design, Date())
-        #expect(editor.touchTapTopic(f.design, at: point, time: 5.1) == .selected)
-        #expect(editor.editingID == nil)
+        editor.noteAccessoryTap(on: f.design, time: 5.1)
+        #expect(editor.touchTapTopic(f.design, at: point, time: 5.1) == .accessory)
+        #expect(editor.editingID == nil && editor.model.map.node(withID: f.design)?.children.isEmpty == true)
     }
 
     @Test func tapsCompletePicks() {
@@ -608,7 +610,8 @@ struct GestureHelpTests {
         defaults.set(true, forKey: GestureHelp.shownKey)
         #expect(!GestureHelp.shouldShowOnLaunch(defaults: defaults, environment: [:], isTesting: false))
         let gestures = GestureHelp.sections.flatMap(\.rows).map(\.gesture).joined(separator: " ")
-        for word in ["Tap a topic", "Double-tap a topic", "Long-press", "Tap +", "Drag a topic", "Pinch", "Select",
+        for word in ["Tap a topic", "Double-tap a topic", "Long-press", "Tap +", "Tap +N or −", "Rename", "Sibling",
+                     "Drag a topic", "Pinch", "Select",
                      "Squeeze", "Double-tap the Pencil", "Write on a topic", "Hover"] {
             #expect(gestures.contains(word))
         }

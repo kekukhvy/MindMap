@@ -6,7 +6,8 @@ import SwiftUI
 /// while the rest of the map flows around it.
 extension EditorController {
     /// Layout changes and the matching viewport shift animate together.
-    static let relayoutAnimation = Animation.snappy(duration: 0.25)
+    static let relayoutDuration: TimeInterval = 0.25
+    static let relayoutAnimation = Animation.snappy(duration: relayoutDuration)
 
     /// Runs `change` keeping `anchor` at the same screen position; if it
     /// becomes hidden, its nearest ancestor visible before and after.

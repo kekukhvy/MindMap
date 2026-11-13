@@ -9,7 +9,9 @@ import Foundation
 /// a topic selection exists (or it is an Insert palette), no pan / zoom /
 /// drag / scribble is in progress and the editor is not busy (inline
 /// editing, picking a target, rubber band...). A single tap shows it after
-/// the double-tap interval, so a double-tap (= rename) never flashes it.
+/// the double-tap interval (and after a collapse it caused has animated),
+/// so a double-tap (= add child) never flashes it and it never moves while
+/// the map relayouts.
 struct ActionPaletteState: Equatable {
     enum Mode: Equatable {
         /// Actions for the selected topic(s).
@@ -111,6 +113,52 @@ struct TapSequence {
 
     mutating func reset() {
         last = nil
+    }
+}
+
+/// What a single tap does to the tapped topic's branch (iPad, WP16: tap =
+/// select + fold / unfold, double-tap = add a child inside).
+///
+/// The first tap of a double-tap cannot know a second one follows, so the
+/// fold is split by direction to be instant *and* never wrong:
+/// - collapsed → expand **now**: a double-tap needs it expanded anyway (the
+///   new child goes inside), so the second tap never has to undo anything;
+/// - expanded → collapse **after** `TapSequence.maxInterval` unless the second
+///   tap arrives: collapsing at once and re-expanding on the double-tap would
+///   make the whole branch vanish and spring back while the child is added.
+/// A tap never collapses the central topic (that would hide the whole map);
+/// a collapsed central topic still expands.
+enum TopicTapPlan: Equatable {
+    /// No children (or the expanded central topic): select only.
+    case select
+    case expandNow
+    case collapseLater
+
+    static func plan(hasChildren: Bool, isCollapsed: Bool, isMainRoot: Bool) -> TopicTapPlan {
+        guard hasChildren else { return .select }
+        if isCollapsed { return .expandNow }
+        return isMainRoot ? .select : .collapseLater
+    }
+}
+
+/// Collapse waiting for the double-tap interval to pass (`TopicTapPlan
+/// .collapseLater`); a newer tap / toggle / double-tap replaces or cancels it.
+struct PendingTapCollapse: Equatable {
+    var id: UUID
+    var token: Int
+    /// Palette show of the same tap, released once the collapse has animated.
+    var paletteToken: Int
+}
+
+/// A tap on a button inside a topic (task checkbox, link icon, attachment
+/// icon) also reaches the topic's tap recognizer; within this window of the
+/// button press the topic tap does nothing (no fold, no double-tap).
+enum TopicAccessoryTap {
+    static let window: TimeInterval = 0.5
+
+    static func isAccessory(_ tap: (id: UUID, time: TimeInterval)?, id: UUID, time: TimeInterval) -> Bool {
+        guard let tap, tap.id == id else { return false }
+        return abs(time - tap.time) <= window
     }
 }
 

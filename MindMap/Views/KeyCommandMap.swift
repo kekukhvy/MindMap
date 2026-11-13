@@ -42,7 +42,7 @@ enum KeyCommandMap {
     static func command(key: KeyEquivalent, modifiers rawModifiers: EventModifiers, characters: String) -> EditorCommand? {
         // Arrow keys carry .function / .numericPad on macOS: ignore those.
         let modifiers = rawModifiers.intersection([.command, .shift, .option, .control])
-        if characters == f2, modifiers.isEmpty { return .edit }
+        if f2Characters.contains(characters), modifiers.isEmpty { return .edit }
         if modifiers == [.command, .option], let digit = Int(String(key.character)), (0...4).contains(digit) {
             return digit == 0 ? .expandAll : .collapseToLevel(digit)
         }
@@ -88,6 +88,9 @@ enum KeyCommandMap {
 
     /// NSF2FunctionKey (macOS) - F2 = rename, as in XMind / Windows.
     static let f2 = "\u{F705}"
+    /// F2 as a hardware keyboard reports it: the function-key character, or
+    /// UIKit's key input name (iPad, `UIKeyCommand.f2`).
+    static let f2Characters: Set<String> = [f2, "UIKeyInputF2"]
 
     private static func isPrintable(_ characters: String) -> Bool {
         guard characters.count == 1, let scalar = characters.unicodeScalars.first else { return false }

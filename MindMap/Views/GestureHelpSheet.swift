@@ -18,10 +18,16 @@ enum GestureHelp {
 
     static let sections: [Section] = [
         Section(title: "Touch", rows: [
-            Row(systemImage: "hand.tap", gesture: "Tap a topic", action: "Select it and show the action bar"),
-            Row(systemImage: "hand.tap.fill", gesture: "Double-tap a topic", action: "Rename it"),
+            Row(systemImage: "hand.tap", gesture: "Tap a topic",
+                action: "Select it, fold or unfold its branch, show the action bar"),
+            Row(systemImage: "hand.tap.fill", gesture: "Double-tap a topic", action: "Add a child inside and name it"),
             Row(systemImage: "plus.circle.fill", gesture: "Tap +", action: "Add a child topic"),
+            Row(systemImage: "plus.forwardslash.minus", gesture: "Tap +N or −", action: "Unfold or fold the branch"),
             Row(systemImage: "hand.point.up.left", gesture: "Long-press a topic", action: "All topic actions"),
+            Row(systemImage: "character.cursor.ibeam", gesture: "Rename",
+                action: "Edit in the action bar, Rename in the long-press menu, or write on it"),
+            Row(systemImage: "plus.rectangle", gesture: "Sibling topic",
+                action: "Sibling in the action bar or menu, or the toolbar button"),
             Row(systemImage: "link", gesture: "Tap a link icon",
                 action: "Open the link (web page, topic or map); also Link › Go to in the menu"),
             Row(systemImage: "arrow.up.and.down.and.arrow.left.and.right", gesture: "Drag a topic",
@@ -35,6 +41,7 @@ enum GestureHelp {
         ]),
         Section(title: "Apple Pencil", rows: [
             Row(systemImage: "pencil.and.scribble", gesture: "Write on a topic", action: "Rename it with Scribble"),
+            Row(systemImage: "pencil", gesture: "Tap · double-tap", action: "Same as with a finger"),
             Row(systemImage: "pencil.tip", gesture: "Hover (iPad Pro)", action: "Highlight a topic and show its +"),
             Row(systemImage: "hand.pinch", gesture: "Squeeze (Pencil Pro)",
                 action: "Action bar on a topic, Insert bar over empty canvas"),
@@ -44,7 +51,7 @@ enum GestureHelp {
         ]),
         Section(title: "Keyboard", rows: [
             Row(systemImage: "keyboard", gesture: "Tab · Return", action: "Child · sibling topic"),
-            Row(systemImage: "keyboard", gesture: "Space · Delete", action: "Rename · delete"),
+            Row(systemImage: "keyboard", gesture: "Space or F2 · Delete", action: "Rename · delete"),
             Row(systemImage: "keyboard", gesture: "⌘Z · ⇧⌘Z", action: "Undo · redo"),
         ]),
     ]

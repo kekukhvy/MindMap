@@ -249,13 +249,18 @@ struct CanvasView: View {
                          || editor.fileDropTargetID == id,
                      editor: editor.editingID == id ? editor : nil, nodeID: id,
                      onOpenAttachment: { attachmentID in
+                         editor.noteAccessoryTap(on: id)
                          editor.select(id)
                          editor.openAttachment(attachmentID)
                      },
-                     onFollowLink: { editor.goToLink(of: id) },
+                     onFollowLink: {
+                         editor.noteAccessoryTap(on: id)
+                         editor.goToLink(of: id)
+                     },
                      onToggleTask: {
                          // Checkbox: toggles (one undo step) and selects the
                          // topic, like any click on it; never starts a drag.
+                         editor.noteAccessoryTap(on: id)
                          editor.lastCheckboxClick = (id, Date())
                          editor.select(id)
                          editor.toggleTaskDone(id)
@@ -290,12 +295,19 @@ struct CanvasView: View {
                 #else
                 .onHover { inside in editor.setHovered(id, inside) }
                 .help(info.link?.topicHelp ?? "")
-                // iPad: tap = select + action palette, double-tap = rename
-                // (`EditorController.touchTapTopic`; one tap recognizer, so
-                // the first tap is never delayed).
+                // iPad (WP16): tap = select + fold / unfold + action palette,
+                // double-tap = add a child inside (`EditorController
+                // .touchTapTopic`; one tap recognizer, so the first tap is
+                // never delayed). Finger and Pencil taps alike. Handled on
+                // the next main-queue turn: a checkbox / link / attachment
+                // button inside the topic has then run its action and noted
+                // itself (`noteAccessoryTap`), whichever recognizer fired first.
                 .simultaneousGesture(SpatialTapGesture(coordinateSpace: .named(CanvasView.space)).onEnded { value in
-                    editor.touchTapTopic(id, at: value.location)
-                    if editor.editingID == nil { isFocused = true }
+                    let time = ProcessInfo.processInfo.systemUptime
+                    DispatchQueue.main.async {
+                        editor.touchTapTopic(id, at: value.location, time: time)
+                        if editor.editingID == nil { isFocused = true }
+                    }
                 })
                 .simultaneousGesture(LongPressGesture(minimumDuration: 0.3).onEnded { _ in
                     editor.touchLongPress(id)
@@ -353,7 +365,13 @@ struct CanvasView: View {
            info.isCollapsed || editor.selectedID == id || editor.hoveredID == id,
            let frame = scene.layout.frames[id] {
             CollapseToggle(info: info, frame: viewport.toScreen(frame), scale: viewport.scale,
-                           onToggle: { editor.toggleCollapse(id) },
+                           onToggle: {
+                               #if os(iOS)
+                               editor.tapCollapseToggle(id)
+                               #else
+                               editor.toggleCollapse(id)
+                               #endif
+                           },
                            onHover: { inside in editor.setHovered(id, inside) })
         }
     }

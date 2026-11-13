@@ -7,7 +7,11 @@ import Foundation
 /// the Insert palette (Pencil squeeze over empty canvas); `=hover` fakes a
 /// Pencil hover over "Launch" (highlight + "+" handle) next to the selected
 /// "Design"; `=help` opens the Gestures sheet; `=root` palette on the
-/// central topic. Seeds a small map when the open one has no such topics.
+/// central topic; `=tapcollapse` taps "Research" (WP16: selected, its branch
+/// folds after the double-tap interval, then the palette); `=tapexpand` taps
+/// the collapsed "Research" again; `=doubletap` double-taps "Design" (new
+/// child inside, being named). Seeds a small map when the open one has no
+/// such topics.
 /// (simctl: `SIMCTL_CHILD_MINDMAP_DEBUG_TOUCH=palette xcrun simctl launch ...`.)
 enum DebugTouchActions {
     nonisolated(unsafe) private static var didRun = false
@@ -34,6 +38,22 @@ enum DebugTouchActions {
             editor.pencilHoveredID = ids.launch
         case "help":
             editor.isGestureHelpPresented = true
+        case "tapcollapse", "tapexpand":
+            let point = center(ids.research, editor)
+            editor.touchTapTopic(ids.research, at: point)
+            if mode == "tapexpand" {
+                // Second, separate tap once the first one has folded it.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    editor.touchTapTopic(ids.research, at: point)
+                }
+            }
+        case "doubletap":
+            let point = center(ids.design, editor)
+            let time = ProcessInfo.processInfo.systemUptime
+            editor.touchTapTopic(ids.design, at: point, time: time)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                editor.touchTapTopic(ids.design, at: point, time: time + 0.15)
+            }
         case "root":
             editor.select(editor.model.root.id)
             editor.palette.showForSelection()
@@ -41,6 +61,11 @@ enum DebugTouchActions {
             editor.select(ids.design)
             editor.palette.showForSelection()
         }
+    }
+
+    private static func center(_ id: UUID, _ editor: EditorController) -> CGPoint {
+        let frame = editor.screenFrame(of: id) ?? .zero
+        return CGPoint(x: frame.midX, y: frame.midY)
     }
 
     private struct Seeded {

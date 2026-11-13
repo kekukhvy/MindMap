@@ -110,6 +110,13 @@ final class EditorController {
     /// iPad floating action palette (WP11, `EditorController+Touch`).
     var palette = ActionPaletteState()
     @ObservationIgnored var tapSequence = TapSequence()
+    /// Single tap on an expanded topic: its collapse after the double-tap
+    /// interval (WP16, `TopicTapPlan`).
+    @ObservationIgnored var pendingTapCollapse: PendingTapCollapse?
+    @ObservationIgnored var tapCollapseCounter = 0
+    /// Last tap on a button inside a topic (checkbox / link / attachment
+    /// icon), uptime: the topic's own tap recognizer ignores that tap.
+    @ObservationIgnored var lastAccessoryTap: (id: UUID, time: TimeInterval)?
     /// Runs the deferred palette show after a tap (replaced by tests).
     @ObservationIgnored var paletteScheduler: (TimeInterval, @escaping () -> Void) -> Void = { delay, work in
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
