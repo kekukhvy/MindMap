@@ -557,6 +557,63 @@ private func sharedMap(_ db: MockCloudDatabase) async throws -> (MockDevice, Moc
     }
 }
 
+// MARK: - Engine callbacks
+
+/// Stands in for CKSyncEngine's rule that a delegate callback must not await
+/// `fetchChanges()` / `sendChanges()` (it traps): callbacks are delivered
+/// with `inCallback` bound, which tasks started from them inherit.
+@MainActor
+final class CallbackCheckingEngine: LibrarySyncEngine {
+    @TaskLocal static var inCallback = false
+    private(set) var reentrantCalls = 0
+    private(set) var fetchCount = 0
+    private var fetchWaiter: CheckedContinuation<Void, Never>?
+
+    func add(_ changes: [LibraryRecordChange]) {}
+
+    var pendingChanges: [LibraryRecordChange] { [] }
+
+    func sendChanges() async throws {
+        if Self.inCallback { reentrantCalls += 1 }
+    }
+
+    func fetchChanges() async throws {
+        if Self.inCallback { reentrantCalls += 1 }
+        fetchCount += 1
+        fetchWaiter?.resume()
+        fetchWaiter = nil
+    }
+
+    func untilFetched() async {
+        guard fetchCount == 0 else { return }
+        await withCheckedContinuation { fetchWaiter = $0 }
+    }
+}
+
+@MainActor
+@Suite struct LibraryEngineCallbackTests {
+    @Test(.timeLimit(.minutes(1)))
+    func conflictWithoutServerPayloadFetchesOutsideTheEngineCallback() async {
+        let cache = LibraryCache(root: FileManager.default.temporaryDirectory
+            .appendingPathComponent("LibraryTest-\(UUID().uuidString)"))
+        let sync = LibrarySync(cache: cache)
+        let engine = CallbackCheckingEngine()
+        sync.attach(engine)
+        let recordID = LibraryRecordID.map(UUID())
+        let sent = CKRecord(recordType: LibraryRecordType.map, recordID: recordID)
+        let serverWithoutPayload = CKRecord(recordType: LibraryRecordType.map, recordID: recordID)
+
+        CallbackCheckingEngine.$inCallback.withValue(true) {
+            sync.handleSent(saved: [], failed: [(sent, .conflict(serverRecord: serverWithoutPayload))],
+                            deleted: [], failedDeletes: [])
+        }
+        await engine.untilFetched()
+
+        #expect(engine.fetchCount == 1)
+        #expect(engine.reentrantCalls == 0)
+    }
+}
+
 // MARK: - Availability, settings, links
 
 @MainActor

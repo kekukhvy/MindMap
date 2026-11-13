@@ -225,13 +225,13 @@ final class LibrarySync {
             guard (serverRecord[MapRecordField.payload] as? CKAsset)?.fileURL != nil else {
                 // Server version without its payload: fetch it, the merge
                 // and the next upload follow from the fetched record.
-                Task { [weak self] in try? await self?.engine?.fetchChanges() }
+                fetchChangesAfterCallback()
                 return nil
             }
             handleFetched(modifications: [serverRecord], deletions: [])
             if state.maps[id]?.missingAttachments.isEmpty == false {
                 // The conflict carried only the Map record: fetch its files.
-                Task { [weak self] in try? await self?.engine?.fetchChanges() }
+                fetchChangesAfterCallback()
             }
             return id
         case let (.attachment(id, name), .conflict(serverRecord)):
@@ -254,6 +254,15 @@ final class LibrarySync {
             lastError = message
             return nil
         }
+    }
+
+    /// Asks the engine to fetch, from outside the engine callback this runs
+    /// in. CKSyncEngine traps ("Cannot await a call into CKSyncEngine from
+    /// within a delegate callback ... Try performing this in a detached
+    /// Task") when a callback's task awaits `fetchChanges()`; a plain `Task`
+    /// inherits that context, a detached one does not.
+    private func fetchChangesAfterCallback() {
+        Task.detached { @MainActor [weak self] in try? await self?.engine?.fetchChanges() }
     }
 
     // MARK: - Fetched changes
