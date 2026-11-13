@@ -353,6 +353,7 @@ enum MapMerge {
             map.theme = scalar(baseMap.theme, localSide.map.theme, remoteSide.map.theme)
             map.taskPanel = scalar(baseMap.taskPanel, localSide.map.taskPanel, remoteSide.map.taskPanel)
             map.title = scalar(baseMap.title, localSide.map.title, remoteSide.map.title)
+            map.isReadOnly = scalar(baseMap.isReadOnly, localSide.map.isReadOnly, remoteSide.map.isReadOnly)
             let existing = Set(map.allNodeIDsForMerge)
             map.relationships = items(baseMap.relationships, localSide.map.relationships, remoteSide.map.relationships)
                 .filter { existing.contains($0.fromNodeID) && existing.contains($0.toNodeID) }

@@ -45,7 +45,10 @@ extension MindMapModel {
     /// until it closes); from a menu the note is locked right away.
     @discardableResult
     func lockNote(_ attachmentID: UUID, keepUnlocked: Bool = false, undoManager: UndoManager?) throws -> LockKeyStorage {
-        guard canLockNote(attachmentID), let attachment = attachment(attachmentID) else { throw LockError.notLockable }
+        guard canLockNote(attachmentID), let attachment = attachment(attachmentID),
+              admitsContentChange(Self.lockActionName(for: attachment.kind), undoManager: undoManager) else {
+            throw LockError.notLockable
+        }
         if let problem = lock.services.authenticator.availabilityProblem() {
             throw LockError.authenticationUnavailable(problem)
         }
@@ -87,7 +90,10 @@ extension MindMapModel {
     /// back to "<UUID>.md" — one undo step (undo restores the encrypted file).
     @MainActor
     func removeNoteLock(_ attachmentID: UUID, reason: String, undoManager: UndoManager?) async -> LockAuthResult {
-        guard let attachment = attachment(attachmentID), let keyID = attachment.lockKeyID else { return .cancelled }
+        guard let attachment = attachment(attachmentID), let keyID = attachment.lockKeyID,
+              admitsContentChange(Self.removeLockActionName(for: attachment.kind), undoManager: undoManager) else {
+            return .cancelled
+        }
         let result = await lock.services.authenticator.authenticate(reason: reason)
         guard result == .success else { return result }
         do {

@@ -57,7 +57,7 @@ extension EditorController {
 
     /// "Locate…": shows the file picker; the chosen map replaces the link's file.
     func beginLocateMap(_ id: UUID? = nil) {
-        guard let target = id ?? selectedID, link(of: target)?.mapReference != nil else { return }
+        guard let target = id ?? selectedID, link(of: target)?.mapReference != nil, requireEditable() else { return }
         commitEditing()
         mapLinkProblem = nil
         mapLocateNodeID = target

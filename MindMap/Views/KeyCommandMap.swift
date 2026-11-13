@@ -24,6 +24,8 @@ enum EditorCommand: Equatable {
     case toggleTaskDone
     /// Cmd+A: select every visible topic.
     case selectAll
+    /// Option+Cmd+L: Lock Editing on / off (WP15).
+    case toggleReadOnly
     /// Esc: cancel picking / member editing, keep only the primary of a
     /// multi-selection, or deselect a relationship/boundary.
     case cancel
@@ -46,6 +48,7 @@ enum KeyCommandMap {
         if modifiers == [.command, .option], let digit = Int(String(key.character)), (0...4).contains(digit) {
             return digit == 0 ? .expandAll : .collapseToLevel(digit)
         }
+        if modifiers == [.command, .option], key.character.lowercased() == "l" { return .toggleReadOnly }
         if modifiers.isEmpty || modifiers == .shift {
             switch key {
             case .tab where modifiers.isEmpty: return .addChild

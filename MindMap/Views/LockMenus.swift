@@ -113,12 +113,13 @@ struct NoteLockToolbarButton: View {
                 if attachment.isLocked {
                     Button("Remove Lock", systemImage: "lock.slash") { removeLock() }
                         .help("Remove the lock: the note is stored unencrypted again")
+                        .disabled(model.isReadOnly)
                 } else {
                     Button("Lock Note", systemImage: "lock") {
                         if didShowNoteInfo { lock() } else { showsInfo = true }
                     }
                     .help("Lock this note with \(model.lock.services.authenticator.methodName)")
-                    .disabled(model.isDraft(attachmentID))
+                    .disabled(model.isDraft(attachmentID) || model.isReadOnly)
                 }
             }
             .alert("Lock Note?", isPresented: $showsInfo) {

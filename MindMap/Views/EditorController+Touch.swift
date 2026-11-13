@@ -24,6 +24,8 @@ enum TouchTapOutcome: Equatable {
     case accessory
     /// Double-tap: a new child inside the topic, being named.
     case addedChild
+    /// Double-tap on a read-only map (WP15): nothing added, notice shown.
+    case refused
 }
 
 /// iPad touch + Apple Pencil UX: single tap = select + fold / unfold its
@@ -60,13 +62,17 @@ extension EditorController {
                               allTasks: !nodes.isEmpty && nodes.allSatisfy { $0.task != nil },
                               hasNote: info.attachments.contains { $0.kind == .markdown },
                               hasLink: info.link != nil,
-                              hasMovable: !model.map.movableTopics(selectedIDs).isEmpty)
+                              hasMovable: !model.map.movableTopics(selectedIDs).isEmpty,
+                              isReadOnly: isReadOnly)
     }
 
     var paletteItems: [PaletteItem] {
         switch visiblePalette {
         case .selection?: return ActionPaletteCatalog.items(for: paletteContext)
-        case .insert?: return ActionPaletteCatalog.insertItems(hasSelection: selectedID.map { scene.nodes[$0] != nil } ?? false)
+        case .insert?:
+            // Nothing to insert into a read-only map (WP15).
+            guard canEdit else { return [] }
+            return ActionPaletteCatalog.insertItems(hasSelection: selectedID.map { scene.nodes[$0] != nil } ?? false)
         case nil: return []
         }
     }
@@ -153,6 +159,8 @@ extension EditorController {
     private func doubleTapAddChild(_ id: UUID) -> TouchTapOutcome {
         cancelPendingTapCollapse()
         palette.dismiss()
+        // Read-only map (WP15): no child; the notice says why.
+        guard requireEditable() else { return .refused }
         if selectedIDs != [id] || selectedID != id { select(id) }
         // `addChild` expands a collapsed parent in the same undo step.
         keepingOnScreen(id) { addChild() }
@@ -245,7 +253,7 @@ extension EditorController {
     /// Whether the "+" handle of `id` is shown (selected alone, or hovered by
     /// the Pencil / pointer).
     func showsAddChildHandle(_ id: UUID) -> Bool {
-        guard scene.nodes[id] != nil, !isSelectMode, palette.interactions.isEmpty else { return false }
+        guard scene.nodes[id] != nil, !isSelectMode, palette.interactions.isEmpty, canEdit else { return false }
         return AddChildHandle.isShown(for: id, selection: selectedIDs, hoveredID: pencilHoveredID ?? hoveredID,
                                       editingID: editingID, isBusy: isTouchBusy)
     }
@@ -289,6 +297,13 @@ extension EditorController {
             palette.dismiss()
         }
         let primary = selectedID.flatMap { scene.nodes[$0] != nil ? $0 : nil }
+        // Read-only map (WP15): edit buttons are disabled; Link = Go to.
+        if action.isEdit, !requireEditable() { return }
+        if action == .link, isReadOnly {
+            palette.dismiss()
+            if let primary, model.map.resolvedLink(of: primary) != nil { goToLink(of: primary) } else { showReadOnlyNotice() }
+            return
+        }
         switch action {
         case .addChild:
             // Insert palette without a selection adds to the central topic.
@@ -409,7 +424,8 @@ extension EditorController {
 
     /// Topics whose screen frame meets `rect` (screen points).
     func scribbleTopics(inScreenRect rect: CGRect) -> [UUID] {
-        guard viewport.scale > 0 else { return [] }
+        // Read-only map (WP15): Scribble does not rename topics.
+        guard viewport.scale > 0, canEdit else { return [] }
         let origin = viewport.toMap(rect.origin)
         let mapRect = CGRect(x: origin.x, y: origin.y, width: rect.width / viewport.scale,
                              height: rect.height / viewport.scale)
@@ -423,7 +439,7 @@ extension EditorController {
     /// Scribble focuses a topic: inline editing with the text selected, so
     /// the handwriting replaces the title.
     func beginScribble(on id: UUID) {
-        guard scene.nodes[id] != nil else { return }
+        guard scene.nodes[id] != nil, requireEditable() else { return }
         tapSequence.reset()
         cancelPendingTapCollapse()
         if editingID != id { beginEditing(id) }

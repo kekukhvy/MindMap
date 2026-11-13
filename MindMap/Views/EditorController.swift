@@ -223,6 +223,12 @@ final class EditorController {
     @ObservationIgnored var pendingRevealID: UUID?
     private(set) var canUndo = false
     private(set) var canRedo = false
+    /// "Map is locked — unlock to edit" notice (WP15); nil = hidden.
+    var readOnlyNotice: ReadOnlyNotice?
+    /// Runs the notice's auto-hide (replaced by tests).
+    @ObservationIgnored var noticeScheduler: (TimeInterval, @escaping () -> Void) -> Void = { delay, work in
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
 
     @ObservationIgnored let measurer = NodeMeasurer()
     @ObservationIgnored private var cachedScene: (map: MindMap, editing: UUID?, draft: String, day: Date,
@@ -236,8 +242,21 @@ final class EditorController {
         #if DEBUG
         Self.debugInstances.append(WeakEditor(editor: self))
         #endif
+        installModelHooks()
+    }
+
+    /// Connects the model to this editor: measured sides (WP17), the
+    /// read-only notice and anchored undo of expand / collapse (WP15).
+    /// Also called when the editor's window appears: SwiftUI may build a
+    /// throwaway editor for the same model whose hooks would win otherwise.
+    func installModelHooks() {
         // Main topics keep the side they are shown on (WP17).
         model.sideSplitProvider = { [weak self] in self?.scene.layout.balanced }
+        model.readOnlyRejectionHandler = { [weak self] _ in self?.showReadOnlyNotice() }
+        model.replayAnchoring = { [weak self] toggled, apply in
+            guard let self else { return apply() }
+            self.keepingOnScreen(self.replayAnchor(for: toggled), apply)
+        }
     }
 
     #if DEBUG
@@ -269,7 +288,8 @@ final class EditorController {
 
     var commandState: EditorCommandState {
         let selected = selectedID.flatMap { scene.nodes[$0] }
-        return EditorCommandState(isEditing: editingID != nil || labelEditing != nil, hasSelection: selected != nil || selectedItem != nil,
+        return EditorCommandState(isEditing: editingID != nil || labelEditing != nil,
+                                  isReadOnly: isReadOnly, hasSelection: selected != nil || selectedItem != nil,
                                   hasNodeSelection: selected != nil,
                                   selectionIsMainRoot: selectedID == model.root.id,
                                   selectionHasChildren: selected?.hasChildren ?? false,
@@ -365,6 +385,8 @@ final class EditorController {
 /// Snapshot published to menu commands (FocusedValue).
 struct EditorCommandState: Equatable {
     var isEditing: Bool
+    /// The map is locked for editing (WP15): edit commands are disabled.
+    var isReadOnly = false
     /// A topic, relationship or boundary is selected.
     var hasSelection: Bool
     var hasNodeSelection: Bool

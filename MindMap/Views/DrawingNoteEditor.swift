@@ -36,6 +36,7 @@ struct DrawingNoteEditor: View {
                 .textFieldStyle(.plain)
                 .font(.title3.weight(.semibold))
                 .focused($titleFocused)
+                .disabled(model.isReadOnly)
                 .onSubmit(commitTitle)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
@@ -58,13 +59,15 @@ struct DrawingNoteEditor: View {
         #if os(iOS)
         PencilCanvas(model: model, attachmentID: attachment.id, fileName: attachment.fileName,
                      revision: store.revision(of: attachment.fileName), undoManager: undoManager,
-                     fingerDrawing: fingerDrawing, flusher: flusher)
+                     fingerDrawing: fingerDrawing, isReadOnly: model.isReadOnly, flusher: flusher)
             .ignoresSafeArea(.container, edges: .bottom)
         #else
         VStack(spacing: 0) {
             MacDrawingBoard(data: model.content(of: attachment.id),
                             revision: store.revision(of: attachment.fileName),
-                            tool: tool, inkColor: MacDrawingBoard.color(hex: inkHex), undoManager: undoManager) { data in
+                            // Read-only map (WP15): view / zoom only.
+                            tool: model.isReadOnly ? .view : tool, inkColor: MacDrawingBoard.color(hex: inkHex),
+                            undoManager: undoManager) { data in
                 model.setAttachmentContent(data, for: attachment.id, actionName: "Draw", coalescing: false,
                                            undoManager: undoManager)
             }
@@ -89,6 +92,7 @@ struct DrawingNoteEditor: View {
             #if os(iOS)
             Toggle(isOn: $fingerDrawing) { Label("Draw with Finger", systemImage: "hand.draw") }
                 .help("Draw with your finger (otherwise only Apple Pencil draws and fingers scroll)")
+                .disabled(model.isReadOnly)
             #else
             Picker("Tool", selection: $tool) {
                 Label("View", systemImage: "hand.raised").tag(MacDrawingTool.view)
@@ -97,13 +101,14 @@ struct DrawingNoteEditor: View {
             }
             .pickerStyle(.segmented)
             .help("Mouse tool: view only, draw, or erase whole strokes")
+            .disabled(model.isReadOnly)
             Picker("Ink", selection: $inkHex) {
                 ForEach(MacDrawingBoard.inkColors, id: \.hex) { ink in
                     Label(ink.name, systemImage: "circle.fill").tag(ink.hex)
                 }
             }
             .help("Pen color")
-            .disabled(tool != .pen)
+            .disabled(tool != .pen || model.isReadOnly)
             #endif
         }
     }
@@ -130,7 +135,7 @@ struct DrawingNoteEditor: View {
     }
 
     private func commitTitle() {
-        guard didLoad else { return }
+        guard didLoad, !model.isReadOnly else { return }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             title = attachment.title

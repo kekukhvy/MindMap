@@ -68,6 +68,16 @@ struct TopicMenuEntry: Equatable {
         TopicMenuEntry(kind: .submenu(entries), title: title, systemImage: systemImage, isEnabled: enabled)
     }
 
+    /// An enabled button here or in its (enabled) submenu.
+    var hasEnabledItem: Bool {
+        guard isEnabled else { return false }
+        switch kind {
+        case .divider: return false
+        case .button: return true
+        case let .submenu(children): return children.contains(where: \.hasEnabledItem)
+        }
+    }
+
     /// Item titles (dividers as "-"), submenus as "Title ▸".
     var outline: String {
         switch kind {
@@ -123,13 +133,45 @@ struct TopicMenuFacts: Equatable {
     var noteLockActions: [NoteLockMenu.Action] = []
     var hasDrawing = false
     var attachments: [AttachmentFacts] = []
+    /// The map is locked for editing (WP15): every item that would change
+    /// it is disabled (`TopicMenus.lockedForReading`).
+    var isReadOnly = false
 
     var isSingle: Bool { count == 1 }
 }
 
 enum TopicMenus {
     static func all(_ facts: TopicMenuFacts) -> [TopicSubmenu] {
-        [task(facts), link(facts), note(facts), attachments(facts)]
+        [task(facts), link(facts), note(facts), attachments(facts)].map { lockedForReading($0, facts) }
+    }
+
+    /// Read-only map (WP15): items that would change the map are disabled
+    /// (`TopicMenuAction.isAllowedWhileReadOnly`), submenus left without an
+    /// enabled item too. Applied to every rendering of these menus.
+    static func lockedForReading(_ submenu: TopicSubmenu, _ facts: TopicMenuFacts) -> TopicSubmenu {
+        guard facts.isReadOnly else { return submenu }
+        var submenu = submenu
+        submenu.entries = lockedForReading(submenu.entries, facts)
+        submenu.isEnabled = submenu.isEnabled && submenu.entries.contains(where: \.hasEnabledItem)
+        return submenu
+    }
+
+    static func lockedForReading(_ entries: [TopicMenuEntry], _ facts: TopicMenuFacts) -> [TopicMenuEntry] {
+        guard facts.isReadOnly else { return entries }
+        return entries.map { entry in
+            var entry = entry
+            switch entry.kind {
+            case .divider:
+                break
+            case let .button(action):
+                entry.isEnabled = entry.isEnabled && action.isAllowedWhileReadOnly(facts)
+            case let .submenu(children):
+                let locked = lockedForReading(children, facts)
+                entry.kind = .submenu(locked)
+                entry.isEnabled = entry.isEnabled && locked.contains(where: \.hasEnabledItem)
+            }
+            return entry
+        }
     }
 
     /// Task ▸ Convert to Task / Mark as Done (⌘⏎) / Priority ▸ / Due Date ▸
@@ -140,6 +182,10 @@ enum TopicMenus {
     }
 
     static func taskEntries(_ facts: TopicMenuFacts) -> [TopicMenuEntry] {
+        lockedForReading(plainTaskEntries(facts), facts)
+    }
+
+    private static func plainTaskEntries(_ facts: TopicMenuFacts) -> [TopicMenuEntry] {
         let priorities = TaskPriority.allCases.map { priority in
             TopicMenuEntry.button("\(priority.title)  \(priority.mark)", nil, .setPriority(priority),
                                   checked: facts.commonPriority == priority)

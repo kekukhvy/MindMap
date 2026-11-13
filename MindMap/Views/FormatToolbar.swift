@@ -28,22 +28,28 @@ struct FormatToolbar: ToolbarContent {
                 .disabled(!editor.canRedo)
         }
         ToolbarItemGroup(placement: Self.toolsPlacement) {
+            // Read-only map (WP15): the editing tools are disabled; Note
+            // still opens an existing note.
+            let locked = editor.isReadOnly
             Button("Relationship", systemImage: "arrow.triangle.turn.up.right.diamond") {
                 if let id = selectedTopic { editor.beginRelationship(from: id) }
             }
-            .disabled(selectedTopic == nil)
+            .disabled(selectedTopic == nil || locked)
             Button("Add Subtopic", systemImage: "arrow.turn.down.right") { editor.addChild() }
+                .disabled(locked)
             Button("Add Sibling Topic", systemImage: "plus.rectangle") { editor.addSibling() }
+                .disabled(locked)
             Button("Boundary", systemImage: "square.dashed") {
                 if selectedTopic != nil { editor.addBoundaryFromSelection() }
             }
-            .disabled(selectedTopic == nil || editor.model.map.movableTopics(editor.selectedIDs).isEmpty)
+            .disabled(selectedTopic == nil || locked || editor.model.map.movableTopics(editor.selectedIDs).isEmpty)
             Button("Note", systemImage: "note.text") {
                 if let id = selectedTopic { editor.openOrAddNote(id) }
             }
             .help("Add or open the note of the selected topic (⇧⌘N)")
-            .disabled(selectedTopic == nil)
+            .disabled(selectedTopic == nil || (locked && selectedTopic.flatMap(editor.firstNote(of:)) == nil))
             Menu("Insert", systemImage: "plus") { InsertMenuItems(editor: editor) }
+                .disabled(locked)
             #if os(iOS)
             // Select mode: taps toggle topics, drags draw a selection band.
             Button(editor.isSelectMode ? "Done Selecting" : "Select",
@@ -53,6 +59,7 @@ struct FormatToolbar: ToolbarContent {
             #endif
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            ReadOnlyToggle(editor: editor)
             Menu("Format", systemImage: "paintbrush") {
                 if let item = editor.selectedItem {
                     CanvasItemMenu(editor: editor, item: item)
@@ -62,6 +69,7 @@ struct FormatToolbar: ToolbarContent {
                     Text("Select a topic, relationship or boundary")
                 }
             }
+            .disabled(editor.isReadOnly)
             Menu("More", systemImage: "ellipsis.circle") {
                 Menu("Theme", systemImage: "paintpalette") { ThemeMenuItems(editor: editor) }
                 Menu("Outline", systemImage: "list.bullet.indent") { OutlineMenuItems(editor: editor) }

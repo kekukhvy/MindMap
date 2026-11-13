@@ -13,21 +13,13 @@ struct AttachmentEditorView: View {
 
     var body: some View {
         if let attachment = model.attachment(attachmentID) {
-            Group {
-                if attachment.isLocked && !model.lock.isNoteUnlocked(attachment.id) {
-                    LockedNoteView(model: model, attachment: attachment, autoPrompt: !didAutoPrompt) {
-                        didAutoPrompt = true
-                    }
-                } else {
-                    switch attachment.kind {
-                    case .markdown:
-                        MarkdownNoteEditor(model: model, attachment: attachment, undoManager: undoManager)
-                    case .drawing:
-                        DrawingNoteEditor(model: model, attachment: attachment, undoManager: undoManager)
-                    case .file:
-                        FileAttachmentView(model: model, attachment: attachment, undoManager: undoManager)
-                    }
+            VStack(spacing: 0) {
+                // Read-only map (WP15): viewers say so; nothing can change.
+                if model.isReadOnly {
+                    ReadOnlyAttachmentBanner()
+                    Divider()
                 }
+                content(attachment)
             }
             .toolbar {
                 if attachment.kind != .file {
@@ -38,16 +30,39 @@ struct AttachmentEditorView: View {
             }
             .navigationTitle(attachment.title.isEmpty ? attachment.kind.displayName : attachment.title)
         } else {
-            // Removed (e.g. "Add Note" undone): redo brings it back here.
-            ContentUnavailableView("Attachment Removed", systemImage: "trash",
-                                   description: Text("This attachment is no longer in the map."))
-                .toolbar {
-                    ToolbarItem {
-                        Button("Redo", systemImage: "arrow.uturn.forward") { undoManager?.redo() }
-                            .disabled(undoManager?.canRedo != true)
-                    }
-                }
+            removedPlaceholder
         }
+    }
+
+    @ViewBuilder private func content(_ attachment: Attachment) -> some View {
+        Group {
+            if attachment.isLocked && !model.lock.isNoteUnlocked(attachment.id) {
+                LockedNoteView(model: model, attachment: attachment, autoPrompt: !didAutoPrompt) {
+                    didAutoPrompt = true
+                }
+            } else {
+                switch attachment.kind {
+                case .markdown:
+                    MarkdownNoteEditor(model: model, attachment: attachment, undoManager: undoManager)
+                case .drawing:
+                    DrawingNoteEditor(model: model, attachment: attachment, undoManager: undoManager)
+                case .file:
+                    FileAttachmentView(model: model, attachment: attachment, undoManager: undoManager)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var removedPlaceholder: some View {
+        // Removed (e.g. "Add Note" undone): redo brings it back here.
+        ContentUnavailableView("Attachment Removed", systemImage: "trash",
+                               description: Text("This attachment is no longer in the map."))
+            .toolbar {
+                ToolbarItem {
+                    Button("Redo", systemImage: "arrow.uturn.forward") { undoManager?.redo() }
+                        .disabled(undoManager?.canRedo != true)
+                }
+            }
     }
 }
 
@@ -66,7 +81,7 @@ struct DeleteAttachmentButton: View {
             close()
         }
         .help(label)
-        .disabled(model.attachment(attachmentID) == nil)
+        .disabled(model.attachment(attachmentID) == nil || model.isReadOnly)
     }
 }
 

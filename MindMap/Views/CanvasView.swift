@@ -54,6 +54,7 @@ struct CanvasView: View {
                 VStack(spacing: 6) {
                     PickBanner(editor: editor)
                     SelectionBanner(editor: editor)
+                    ReadOnlyNoticeView(editor: editor)
                 }
             }
             .overlay(alignment: .bottom) { BackPill(editor: editor) }
@@ -417,13 +418,34 @@ struct CanvasView: View {
     private func reparentDrag(_ id: UUID) -> some Gesture {
         DragGesture(minimumDistance: 6, coordinateSpace: .named(CanvasView.space))
             .onChanged { value in
+                // Read-only map (WP15): the topic stays, the canvas pans
+                // (and the notice says why nothing moved).
+                if editor.isReadOnly, editor.drag == nil {
+                    lockedPan(value)
+                    return
+                }
                 editor.updateDrag(id, translation: value.translation, location: value.location,
                                   freeMove: Self.isOptionPressed)
             }
             .onEnded { _ in
+                if panStart != nil {
+                    editor.endCanvasGesture(.pan)
+                    panStart = nil
+                }
                 editor.endDrag()
                 isFocused = true
             }
+    }
+
+    /// Topic dragged on a read-only map: pans like the background.
+    private func lockedPan(_ value: DragGesture.Value) {
+        if panStart == nil { editor.showReadOnlyNotice() }
+        editor.beginCanvasGesture(.pan)
+        let start = panStart ?? editor.viewport
+        if panStart == nil { panStart = start }
+        var viewport = start
+        viewport.pan(dx: value.translation.width, dy: value.translation.height)
+        editor.viewport = viewport
     }
 }
 

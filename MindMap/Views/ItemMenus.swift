@@ -42,6 +42,8 @@ struct CanvasItemMenu: View {
             Divider()
             Button("Delete", systemImage: "trash", role: .destructive) { editor.removeItem(item) }
         }
+        // Read-only map (WP15): relationships / boundaries are not edited.
+        .disabled(editor.isReadOnly)
     }
 }
 
@@ -127,35 +129,39 @@ struct InsertMenuItems: View {
 
     var body: some View {
         let selected = editor.selectedID.flatMap { editor.scene.nodes[$0] != nil ? $0 : nil }
-        Button("Floating Topic", systemImage: "rectangle.dashed") { editor.addFloatingTopic() }
-        Button("Relationship", systemImage: "arrow.triangle.turn.up.right.diamond") {
-            if let selected { editor.beginRelationship(from: selected) }
+        Group {
+            Button("Floating Topic", systemImage: "rectangle.dashed") { editor.addFloatingTopic() }
+            Button("Relationship", systemImage: "arrow.triangle.turn.up.right.diamond") {
+                if let selected { editor.beginRelationship(from: selected) }
+            }
+            .disabled(selected == nil)
+            Button("Boundary", systemImage: "square.dashed") {
+                if selected != nil { editor.addBoundaryFromSelection() }
+            }
+            .disabled(selected == nil || selected == editor.model.root.id)
+            Divider()
+            Button("Note", systemImage: "note.text.badge.plus") {
+                if let selected { editor.addNote(to: selected) }
+            }
+            .disabled(selected == nil)
+            Button("Handwritten Note", systemImage: "pencil.and.scribble") {
+                if let selected { editor.addDrawing(to: selected) }
+            }
+            .disabled(selected == nil)
+            Button("Attach File…", systemImage: "paperclip") {
+                if let selected { editor.beginAttachFile(to: selected) }
+            }
+            .disabled(selected == nil)
+            Button("Link…", systemImage: "link") {
+                if let selected { editor.beginEditLink(selected) }
+            }
+            .disabled(selected == nil)
+            Button("Task", systemImage: "checkmark.circle") {
+                if let selected { editor.convertToTask(selected) }
+            }
+            .disabled(selected == nil || selected.map { editor.task(of: $0) != nil } == true)
         }
-        .disabled(selected == nil)
-        Button("Boundary", systemImage: "square.dashed") {
-            if selected != nil { editor.addBoundaryFromSelection() }
-        }
-        .disabled(selected == nil || selected == editor.model.root.id)
-        Divider()
-        Button("Note", systemImage: "note.text.badge.plus") {
-            if let selected { editor.addNote(to: selected) }
-        }
-        .disabled(selected == nil)
-        Button("Handwritten Note", systemImage: "pencil.and.scribble") {
-            if let selected { editor.addDrawing(to: selected) }
-        }
-        .disabled(selected == nil)
-        Button("Attach File…", systemImage: "paperclip") {
-            if let selected { editor.beginAttachFile(to: selected) }
-        }
-        .disabled(selected == nil)
-        Button("Link…", systemImage: "link") {
-            if let selected { editor.beginEditLink(selected) }
-        }
-        .disabled(selected == nil)
-        Button("Task", systemImage: "checkmark.circle") {
-            if let selected { editor.convertToTask(selected) }
-        }
-        .disabled(selected == nil || selected.map { editor.task(of: $0) != nil } == true)
+        // Read-only map (WP15): nothing to insert.
+        .disabled(editor.isReadOnly)
     }
 }

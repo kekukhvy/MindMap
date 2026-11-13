@@ -21,6 +21,8 @@ extension EditorController {
 
     /// ⌘K / "Add Link…" / "Edit Link…": shows the link editor.
     func beginEditLink(_ id: UUID? = nil, mode: LinkEditorSheet.Mode? = nil) {
+        // Read-only map (WP15): no edit starts.
+        guard requireEditable() else { return }
         commitEditing()
         cancelPick()
         guard let target = id ?? selectedID, model.map.node(withID: target) != nil else { return }

@@ -115,6 +115,8 @@ extension EditorController {
 
     /// "Choose Date…": the date picker popover on the topic.
     func beginDueDatePicker(_ id: UUID? = nil) {
+        // Read-only map (WP15): no edit starts.
+        guard requireEditable() else { return }
         guard let target = id ?? selectedID, scene.nodes[target] != nil else { return }
         commitEditing()
         select(target)
@@ -171,6 +173,11 @@ extension EditorController {
     }
 
     func updateTaskPanelDrag(_ translation: CGSize) {
+        // Read-only map (WP15): the panel stays where it is.
+        guard canEdit else {
+            if taskPanelDrag == nil { showReadOnlyNotice() }
+            return
+        }
         taskPanelDrag = translation
     }
 

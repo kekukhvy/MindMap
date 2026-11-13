@@ -98,6 +98,8 @@ extension EditorController {
     /// Starts editing `id` (default: selection). `replacement` replaces the
     /// text (typing on a selected node); otherwise all text is selected.
     func beginEditing(_ id: UUID? = nil, replacement: String? = nil) {
+        // Read-only map (WP15): no edit starts.
+        guard requireEditable() else { return }
         guard let id = id ?? selectedID, let node = model.map.node(withID: id) else { return }
         if let editingID, editingID != id { commitEditing() }
         selectedIDs = [id]
@@ -127,6 +129,11 @@ extension EditorController {
     /// Live drag of `id`: drop target + placement under the pointer
     /// (`freeMove` = no target, the drop moves the topic freely).
     func updateDrag(_ id: UUID, translation: CGSize, location: CGPoint, freeMove: Bool = false) {
+        // Read-only map (WP15): topics stay put (the canvas pans instead).
+        guard canEdit else {
+            if drag == nil { showReadOnlyNotice() }
+            return
+        }
         if editingID != nil { commitEditing() }
         cancelPick()
         let point = viewport.toMap(location)
@@ -310,6 +317,8 @@ extension EditorController {
     @discardableResult
     func perform(_ command: EditorCommand) -> Bool {
         guard editingID == nil, labelEditing == nil else { return false }
+        // Read-only map (WP15): edit keys are swallowed with the notice.
+        if command.isEdit, !requireEditable() { return true }
         switch command {
         case .addChild: addChild()
         case .addSibling: addSibling()
@@ -334,6 +343,8 @@ extension EditorController {
             addBoundaryFromSelection()
         case .selectAll:
             selectAllTopics()
+        case .toggleReadOnly:
+            toggleReadOnly()
         case .note:
             // One topic only (the Link / Note / Attachments submenus are
             // disabled for a multi-selection).

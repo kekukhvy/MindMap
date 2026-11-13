@@ -34,6 +34,7 @@ extension MindMapModel {
     func refreshMapLinks(_ updates: [UUID: MapReference]) -> Bool {
         let edits = map.updateMapLinkEdits(updates)
         guard !edits.isEmpty else { return false }
-        return perform(edits, actionName: "Update Map Links", undoManager: nil)
+        // Bookkeeping, not an edit: also on a read-only map (WP15).
+        return bypassingReadOnly { perform(edits, actionName: "Update Map Links", undoManager: nil) }
     }
 }

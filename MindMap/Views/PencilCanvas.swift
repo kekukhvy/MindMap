@@ -115,6 +115,8 @@ struct PencilCanvas: UIViewRepresentable {
     let revision: Int
     let undoManager: UndoManager?
     let fingerDrawing: Bool
+    /// Read-only map (WP15): scroll / zoom only, no ink, no tool picker.
+    var isReadOnly = false
     let flusher: DrawingFlusher
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -140,10 +142,10 @@ struct PencilCanvas: UIViewRepresentable {
         let picker = PKToolPicker()
         picker.colorUserInterfaceStyle = .light
         picker.addObserver(canvas)
-        picker.setVisible(true, forFirstResponder: canvas)
+        picker.setVisible(!isReadOnly, forFirstResponder: canvas)
         coordinator.toolPicker = picker
         apply(to: canvas)
-        DispatchQueue.main.async { canvas.becomeFirstResponder() }
+        if !isReadOnly { DispatchQueue.main.async { canvas.becomeFirstResponder() } }
         return canvas
     }
 
@@ -164,6 +166,10 @@ struct PencilCanvas: UIViewRepresentable {
         canvas.forwarder.target = undoManager
         let policy: PKCanvasViewDrawingPolicy = fingerDrawing ? .anyInput : .pencilOnly
         if canvas.drawingPolicy != policy { canvas.drawingPolicy = policy }
+        if canvas.drawingGestureRecognizer.isEnabled == isReadOnly {
+            canvas.drawingGestureRecognizer.isEnabled = !isReadOnly
+            if isReadOnly, canvas.isFirstResponder { canvas.resignFirstResponder() }
+        }
     }
 
     final class Coordinator: NSObject, PKCanvasViewDelegate {

@@ -264,6 +264,8 @@ struct PaletteContext: Equatable {
     var hasLink = false
     /// At least one selected topic can be deleted / enclosed (not central).
     var hasMovable = true
+    /// Read-only map (WP15): only folding and opening what exists.
+    var isReadOnly = false
 }
 
 enum ActionPaletteCatalog {
@@ -271,6 +273,7 @@ enum ActionPaletteCatalog {
     /// Several: Task/Done, Boundary, Collapse, Delete, More (actions valid for many).
     static func items(for context: PaletteContext) -> [PaletteItem] {
         guard context.count > 0 else { return [] }
+        if context.isReadOnly { return readOnlyItems(for: context) }
         if context.count > 1 {
             var items = [taskItem(isTask: context.allTasks, isDone: context.isDoneTask)]
             items.append(PaletteItem(action: .boundary, title: "Boundary", systemImage: "square.dashed",
@@ -295,6 +298,19 @@ enum ActionPaletteCatalog {
         items.append(PaletteItem(action: .note, title: "Note", systemImage: context.hasNote ? "note.text" : "note.text.badge.plus"))
         items.append(PaletteItem(action: .link, title: "Link", systemImage: "link"))
         items.append(taskItem(isTask: context.isTask, isDone: context.isDoneTask))
+        items.append(moreItem)
+        return items
+    }
+
+    /// Read-only map (WP15): Expand / Collapse, Open Note, Go to (link),
+    /// More (its menu shows the edit items disabled).
+    static func readOnlyItems(for context: PaletteContext) -> [PaletteItem] {
+        var items: [PaletteItem] = []
+        if context.hasChildren { items.append(collapseItem(collapsed: context.isCollapsed)) }
+        if context.count == 1 {
+            if context.hasNote { items.append(PaletteItem(action: .note, title: "Note", systemImage: "note.text")) }
+            if context.hasLink { items.append(PaletteItem(action: .link, title: "Go to", systemImage: "arrow.right.circle")) }
+        }
         items.append(moreItem)
         return items
     }

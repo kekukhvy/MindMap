@@ -20,6 +20,8 @@ enum FileImportDestination: Equatable {
 extension EditorController {
     /// "Attach File…": shows the file picker for `id` (default: selection).
     func beginAttachFile(to id: UUID? = nil) {
+        // Read-only map (WP15): no edit starts.
+        guard requireEditable() else { return }
         commitEditing()
         guard let target = id ?? selectedID, model.map.node(withID: target) != nil else { return }
         select(target)
@@ -39,7 +41,7 @@ extension EditorController {
 
     func importFiles(_ urls: [URL], to destination: FileImportDestination,
                      completion: (() -> Void)? = nil) {
-        guard !urls.isEmpty else { return }
+        guard !urls.isEmpty, requireEditable() else { return }
         AttachmentImporter.copy(urls, into: model.attachmentStore.scratchDirectory) { [weak self] results in
             self?.finishImport(results, to: destination)
             completion?()
@@ -50,7 +52,7 @@ extension EditorController {
     func importItems(_ providers: [NSItemProvider], to destination: FileImportDestination,
                      completion: (() -> Void)? = nil) {
         let files = providers.filter(AttachmentImporter.isFileLike)
-        guard !files.isEmpty else { return }
+        guard !files.isEmpty, requireEditable() else { return }
         AttachmentImporter.load(files, into: model.attachmentStore.scratchDirectory) { [weak self] results in
             self?.finishImport(results, to: destination)
             completion?()
@@ -116,6 +118,8 @@ extension EditorController {
     /// Pastes files from the clipboard onto `id` (default: selection; no
     /// selection = floating topics at the view center).
     func pasteFiles(to id: UUID? = nil) {
+        // Read-only map (WP15): no edit starts.
+        guard requireEditable() else { return }
         let destination: FileImportDestination = (id ?? selectedID).map { .topic($0) }
             ?? .canvas(CGPoint(x: viewSize.width / 2, y: viewSize.height / 2))
         #if os(macOS)

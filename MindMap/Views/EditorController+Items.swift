@@ -27,6 +27,8 @@ extension EditorController {
     /// Adds a floating topic centered at `screenPoint` (default: a free spot
     /// near the view center) and starts naming it (one undo step).
     func addFloatingTopic(at screenPoint: CGPoint? = nil) {
+        // Read-only map (WP15): no edit starts.
+        guard requireEditable() else { return }
         commitEditing()
         cancelPick()
         var position = viewport.toMap(screenPoint ?? CGPoint(x: viewSize.width / 2, y: viewSize.height / 2))
@@ -66,6 +68,8 @@ extension EditorController {
     }
 
     func beginPick(_ mode: PickMode) {
+        // Read-only map (WP15): no edit starts.
+        guard requireEditable() else { return }
         commitEditing()
         select(mode.sourceID)
         pickPointer = nil
@@ -136,6 +140,8 @@ extension EditorController {
 
     /// Starts inline editing of the item's label (shown on the canvas).
     func beginLabelEdit(_ item: CanvasItem) {
+        // Read-only map (WP15): no edit starts.
+        guard requireEditable() else { return }
         selectItem(item)
         cancelPick()
         let text: String?
@@ -208,6 +214,7 @@ extension EditorController {
     }
 
     func updateControlDrag(_ id: UUID, isStart: Bool, translation: CGSize) {
+        guard canEdit else { return }
         controlDrag = ControlPointDrag(relationshipID: id, isStart: isStart, translation: translation)
     }
 

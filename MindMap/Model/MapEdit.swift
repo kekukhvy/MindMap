@@ -21,6 +21,8 @@ enum MapEdit: Equatable {
     case setTaskPanel(TaskPanelState?)
     /// Replaces the map title (library maps, WP14b).
     case setTitle(String?)
+    /// "Lock Editing" on / off (WP15).
+    case setReadOnly(Bool)
 }
 
 extension MindMap {
@@ -96,6 +98,11 @@ extension MindMap {
             let old = self.title
             self.title = title
             return .setTitle(old)
+
+        case let .setReadOnly(value):
+            let old = isReadOnly
+            isReadOnly = value
+            return .setReadOnly(old)
         }
     }
 

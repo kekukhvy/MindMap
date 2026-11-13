@@ -75,6 +75,7 @@ struct LayoutStyleMenu: View {
         } label: {
             Label("Layout", systemImage: (current ?? .treeDown).systemImage)
         }
+        .disabled(editor.isReadOnly)
     }
 }
 
@@ -125,11 +126,15 @@ struct NodeFormatMenus: View {
 
     var body: some View {
         if let node {
-            if includesLayout { LayoutStyleMenu(editor: editor, id: id) }
-            shapeMenu(node)
-            borderMenu(node)
-            colorMenu(node)
-            lineMenu(node)
+            Group {
+                if includesLayout { LayoutStyleMenu(editor: editor, id: id) }
+                shapeMenu(node)
+                borderMenu(node)
+                colorMenu(node)
+                lineMenu(node)
+            }
+            // Read-only map (WP15): formatting is an edit.
+            .disabled(editor.isReadOnly)
         }
     }
 
@@ -242,24 +247,28 @@ struct ThemeMenuItems: View {
 
     var body: some View {
         let theme = editor.model.map.theme
-        CheckItem("XMind Pastel", checked: theme == .rainbow) {
-            editor.model.setTheme(.rainbow, undoManager: editor.undoManager)
-        }
-        CheckItem("Classic Rainbow", checked: theme == .classic) {
-            editor.model.setTheme(.classic, undoManager: editor.undoManager)
-        }
-        Menu("Single Color") {
-            ForEach(ColorPresets.all, id: \.hex) { preset in
-                CheckItem(preset.name, checked: theme == .mono(hex: preset.hex)) {
-                    editor.model.setTheme(.mono(hex: preset.hex), undoManager: editor.undoManager)
+        Group {
+            CheckItem("XMind Pastel", checked: theme == .rainbow) {
+                editor.model.setTheme(.rainbow, undoManager: editor.undoManager)
+            }
+            CheckItem("Classic Rainbow", checked: theme == .classic) {
+                editor.model.setTheme(.classic, undoManager: editor.undoManager)
+            }
+            Menu("Single Color") {
+                ForEach(ColorPresets.all, id: \.hex) { preset in
+                    CheckItem(preset.name, checked: theme == .mono(hex: preset.hex)) {
+                        editor.model.setTheme(.mono(hex: preset.hex), undoManager: editor.undoManager)
+                    }
+                }
+                Divider()
+                Button("Custom…") {
+                    let current: String
+                    if case let .mono(hex) = theme { current = hex } else { current = ColorPresets.all[4].hex }
+                    editor.colorSheet = ColorSheetRequest(target: .theme, initialHex: current)
                 }
             }
-            Divider()
-            Button("Custom…") {
-                let current: String
-                if case let .mono(hex) = theme { current = hex } else { current = ColorPresets.all[4].hex }
-                editor.colorSheet = ColorSheetRequest(target: .theme, initialHex: current)
-            }
         }
+        // Read-only map (WP15): the theme is document data.
+        .disabled(editor.isReadOnly)
     }
 }

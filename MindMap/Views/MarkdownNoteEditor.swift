@@ -35,11 +35,14 @@ struct MarkdownNoteEditor: View {
     private var storedText: String { MarkdownNote.text(model.content(of: attachment.id)) }
 
     var body: some View {
+        // Read-only map (WP15): readable, selectable, nothing typed.
+        let locked = model.isReadOnly
         VStack(spacing: 0) {
             TextField("Title", text: $title)
                 .textFieldStyle(.plain)
                 .font(.title3.weight(.semibold))
                 .focused($titleFocused)
+                .disabled(locked)
                 .onSubmit(commitTitle)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
@@ -47,9 +50,10 @@ struct MarkdownNoteEditor: View {
             if isPreview {
                 MarkdownPreview(text: text)
             } else {
-                MarkdownTextView(text: $text, monospaced: monospaced, undoManager: undoManager, onEdit: save)
+                MarkdownTextView(text: $text, monospaced: monospaced, undoManager: undoManager, focusOnAppear: !locked,
+                                 isEditable: !locked, onEdit: save)
                     .overlay(alignment: .topLeading) {
-                        if text.isEmpty {
+                        if text.isEmpty, !locked {
                             Text(MarkdownTextView.placeholder)
                                 .font(.system(size: MarkdownTextView.fontSize(monospaced: monospaced),
                                               design: monospaced ? .monospaced : .default))
@@ -96,7 +100,7 @@ struct MarkdownNoteEditor: View {
     }
 
     private func save(_ newText: String) {
-        guard didLoad, newText != storedText else { return }
+        guard didLoad, newText != storedText, !model.isReadOnly else { return }
         model.setAttachmentContent(MarkdownNote.data(newText), for: attachment.id, undoManager: undoManager)
     }
 
@@ -105,7 +109,7 @@ struct MarkdownNoteEditor: View {
     }
 
     private func commitTitle() {
-        guard didLoad else { return }
+        guard didLoad, !model.isReadOnly else { return }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             title = attachment.title

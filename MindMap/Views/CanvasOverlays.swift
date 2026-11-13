@@ -89,7 +89,8 @@ struct CanvasOverlays: View {
     // MARK: Curve handles of the selected relationship
 
     @ViewBuilder private var controlHandles: some View {
-        if case let .relationship(id)? = editor.selectedItem, let relationship = editor.relationship(id),
+        // Not on a read-only map (WP15): the curve cannot be reshaped.
+        if case let .relationship(id)? = editor.selectedItem, editor.canEdit, let relationship = editor.relationship(id),
            relationship.style.path == .curved, let path = editor.relationshipPath(id) {
             let screen = path.transformed(by: viewport)
             handleLine(from: screen.start, to: screen.control1)

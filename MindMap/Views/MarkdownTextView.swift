@@ -13,6 +13,8 @@ struct MarkdownTextView {
     /// The document's undo manager.
     var undoManager: UndoManager?
     var focusOnAppear = true
+    /// Off on a read-only map (WP15): the text can be selected and copied only.
+    var isEditable = true
     /// Called synchronously for every user edit (before SwiftUI's next
     /// update), so the document has the text even if the window closes at
     /// once (empty notes are removed on close).
@@ -119,7 +121,7 @@ extension MarkdownTextView: NSViewRepresentable {
             let length = (text as NSString).length
             textView.setSelectedRange(NSRange(location: min(selection.location, length), length: 0))
         }
-        if focusOnAppear, !context.coordinator.didFocus, let window = textView.window {
+        if focusOnAppear, isEditable, !context.coordinator.didFocus, let window = textView.window {
             context.coordinator.didFocus = true
             window.makeFirstResponder(textView)
             textView.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
@@ -133,6 +135,7 @@ extension MarkdownTextView: NSViewRepresentable {
             : NSFont.systemFont(ofSize: size)
         if textView.font != font { textView.font = font }
         textView.textColor = .textColor
+        if textView.isEditable != isEditable { textView.isEditable = isEditable }
     }
 }
 
@@ -203,7 +206,7 @@ extension MarkdownTextView: UIViewRepresentable {
             let length = (text as NSString).length
             textView.selectedRange = NSRange(location: min(selection.location, length), length: 0)
         }
-        if focusOnAppear, !context.coordinator.didFocus, textView.window != nil {
+        if focusOnAppear, isEditable, !context.coordinator.didFocus, textView.window != nil {
             context.coordinator.didFocus = true
             DispatchQueue.main.async {
                 textView.becomeFirstResponder()
@@ -219,6 +222,7 @@ extension MarkdownTextView: UIViewRepresentable {
             : UIFont.systemFont(ofSize: size)
         if textView.font != font { textView.font = font }
         textView.textColor = .label
+        if textView.isEditable != isEditable { textView.isEditable = isEditable }
     }
 }
 

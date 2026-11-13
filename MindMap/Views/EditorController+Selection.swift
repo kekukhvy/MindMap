@@ -153,6 +153,8 @@ extension EditorController {
     /// "Edit Members": the members become the topic selection; clicks then
     /// toggle topics; Done stores the selection as the members (one step).
     func beginEditBoundaryMembers(_ id: UUID) {
+        // Read-only map (WP15): no edit starts.
+        guard requireEditable() else { return }
         guard let boundary = boundary(id) else { return }
         commitEditing()
         cancelPick()

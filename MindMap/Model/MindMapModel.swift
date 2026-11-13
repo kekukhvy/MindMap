@@ -22,6 +22,15 @@ final class MindMapModel {
     /// Side split of the balanced-map topics as laid out on screen now
     /// (measured; set by the editor). nil = estimated sizes (WP17).
     @ObservationIgnored var sideSplitProvider: (() -> [UUID: BalancedSplit]?)?
+    /// Told about an edit refused because the map is read-only (WP15; the
+    /// editor shows its notice). Argument: the refused action's name.
+    @ObservationIgnored var readOnlyRejectionHandler: ((String) -> Void)?
+    /// Undo / redo of an expand / collapse runs its map change through this
+    /// (the editor keeps the toggled topic still on screen, WP17 anchoring);
+    /// arguments: the folded / unfolded topics and the change to run.
+    @ObservationIgnored var replayAnchoring: ((_ toggled: [UUID], _ apply: () -> Void) -> Void)?
+    /// > 0 while `bypassingReadOnly` runs (WP15).
+    @ObservationIgnored var readOnlyBypassDepth = 0
 
     var root: Node { map.root }
 
@@ -67,10 +76,12 @@ final class MindMapModel {
     @discardableResult
     func perform(_ edits: [MapEdit], actionName: String, undoManager: UndoManager?,
                  coalesceKey: UUID? = nil) -> Bool {
+        // Read-only maps refuse UI edits here (WP15, `MindMapModel+ReadOnly`).
+        guard admits(edits, actionName: actionName, undoManager: undoManager) else { return false }
         let edits = withStableSides(edits, undoManager: undoManager)
         var newMap = map
         guard let inverses = try? newMap.apply(edits) else { return false }
-        map = newMap
+        commit(newMap, edits: edits, undoManager: undoManager)
         lastContentStep = nil
         guard let undoManager else {
             lastStep = nil
@@ -98,12 +109,32 @@ final class MindMapModel {
               last.manager == ObjectIdentifier(undoManager), !undoManager.canRedo else {
             return perform(edits, actionName: actionName, undoManager: undoManager)
         }
+        guard admits(edits, actionName: actionName, undoManager: undoManager) else { return false }
         let edits = withStableSides(edits, undoManager: undoManager)
         var newMap = map
         guard let inverses = try? newMap.apply(edits) else { return false }
         map = newMap
         last.step.inverses = inverses + last.step.inverses
         return true
+    }
+
+    /// Installs `newMap`. An undo / redo that only folds / unfolds topics
+    /// goes through `replayAnchoring`, so ⌘Z / ⇧⌘Z of an expand keep the
+    /// toggled topic where it is on screen like the action itself did.
+    private func commit(_ newMap: MindMap, edits: [MapEdit], undoManager: UndoManager?) {
+        if let undoManager, undoManager.isUndoing || undoManager.isRedoing, let replayAnchoring {
+            let toggled = MapEdit.collapseTargets(of: edits)
+            if !toggled.isEmpty {
+                var applied = false
+                replayAnchoring(toggled) {
+                    applied = true
+                    self.map = newMap
+                }
+                if !applied { map = newMap }
+                return
+            }
+        }
+        map = newMap
     }
 
     /// `edits` plus the side edits keeping balanced-map branches where

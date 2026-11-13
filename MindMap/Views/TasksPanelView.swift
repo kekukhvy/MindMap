@@ -66,7 +66,7 @@ struct TasksPanelView: View {
                 Button("Reset Position", systemImage: "arrow.uturn.backward.circle") {
                     editor.resetTaskPanelPosition()
                 }
-                .disabled(panel.isAutoPositioned)
+                .disabled(panel.isAutoPositioned || editor.isReadOnly)
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 13 * scale, weight: .bold))
@@ -88,7 +88,7 @@ struct TasksPanelView: View {
                 .onChanged { editor.updateTaskPanelDrag($0.translation) }
                 .onEnded { _ in editor.endTaskPanelDrag() }
         )
-        .help("Drag to move the Tasks panel")
+        .help(editor.isReadOnly ? "" : "Drag to move the Tasks panel")
     }
 
     private var footer: some View {

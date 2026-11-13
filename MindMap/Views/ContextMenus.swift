@@ -22,17 +22,22 @@ struct NodeContextMenu: View {
         let info = editor.scene.nodes[id]
         let isMainRoot = id == editor.model.root.id
         let isFloatingRoot = editor.model.map.isFloatingRoot(id)
-        Button("Rename", systemImage: "pencil") { editor.beginEditing(id) }
-        Button("Add Child Topic", systemImage: "arrow.turn.down.right") {
-            editor.select(id)
-            editor.addChild()
+        // Read-only map (WP15): edit items disabled, folding / links / opening stay.
+        let locked = editor.isReadOnly
+        Group {
+            Button("Rename", systemImage: "pencil") { editor.beginEditing(id) }
+            Button("Add Child Topic", systemImage: "arrow.turn.down.right") {
+                editor.select(id)
+                editor.addChild()
+            }
+            Button("Add Sibling Topic", systemImage: "plus") {
+                editor.select(id)
+                editor.addSibling()
+            }
+            .disabled(info?.isTreeRoot ?? true)
+            LayoutStyleMenu(editor: editor, id: id)
         }
-        Button("Add Sibling Topic", systemImage: "plus") {
-            editor.select(id)
-            editor.addSibling()
-        }
-        .disabled(info?.isTreeRoot ?? true)
-        LayoutStyleMenu(editor: editor, id: id)
+        .disabled(locked)
         if info?.hasChildren == true {
             Button(info?.isCollapsed == true ? "Expand" : "Collapse",
                    systemImage: info?.isCollapsed == true ? "plus.circle" : "minus.circle") {
@@ -43,6 +48,7 @@ struct NodeContextMenu: View {
         }
         if editor.isFreelyPositioned(id) {
             Button("Reset Position", systemImage: "arrow.uturn.backward.circle") { editor.resetPositions(in: id) }
+                .disabled(locked)
         }
         if isMainRoot {
             Divider()
@@ -51,17 +57,20 @@ struct NodeContextMenu: View {
         Divider()
         TopicSubmenusView(facts: editor.menuFacts(for: id)) { editor.performMenuAction($0, on: id) }
         Divider()
-        Button("Relationship", systemImage: "arrow.triangle.turn.up.right.diamond") {
-            editor.beginRelationship(from: id)
+        Group {
+            Button("Relationship", systemImage: "arrow.triangle.turn.up.right.diamond") {
+                editor.beginRelationship(from: id)
+            }
+            if !isMainRoot {
+                Button("Boundary", systemImage: "square.dashed") { editor.addBoundaryFromSelection(id) }
+            }
+            if isFloatingRoot {
+                Button("Attach to…", systemImage: "link") { editor.beginAttach(id) }
+            } else if !isMainRoot {
+                Button("Detach as Floating", systemImage: "rectangle.dashed") { editor.detachAsFloating(id) }
+            }
         }
-        if !isMainRoot {
-            Button("Boundary", systemImage: "square.dashed") { editor.addBoundaryFromSelection(id) }
-        }
-        if isFloatingRoot {
-            Button("Attach to…", systemImage: "link") { editor.beginAttach(id) }
-        } else if !isMainRoot {
-            Button("Detach as Floating", systemImage: "rectangle.dashed") { editor.detachAsFloating(id) }
-        }
+        .disabled(locked)
         Divider()
         NodeFormatMenus(editor: editor, id: id, includesLayout: false)
         if !isMainRoot {
@@ -70,6 +79,7 @@ struct NodeContextMenu: View {
                 editor.select(id)
                 editor.deleteSelection()
             }
+            .disabled(locked)
         }
     }
 }
@@ -84,6 +94,7 @@ struct MultiTopicMenuItems: View {
         let ids = editor.selection
         let nodes = ids.compactMap { editor.model.map.node(withID: $0) }
         let reference = editor.model.map.node(withID: id)
+        let locked = editor.isReadOnly
         Text("\(ids.count) Topics")
         Divider()
         LayoutStyleMenu(editor: editor, id: id)
@@ -99,14 +110,14 @@ struct MultiTopicMenuItems: View {
         TopicSubmenusView(facts: editor.menuFacts(for: id)) { editor.performMenuAction($0, on: id) }
         Divider()
         Button("Add Boundary", systemImage: "square.dashed") { editor.addBoundaryFromSelection(id) }
-            .disabled(editor.model.map.movableTopics(ids).isEmpty)
+            .disabled(locked || editor.model.map.movableTopics(ids).isEmpty)
         Divider()
         NodeFormatMenus(editor: editor, id: id, includesLayout: false)
         Divider()
         Button("Delete \(ids.count) Topics", systemImage: "trash", role: .destructive) {
             editor.deleteSelectedTopics()
         }
-        .disabled(editor.model.map.movableTopics(ids).isEmpty)
+        .disabled(locked || editor.model.map.movableTopics(ids).isEmpty)
     }
 }
 
@@ -118,6 +129,7 @@ struct CanvasBackgroundMenu: View {
         Button("Add Floating Topic Here", systemImage: "rectangle.dashed") {
             editor.addFloatingTopic(at: editor.contextPoint)
         }
+        .disabled(editor.isReadOnly)
         Divider()
         OutlineMenuItems(editor: editor)
     }
@@ -134,10 +146,11 @@ struct OutlineMenuItems: View {
             Button("Collapse to Level \(level)") { editor.collapseToLevel(level) }
         }
         Button("Expand All", systemImage: "arrow.down.right.and.arrow.up.left") { editor.expandAll() }
+        // Folding stays available on a read-only map (WP15); layout does not.
         Button("Reset All Positions", systemImage: "arrow.uturn.backward.circle") { editor.resetPositions() }
-            .disabled(!editor.hasManualPosition())
+            .disabled(editor.isReadOnly || !editor.hasManualPosition())
         Button("Rebalance Map", systemImage: "arrow.left.arrow.right") { editor.rebalanceMap() }
-            .disabled(!editor.canRebalance)
+            .disabled(editor.isReadOnly || !editor.canRebalance)
     }
 }
 

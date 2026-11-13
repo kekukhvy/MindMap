@@ -75,6 +75,7 @@ struct FileAttachmentView: View {
                     .textFieldStyle(.plain)
                     .font(.title3.weight(.semibold))
                     .focused($titleFocused)
+                    .disabled(model.isReadOnly)
                     .onSubmit(commitTitle)
                 Text(details)
                     .font(.caption)
@@ -131,6 +132,7 @@ struct FileAttachmentView: View {
                 Button("Export…", systemImage: "square.and.arrow.down", action: export)
                 #endif
                 Button("Rename", systemImage: "pencil") { titleFocused = true }
+                    .disabled(model.isReadOnly)
             }
         }
     }
@@ -145,7 +147,7 @@ struct FileAttachmentView: View {
     }
 
     private func commitTitle() {
-        guard didLoad else { return }
+        guard didLoad, !model.isReadOnly else { return }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             title = attachment.title

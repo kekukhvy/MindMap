@@ -29,7 +29,8 @@ extension MindMapModel {
     }
 
     private func startDraft(_ kind: AttachmentKind, on nodeID: UUID, actionName: String) -> UUID? {
-        guard let node = map.node(withID: nodeID) else { return nil }
+        // No new notes on a read-only map (WP15).
+        guard let node = map.node(withID: nodeID), admitsContentChange(actionName, undoManager: nil) else { return nil }
         let attachment = Attachment(kind: kind, title: defaultTitle(kind, on: nodeID, in: node))
         attachmentDrafts[attachment.id] = AttachmentDraft(nodeID: nodeID, attachment: attachment,
                                                           actionName: actionName)
@@ -77,6 +78,8 @@ extension MindMapModel {
             attachmentDrafts[attachmentID] = nil
             return true
         }
+        // A read-only map keeps its (empty) notes; closing a viewer is no edit.
+        guard !map.isReadOnly else { return false }
         guard let attachment = map.attachment(withID: attachmentID)?.attachment, attachment.kind != .file,
               isContentEmpty(attachment) else { return false }
         return deleteAttachment(attachmentID, undoManager: undoManager)

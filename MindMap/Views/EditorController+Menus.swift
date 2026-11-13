@@ -11,6 +11,7 @@ extension EditorController {
         guard let reference = map.node(withID: id), !nodes.isEmpty else { return TopicMenuFacts() }
         let tasks = nodes.compactMap(\.task)
         var facts = TopicMenuFacts(count: nodes.count)
+        facts.isReadOnly = map.isReadOnly
         facts.isTask = reference.task != nil
         facts.isDoneTask = reference.task?.isDone == true
         facts.anyTask = !tasks.isEmpty
@@ -39,6 +40,11 @@ extension EditorController {
     /// Runs a submenu item on `id` (default: the primary selection).
     func performMenuAction(_ action: TopicMenuAction, on id: UUID? = nil) {
         guard let id = id ?? selectedID, model.map.node(withID: id) != nil else { return }
+        // Read-only map (WP15): only following links / opening what exists.
+        if isReadOnly, !action.isAllowedWhileReadOnly(menuFacts(for: id)) {
+            showReadOnlyNotice()
+            return
+        }
         switch action {
         case .convertToTask: convertToTask(id)
         case .toggleDone: toggleTargetsDone(id)

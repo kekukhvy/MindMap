@@ -49,11 +49,14 @@ struct ContentView: View {
             .alert("Open Map", isPresented: Binding(get: { editor.mapLinkProblem != nil },
                                                    set: { if !$0 { editor.mapLinkProblem = nil } }),
                    presenting: editor.mapLinkProblem) { problem in
-                Button("Locate…") {
-                    // After the alert is gone (one presentation at a time).
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { editor.beginLocateMap(problem.nodeID) }
+                // Relinking is an edit: not on a read-only map (WP15).
+                if editor.canEdit {
+                    Button("Locate…") {
+                        // After the alert is gone (one presentation at a time).
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { editor.beginLocateMap(problem.nodeID) }
+                    }
+                    Button("Remove Link", role: .destructive) { editor.removeLink(problem.nodeID) }
                 }
-                Button("Remove Link", role: .destructive) { editor.removeLink(problem.nodeID) }
                 Button("Cancel", role: .cancel) {}
             } message: { problem in
                 Text(problem.message)
@@ -111,12 +114,14 @@ struct ContentView: View {
                 Text(editor.fileImportError ?? "")
             }
             .onAppear {
+                editor.installModelHooks()
                 editor.undoManager = undoManager
                 editor.mapOpener = mapOpener ?? defaultMapOpener
                 editor.refreshUndoState()
                 OpenDocumentRegistry.shared.register(model, undoManager: undoManager)
                 #if DEBUG
                 DebugLaunchActions.run(editor)
+                DebugReadOnlyActions.run(editor)
                 #if os(macOS)
                 DebugFocusProbe.run(editor)
                 #endif

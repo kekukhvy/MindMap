@@ -38,6 +38,8 @@ extension MindMapModel {
               let edits = try? map.addAttachmentEdits(attachment, to: nodeID, at: index), !edits.isEmpty else {
             return false
         }
+        // Read-only map (WP15): refused before any file is written.
+        guard admits(edits, actionName: actionName, undoManager: undoManager) else { return false }
         if let content { attachmentStore.write(content, to: attachment.fileName) }
         return perform(edits, actionName: actionName, undoManager: undoManager)
     }
@@ -119,6 +121,8 @@ extension MindMapModel {
     @discardableResult
     func setAttachmentContent(_ data: Data, for attachmentID: UUID, actionName: String = "Edit Note",
                               coalescing: Bool = true, undoManager: UndoManager?, now: Date = Date()) -> Bool {
+        // Read-only map (WP15): note text / drawings do not change.
+        guard admitsContentChange(actionName, undoManager: undoManager) else { return false }
         if let draft = attachmentDrafts[attachmentID] {
             return writeDraftContent(data, draft: draft, undoManager: undoManager, now: now)
         }

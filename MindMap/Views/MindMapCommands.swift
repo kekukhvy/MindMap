@@ -30,6 +30,9 @@ struct MindMapCommands: Commands {
 
     /// Topic commands need the canvas focused and no inline editing.
     private var canAct: Bool { editor != nil && state?.isEditing == false }
+    /// Commands that change the map: also not while it is read-only (WP15).
+    private var canEdit: Bool { canAct && state?.isReadOnly == false }
+    private var isReadOnly: Bool { state?.isReadOnly == true }
     private var hasSelection: Bool { canAct && state?.hasSelection == true }
     private var hasNodeSelection: Bool { canAct && state?.hasNodeSelection == true }
     /// Only the central topic is selected (nothing to delete / enclose).
@@ -39,13 +42,13 @@ struct MindMapCommands: Commands {
         CommandMenu("Topic") {
             Button("Add Child Topic") { editor?.perform(.addChild) }
                 .plainKeyShortcut(.tab)
-                .disabled(!canAct)
+                .disabled(!canEdit)
             Button("Add Sibling Topic") { editor?.perform(.addSibling) }
                 .plainKeyShortcut(.return)
-                .disabled(!canAct)
+                .disabled(!canEdit)
             Button("Rename") { editor?.perform(.edit) }
                 .plainKeyShortcut(.space)
-                .disabled(!hasSelection)
+                .disabled(!hasSelection || isReadOnly)
             Button(state?.selectionIsCollapsed == true ? "Expand" : "Collapse") {
                 editor?.perform(.toggleCollapse)
             }
@@ -56,16 +59,16 @@ struct MindMapCommands: Commands {
             Button("Collapse Branch") { editor?.collapseBranch() }
                 .disabled(!hasNodeSelection || state?.selectionHasChildren != true)
             Button("Reset Position") { editor?.resetPositions(in: editor?.selectedID) }
-                .disabled(!hasNodeSelection || state?.selectionIsFreelyPositioned != true)
+                .disabled(!hasNodeSelection || state?.selectionIsFreelyPositioned != true || isReadOnly)
             Divider()
             Button("Floating Topic") { editor?.addFloatingTopic() }
-                .disabled(!canAct)
+                .disabled(!canEdit)
             Button("Relationship") { editor?.perform(.addRelationship) }
                 .keyboardShortcut("l", modifiers: .command)
-                .disabled(!hasNodeSelection)
+                .disabled(!hasNodeSelection || isReadOnly)
             Button("Boundary") { editor?.perform(.addBoundary) }
                 .keyboardShortcut("b", modifiers: .command)
-                .disabled(!hasNodeSelection || onlyMainRoot)
+                .disabled(!hasNodeSelection || onlyMainRoot || isReadOnly)
             Divider()
             // Task ▸ Link ▸ Note ▸ Attachments ▸ — the same submenus as the
             // topic context menu (`TopicMenus`), shortcuts registered here.
@@ -79,7 +82,16 @@ struct MindMapCommands: Commands {
                 editor?.perform(.delete)
             }
             .plainKeyShortcut(.delete)
-            .disabled(!hasSelection || onlyMainRoot)
+            .disabled(!hasSelection || onlyMainRoot || isReadOnly)
+        }
+        // Edit ▸ Lock Editing (⌥⌘L), also the toolbar lock toggle (WP15).
+        CommandGroup(after: .pasteboard) {
+            Divider()
+            Toggle(isOn: Binding(get: { isReadOnly }, set: { editor?.setReadOnly($0) })) {
+                Text(ReadOnlyToggle.title)
+            }
+            .keyboardShortcut(ReadOnlyToggle.shortcut)
+            .disabled(editor == nil)
         }
         #if os(iOS)
         CommandGroup(replacing: .help) {
@@ -107,9 +119,9 @@ struct MindMapCommands: Commands {
                 .keyboardShortcut("0", modifiers: [.command, .option])
                 .disabled(!canAct)
             Button("Reset All Positions") { editor?.resetPositions() }
-                .disabled(!canAct)
+                .disabled(!canEdit)
             Button("Rebalance Map") { editor?.rebalanceMap() }
-                .disabled(!canAct)
+                .disabled(!canEdit)
         }
     }
 }
