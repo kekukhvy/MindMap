@@ -137,14 +137,14 @@ final class MockSyncEngine: LibrarySyncEngine {
                     if database.delete(id) { deleted.append(id) } else { failedDeletes.append((id, .unknownItem)) }
                 }
             }
-            sync.handleSent(saved: saved, failed: failed, deleted: deleted, failedDeletes: failedDeletes)
+            await sync.handleSent(saved: saved, failed: failed, deleted: deleted, failedDeletes: failedDeletes)
         }
     }
 
     func fetchChanges() async throws {
         let changes = database.changes(since: token)
         token = changes.token
-        sync?.handleFetched(modifications: changes.modified, deletions: changes.deleted)
+        await sync?.handleFetched(modifications: changes.modified, deletions: changes.deleted)
     }
 }
 
@@ -156,8 +156,9 @@ struct MockDevice {
     let engine: MockSyncEngine
     let store: LibraryMapStore
 
-    init(database: MockCloudDatabase) {
-        cache = LibraryCache(root: FileManager.default.temporaryDirectory
+    /// `cache`: an existing device's folder (the app launched again).
+    init(database: MockCloudDatabase, cache existing: LibraryCache? = nil) {
+        cache = existing ?? LibraryCache(root: FileManager.default.temporaryDirectory
             .appendingPathComponent("LibraryTest-\(UUID().uuidString)"))
         sync = LibrarySync(cache: cache)
         engine = MockSyncEngine(database: database)
@@ -603,14 +604,171 @@ final class CallbackCheckingEngine: LibrarySyncEngine {
         let sent = CKRecord(recordType: LibraryRecordType.map, recordID: recordID)
         let serverWithoutPayload = CKRecord(recordType: LibraryRecordType.map, recordID: recordID)
 
-        CallbackCheckingEngine.$inCallback.withValue(true) {
-            sync.handleSent(saved: [], failed: [(sent, .conflict(serverRecord: serverWithoutPayload))],
-                            deleted: [], failedDeletes: [])
+        await CallbackCheckingEngine.$inCallback.withValue(true) {
+            await sync.handleSent(saved: [], failed: [(sent, .conflict(serverRecord: serverWithoutPayload))],
+                                  deleted: [], failedDeletes: [])
         }
         await engine.untilFetched()
 
         #expect(engine.fetchCount == 1)
         #expect(engine.reentrantCalls == 0)
+    }
+}
+
+// MARK: - Stuck sync (Mac and iPad out of sync, 2026-11-13)
+
+/// Stands in for an open iPad editor: `UIDocument` gives up its file to a
+/// writer by running a block synchronously on the main thread.
+final class MainThreadRelinquishingPresenter: NSObject, NSFilePresenter, @unchecked Sendable {
+    /// How long the main thread may stay busy before it counts as blocked.
+    static let mainThreadWait: TimeInterval = 3
+    let presentedItemURL: URL?
+    let presentedItemOperationQueue = OperationQueue()
+    private(set) var mainThreadWasBlocked = false
+
+    init(url: URL) {
+        presentedItemURL = url
+    }
+
+    func relinquishPresentedItem(toWriter writer: @escaping @Sendable ((@Sendable () -> Void)?) -> Void) {
+        let reached = DispatchSemaphore(value: 0)
+        DispatchQueue.main.async { reached.signal() }
+        if reached.wait(timeout: .now() + Self.mainThreadWait) == .timedOut { mainThreadWasBlocked = true }
+        writer(nil)
+    }
+}
+
+@MainActor
+@Suite struct LibraryStuckSyncTests {
+    private let readOnly = 0o555
+    private let writable = 0o755
+
+    /// iPad: the fetched version of the open map was written by a
+    /// coordinated write on the main thread, which the open document needs
+    /// to give the file up: the app hung until the watchdog killed it.
+    @Test(.timeLimit(.minutes(1)))
+    func fetchedVersionOfAMapOpenInAnEditorIsWrittenWithoutBlockingTheMainThread() async throws {
+        let db = MockCloudDatabase()
+        let (a, b, id) = try await sharedMap(db)
+        var onA = try a.map(id)
+        rename("X", to: "X (A)", in: &onA)
+        try a.save(onA, id: id, modified: t0)
+        try await a.syncNow()
+
+        let editor = MainThreadRelinquishingPresenter(url: try #require(b.cache.packageURL(for: id)))
+        NSFileCoordinator.addFilePresenter(editor)
+        defer { NSFileCoordinator.removeFilePresenter(editor) }
+        try await b.engine.fetchChanges()
+
+        #expect(!editor.mainThreadWasBlocked)
+        #expect(try b.map(id).root.children.map(\.text) == ["X (A)", "Y"])
+    }
+
+    /// iPad: after the kill the fetched version stayed staged, and the
+    /// engine does not fetch it again.
+    @Test func versionFetchedBeforeTheAppWasKilledIsIntegratedAtTheNextLaunch() async throws {
+        let db = MockCloudDatabase()
+        let (a, b, id) = try await sharedMap(db)
+        var onA = try a.map(id)
+        rename("X", to: "X (A)", in: &onA)
+        try a.save(onA, id: id, modified: t0)
+        try await a.syncNow()
+
+        // The package write fails (stands in for the kill while it waited).
+        let folder = try #require(b.cache.packageURL(for: id)).deletingLastPathComponent().path
+        try FileManager.default.setAttributes([.posixPermissions: readOnly], ofItemAtPath: folder)
+        try await b.engine.fetchChanges()
+        try FileManager.default.setAttributes([.posixPermissions: writable], ofItemAtPath: folder)
+        #expect(try b.map(id).root.children.map(\.text) == ["X", "Y"])
+
+        let relaunched = MockDevice(database: db, cache: b.cache)
+        await relaunched.sync.integrateStagedChanges()
+        #expect(try relaunched.map(id).root.children.map(\.text) == ["X (A)", "Y"])
+    }
+
+    /// Mac: a note marked "downloading" although the server has the file
+    /// uploaded from here blocked every later upload of the map.
+    @Test func fileTheServerHasFromHereIsNotWaitedFor() async throws {
+        let db = MockCloudDatabase()
+        let (a, b, id) = try await sharedMap(db)
+        var note = Attachment(kind: .markdown, title: "Note")
+        note.fileName = "\(note.id.uuidString).md"
+        var withNote = try a.map(id)
+        withNote.root.children[0].attachments = [note]
+        try a.save(withNote, id: id, modified: t0, files: [note.fileName: Data("v1".utf8)])
+        try await a.syncNow()
+        var state = a.cache.loadState()
+        state.maps[id]?.missingAttachments = [note.fileName]
+        a.cache.saveState(state)
+
+        let relaunched = MockDevice(database: db, cache: a.cache)
+        var onA = try relaunched.map(id)
+        rename("X", to: "X (A)", in: &onA)
+        try relaunched.save(onA, id: id, modified: t0.addingTimeInterval(10))
+        try await relaunched.engine.sendChanges()
+        try await b.syncNow()
+
+        #expect(try b.map(id).root.children.map(\.text) == ["X (A)", "Y"])
+        #expect(b.attachmentData(id, note.fileName) == Data("v1".utf8))
+    }
+
+    /// Mac: an upload queued before a fetched version's files arrived went
+    /// out without them; the server's map lost the note and this device
+    /// later rolled back to the staged version.
+    @Test func uploadQueuedBeforeFilesStartedDownloadingWaitsForThem() async throws {
+        let db = MockCloudDatabase()
+        let (a, b, id) = try await sharedMap(db)
+        var note = Attachment(kind: .markdown, title: "Note")
+        note.fileName = "\(note.id.uuidString).md"
+        var onA = try a.map(id)
+        rename("X", to: "X (A)", in: &onA)
+        onA.root.children[0].attachments = [note]
+        try a.save(onA, id: id, modified: t0, files: [note.fileName: Data("from A".utf8)])
+        try await a.syncNow()
+
+        var onB = try b.map(id)
+        rename("Y", to: "Y (B)", in: &onB)
+        try b.save(onB, id: id, modified: t0.addingTimeInterval(10)) // upload queued
+        await b.sync.handleFetched(modifications: [try #require(db.mapRecord(id))], deletions: [])
+        try await b.engine.sendChanges()
+        await b.sync.handleFetched(modifications: [try #require(db.attachmentRecords.first)], deletions: [])
+        try await b.engine.sendChanges()
+        try await a.syncNow()
+
+        for device in [a, b] {
+            #expect(try device.map(id).root.children.map(\.text) == ["X (A)", "Y (B)"])
+            #expect(device.attachmentData(id, note.fileName) == Data("from A".utf8))
+        }
+    }
+
+    /// Mac: the state an earlier build left (its own upload went out while
+    /// an older fetched version was still staged): a later fetch of a file
+    /// of that map must not roll the map back to the staged version.
+    @Test func olderStagedVersionDoesNotRollTheMapBack() async throws {
+        let db = MockCloudDatabase()
+        let (a, b, id) = try await sharedMap(db)
+        var note = Attachment(kind: .markdown, title: "Note")
+        note.fileName = "\(note.id.uuidString).md"
+        var onA = try a.map(id)
+        rename("X", to: "X (A)", in: &onA)
+        onA.root.children[0].attachments = [note]
+        try a.save(onA, id: id, modified: t0, files: [note.fileName: Data("from A".utf8)])
+        try await a.syncNow()
+
+        var onB = try b.map(id)
+        rename("Y", to: "Y (B)", in: &onB)
+        try b.save(onB, id: id, modified: t0.addingTimeInterval(10))
+        await b.sync.handleFetched(modifications: [try #require(db.mapRecord(id))], deletions: [])
+        let package = try #require(b.cache.packageURL(for: id))
+        let merged = try #require(try LibraryPackageSnapshot.read(at: package, mapID: id))
+        var state = b.cache.loadState()
+        state.maps[id]?.revision += 1 // the earlier build uploaded the merged version
+        state.maps[id]?.syncedPayloadHash = merged.payloadHash
+        b.cache.saveState(state)
+
+        let relaunched = MockDevice(database: db, cache: b.cache)
+        await relaunched.sync.handleFetched(modifications: [try #require(db.attachmentRecords.first)], deletions: [])
+        #expect(try relaunched.map(id).root.children.map(\.text) == ["X (A)", "Y (B)"])
     }
 }
 

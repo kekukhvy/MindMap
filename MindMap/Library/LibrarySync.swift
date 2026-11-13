@@ -97,6 +97,11 @@ final class LibrarySync {
         meta.title = snapshot.title
         meta.isEncrypted = snapshot.isEncrypted
         meta.modified = snapshot.modified
+        // A file the server has as it is here (e.g. uploaded from here since)
+        // is not waiting for a download any more.
+        meta.missingAttachments = meta.missingAttachments.filter {
+            meta.syncedAttachments[$0] == nil || meta.syncedAttachments[$0] != snapshot.attachmentHashes[$0]
+        }
         state.maps[id] = meta
         persist()
         // Files of the server version still downloading: uploading now
@@ -140,6 +145,9 @@ final class LibrarySync {
     func record(for recordID: CKRecord.ID) -> CKRecord? {
         switch LibraryRecordID.parse(recordID) {
         case let .map(id)?:
+            // Queued before files of the server version started downloading:
+            // not now (see `checkForLocalChanges`); queued again once they are here.
+            guard state.maps[id]?.missingAttachments.isEmpty != false else { return nil }
             guard let url = cache.packageURL(for: id),
                   let snapshot = try? LibraryPackageSnapshot.read(at: url, mapID: id),
                   let staged = try? cache.stageUpload(snapshot.payload, name: id.uuidString + ".payload") else { return nil }
@@ -164,7 +172,7 @@ final class LibrarySync {
     // MARK: - Send results
 
     func handleSent(saved: [CKRecord], failed: [(CKRecord, LibrarySaveFailure)],
-                    deleted: [CKRecord.ID], failedDeletes: [(CKRecord.ID, LibrarySaveFailure)]) {
+                    deleted: [CKRecord.ID], failedDeletes: [(CKRecord.ID, LibrarySaveFailure)]) async {
         var recheck = Set<UUID>()
         for record in saved {
             defer { cleanUpStaged(record.recordID) }
@@ -192,7 +200,7 @@ final class LibrarySync {
         }
         for (record, failure) in failed {
             cleanUpStaged(record.recordID)
-            if let id = handleSaveFailure(record, failure) { recheck.insert(id) }
+            if let id = await handleSaveFailure(record, failure) { recheck.insert(id) }
         }
         for recordID in deleted {
             switch LibraryRecordID.parse(recordID) {
@@ -217,7 +225,7 @@ final class LibrarySync {
     }
 
     /// Returns the map to check again for changes to upload.
-    private func handleSaveFailure(_ record: CKRecord, _ failure: LibrarySaveFailure) -> UUID? {
+    private func handleSaveFailure(_ record: CKRecord, _ failure: LibrarySaveFailure) async -> UUID? {
         guard let parsed = LibraryRecordID.parse(record.recordID) else { return nil }
         switch (parsed, failure) {
         case let (.map(id), .conflict(serverRecord)):
@@ -228,7 +236,7 @@ final class LibrarySync {
                 fetchChangesAfterCallback()
                 return nil
             }
-            handleFetched(modifications: [serverRecord], deletions: [])
+            await handleFetched(modifications: [serverRecord], deletions: [])
             if state.maps[id]?.missingAttachments.isEmpty == false {
                 // The conflict carried only the Map record: fetch its files.
                 fetchChangesAfterCallback()
@@ -267,7 +275,7 @@ final class LibrarySync {
 
     // MARK: - Fetched changes
 
-    func handleFetched(modifications: [CKRecord], deletions: [(CKRecord.ID, CKRecord.RecordType)]) {
+    func handleFetched(modifications: [CKRecord], deletions: [(CKRecord.ID, CKRecord.RecordType)]) async {
         var touched: [UUID] = []
         for record in modifications {
             do {
@@ -293,7 +301,7 @@ final class LibrarySync {
         for (recordID, _) in deletions {
             switch LibraryRecordID.parse(recordID) {
             case let .map(id)?:
-                handleRemoteDeletion(id)
+                await handleRemoteDeletion(id)
             case let .attachment(id, name)?:
                 // The server copy is gone; the map record decides whether
                 // the file stays (integration), a later upload re-creates it.
@@ -303,7 +311,14 @@ final class LibrarySync {
             }
         }
         var seen = Set<UUID>()
-        for id in touched where seen.insert(id).inserted { integrate(id) }
+        for id in touched where seen.insert(id).inserted { await integrate(id) }
+        persist()
+    }
+
+    /// Fetched versions not integrated yet (the app was quit or killed
+    /// meanwhile; the engine does not fetch them again).
+    func integrateStagedChanges() async {
+        for id in cache.incomingMapIDs() { await integrate(id) }
         persist()
     }
 
@@ -324,7 +339,7 @@ final class LibrarySync {
         scanForLocalChanges()
     }
 
-    private func handleRemoteDeletion(_ id: UUID) {
+    private func handleRemoteDeletion(_ id: UUID) async {
         try? FileManager.default.removeItem(at: cache.incomingFolder(for: id))
         guard let meta = state.maps[id] else { return }
         if let url = cache.packageURL(for: id), let local = try? LibraryPackageSnapshot.read(at: url, mapID: id),
@@ -335,7 +350,8 @@ final class LibrarySync {
             engine?.add(Self.pendingChanges(for: local, meta: state.maps[id] ?? MapSyncMeta()))
             return
         }
-        cache.removeMap(id)
+        let files = cache
+        await Task.detached { files.removeMap(id) }.value // off the main thread, see `writePackage`
         state.maps[id] = nil
         onLibraryChanged?()
     }
@@ -392,12 +408,16 @@ final class LibrarySync {
     // MARK: Integration
 
     /// Brings the fetched version of map `id` into the cache.
-    private func integrate(_ id: UUID) {
+    private func integrate(_ id: UUID) async {
         let incoming = loadIncoming(id)
         guard let fetched = incoming.remote, let remotePayload = try? Data(contentsOf: incomingPayloadURL(id)) else {
             return // only attachments so far: wait for the map record
         }
         let meta = state.maps[id] ?? MapSyncMeta()
+        if Self.isSuperseded(fetched, by: meta) {
+            finishIncoming(id, missing: [])
+            return
+        }
         let local = cache.packageURL(for: id).flatMap { try? LibraryPackageSnapshot.read(at: $0, mapID: id) }
 
         // Remote attachment files: downloaded now, or already here. An
@@ -435,23 +455,47 @@ final class LibrarySync {
                local.payloadHash != remote.payloadHash || local.attachmentHashes != remote.attachmentHashes {
                 if !local.isEncrypted, !remote.isEncrypted, let base = cache.base(for: id), let localMap = local.map,
                    let remoteMap = try? MindMapPackage.decode(remotePayload) {
-                    try merge(id, base: base, local: local, localMap: localMap, remote: remote, remoteMap: remoteMap,
+                    try await merge(id, base: base, local: local, localMap: localMap, remote: remote, remoteMap: remoteMap,
                               remotePayload: remotePayload, remoteFiles: remoteFiles, meta: meta)
                 } else {
-                    try keepBothVersions(id, local: local, remote: remote, remotePayload: remotePayload,
+                    try await keepBothVersions(id, local: local, remote: remote, remotePayload: remotePayload,
                                          remoteFiles: remoteFiles)
                 }
             } else {
-                try writeRemotePackage(remote, payload: remotePayload, files: remoteFiles, as: id)
+                try await writeRemotePackage(remote, payload: remotePayload, files: remoteFiles, as: id)
             }
             adopt(remote, payload: remotePayload, missing: missing, attachmentSystemFields: incoming.systemFields, for: id)
             // Renamed elsewhere: the package (window title) follows.
-            if let title = cache.plainTitle(of: id) { _ = try? cache.renamePackage(of: id, toTitle: title) }
+            if let title = cache.plainTitle(of: id) { try? await renamePackage(of: id, toTitle: title) }
             finishIncoming(id, missing: missing)
         } catch {
             lastError = "“\(remote.title ?? LibraryTitle.lockedMap)” could not be updated: \(error.localizedDescription)"
         }
         onLibraryChanged?()
+    }
+
+    /// A staged version older than the one adopted since (left behind while
+    /// its files were downloading, then this device uploaded a newer one):
+    /// integrating it would roll the map back.
+    static func isSuperseded(_ remote: RemoteMap, by meta: MapSyncMeta) -> Bool {
+        guard remote.revision < meta.revision else { return false }
+        // A record deleted and saved again starts its revisions anew.
+        let created = { LibraryRecordCodec.record(fromSystemFields: $0)?.creationDate }
+        return created(remote.systemFields) == created(meta.systemFields)
+    }
+
+    /// Package writes and renames run off the main thread: an open iPad
+    /// editor (`UIDocument`) gives up the file on the main thread, so a
+    /// coordinated write waiting there never finishes (the app hangs until
+    /// the watchdog kills it, the fetched version stays unintegrated).
+    private func writePackage(_ wrapper: FileWrapper, for id: UUID, title: String) async throws {
+        let files = cache
+        _ = try await Task.detached { try files.writePackage(wrapper, for: id, title: title) }.value
+    }
+
+    private func renamePackage(of id: UUID, toTitle title: String) async throws {
+        let files = cache
+        _ = try await Task.detached { try files.renamePackage(of: id, toTitle: title) }.value
     }
 
     /// The server state becomes this device's base.
@@ -478,10 +522,10 @@ final class LibrarySync {
     }
 
     private func writeRemotePackage(_ remote: RemoteMap, payload: Data, files: [String: URL], as id: UUID,
-                                    title: String? = nil) throws {
+                                    title: String? = nil) async throws {
         let wrapper = try Self.package(payload: payload, lockHeader: remote.isEncrypted ? remote.lockHeader : nil,
                                        files: files)
-        try cache.writePackage(wrapper, for: id, title: title ?? remote.title ?? LibraryTitle.lockedMap)
+        try await writePackage(wrapper, for: id, title: title ?? remote.title ?? LibraryTitle.lockedMap)
     }
 
     /// Package folder wrapper: plain (`map.json`) or locked (`lock.json` +
@@ -506,7 +550,7 @@ final class LibrarySync {
 
     /// Both sides changed a plain map: per-topic three-way merge.
     private func merge(_ id: UUID, base: MindMap, local: LibraryPackageSnapshot, localMap: MindMap, remote: RemoteMap,
-                       remoteMap: MindMap, remotePayload: Data, remoteFiles: [String: URL], meta: MapSyncMeta) throws {
+                       remoteMap: MindMap, remotePayload: Data, remoteFiles: [String: URL], meta: MapSyncMeta) async throws {
         let result = MapMerge.merge(base: base, local: .init(map: localMap, modified: local.modified),
                                     remote: .init(map: remoteMap, modified: remote.modified))
         let localIsNewer = local.modified >= remote.modified
@@ -526,7 +570,7 @@ final class LibrarySync {
             }
         }
         let wrapper = try Self.package(payload: try MindMapPackage.encode(result.map), lockHeader: nil, files: files)
-        try cache.writePackage(wrapper, for: id, title: LibraryTitle.title(of: result.map))
+        try await writePackage(wrapper, for: id, title: LibraryTitle.title(of: result.map))
         lastConflicts[id] = result.conflicts
     }
 
@@ -534,17 +578,17 @@ final class LibrarySync {
     /// the newer version keeps the map's identity, the other one becomes a
     /// new library map "… (conflict copy)".
     private func keepBothVersions(_ id: UUID, local: LibraryPackageSnapshot, remote: RemoteMap, remotePayload: Data,
-                                  remoteFiles: [String: URL]) throws {
+                                  remoteFiles: [String: URL]) async throws {
         let copyID = UUID()
         if local.modified >= remote.modified {
             let payload = remote.isEncrypted ? remotePayload : Self.markedAsConflictCopy(remotePayload)
-            try writeRemotePackage(remote, payload: payload, files: remoteFiles, as: copyID,
-                                   title: Self.conflictCopyTitle(remote.title))
+            try await writeRemotePackage(remote, payload: payload, files: remoteFiles, as: copyID,
+                                         title: Self.conflictCopyTitle(remote.title))
         } else {
             let payload = local.isEncrypted ? local.payload : Self.markedAsConflictCopy(local.payload)
             let wrapper = try Self.package(payload: payload, lockHeader: local.lockHeader, files: local.attachmentFiles)
-            try cache.writePackage(wrapper, for: copyID, title: Self.conflictCopyTitle(local.title))
-            try writeRemotePackage(remote, payload: remotePayload, files: remoteFiles, as: id)
+            try await writePackage(wrapper, for: copyID, title: Self.conflictCopyTitle(local.title))
+            try await writeRemotePackage(remote, payload: remotePayload, files: remoteFiles, as: id)
         }
         lastConflicts[copyID] = []
         checkForLocalChanges(copyID)

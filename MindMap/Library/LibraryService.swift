@@ -125,6 +125,7 @@ final class LibraryService {
             let engine = CloudKitSyncEngine(database: container.privateCloudDatabase, sync: sync)
             self.engine = engine
             sync.attach(engine)
+            await sync.integrateStagedChanges()
             registerForPushNotifications()
             try? await engine.fetchChanges()
         } else if !availability.isAvailable, engine != nil {

@@ -84,8 +84,8 @@ final class CloudKitSyncEngine: LibrarySyncEngine, CKSyncEngineDelegate {
                 sync.handleZoneDeleted()
             }
         case let .fetchedRecordZoneChanges(changes):
-            sync.handleFetched(modifications: changes.modifications.map(\.record),
-                               deletions: changes.deletions.map { ($0.recordID, $0.recordType) })
+            await sync.handleFetched(modifications: changes.modifications.map(\.record),
+                                     deletions: changes.deletions.map { ($0.recordID, $0.recordType) })
         case let .sentDatabaseChanges(sent):
             for failure in sent.failedZoneSaves {
                 Self.log.error("zone save failed: \(failure.error.localizedDescription, privacy: .public)")
@@ -100,8 +100,8 @@ final class CloudKitSyncEngine: LibrarySyncEngine, CKSyncEngineDelegate {
                 }
                 failed.append((failure.record, mapped))
             }
-            sync.handleSent(saved: sent.savedRecords, failed: failed, deleted: sent.deletedRecordIDs,
-                            failedDeletes: sent.failedRecordDeletes.map { ($0.key, Self.failure($0.value)) })
+            await sync.handleSent(saved: sent.savedRecords, failed: failed, deleted: sent.deletedRecordIDs,
+                                  failedDeletes: sent.failedRecordDeletes.map { ($0.key, Self.failure($0.value)) })
         default:
             break
         }

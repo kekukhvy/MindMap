@@ -39,8 +39,15 @@ final class LibraryCache: @unchecked Sendable {
     var syncFolder: URL { root.appendingPathComponent("Sync", isDirectory: true) }
     var outboxFolder: URL { syncFolder.appendingPathComponent("outbox", isDirectory: true) }
 
+    var incomingRoot: URL { syncFolder.appendingPathComponent("incoming", isDirectory: true) }
+
     func incomingFolder(for id: UUID) -> URL {
-        syncFolder.appendingPathComponent("incoming/\(id.uuidString)", isDirectory: true)
+        incomingRoot.appendingPathComponent(id.uuidString, isDirectory: true)
+    }
+
+    /// Maps with fetched files waiting in `incoming/`.
+    func incomingMapIDs() -> [UUID] {
+        ((try? FileManager.default.contentsOfDirectory(atPath: incomingRoot.path)) ?? []).compactMap(UUID.init(uuidString:))
     }
 
     // MARK: Maps
