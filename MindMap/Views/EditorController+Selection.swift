@@ -133,7 +133,7 @@ extension EditorController {
         commitEditing()
         let reference = (id ?? selectedID).flatMap(model.map.node(withID:))
         let collapse = !(reference?.isCollapsed ?? false)
-        model.setCollapsed(collapse, for: ids, undoManager: undoManager)
+        keepingOnScreen(id ?? selectedID) { _ = model.setCollapsed(collapse, for: ids, undoManager: undoManager) }
         validateSelection()
     }
 

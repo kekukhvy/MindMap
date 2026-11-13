@@ -104,7 +104,8 @@ extension EditorController {
     /// scrolls / zooms it into view with animation.
     func show(_ id: UUID) {
         guard model.map.contains(id) else { return }
-        model.revealTopic(id, undoManager: undoManager)
+        // The collapsed ancestor that opens stays put; then scroll if needed.
+        keepingOnScreen(id) { _ = model.revealTopic(id, undoManager: undoManager) }
         select(id)
         guard let frame = scene.layout.frames[id] else { return }
         let target = viewport.focusing(frame, in: viewSize)

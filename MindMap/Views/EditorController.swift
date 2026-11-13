@@ -219,7 +219,7 @@ final class EditorController {
 
     @ObservationIgnored let measurer = NodeMeasurer()
     @ObservationIgnored private var cachedScene: (map: MindMap, editing: UUID?, draft: String, day: Date,
-                                                  scene: MapScene)?
+                                                  panel: CGRect?, scene: MapScene)?
     /// Current time (due chips, completion stamps); replaced by tests.
     @ObservationIgnored var now: () -> Date = Date.init
     @ObservationIgnored private var didPlaceViewport = false
@@ -229,6 +229,8 @@ final class EditorController {
         #if DEBUG
         Self.debugInstances.append(WeakEditor(editor: self))
         #endif
+        // Main topics keep the side they are shown on (WP17).
+        model.sideSplitProvider = { [weak self] in self?.scene.layout.balanced }
     }
 
     #if DEBUG
@@ -246,13 +248,15 @@ final class EditorController {
         let now = now()
         // Due chips say "Today" / overdue: rebuild when the day changes.
         let day = Calendar.current.startOfDay(for: now)
+        // A dragged Tasks panel stays put: topics keep clear of it (WP17).
+        let panel = fixedTaskPanelFrame
         if let cachedScene, cachedScene.editing == editing, cachedScene.draft == draft, cachedScene.day == day,
-           cachedScene.map == map {
+           cachedScene.panel == panel, cachedScene.map == map {
             return cachedScene.scene
         }
         let scene = MapScene.build(map: map, measurer: measurer, editing: editing.map { ($0, draft) }, now: now,
-                                   hidesAttachment: hidesAttachmentIcon)
-        cachedScene = (map, editing, draft, day, scene)
+                                   fixedObstacles: panel.map { [$0] } ?? [], hidesAttachment: hidesAttachmentIcon)
+        cachedScene = (map, editing, draft, day, panel, scene)
         return scene
     }
 

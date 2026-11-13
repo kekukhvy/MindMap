@@ -129,6 +129,13 @@ extension EditorController {
                                 showsCompleted: taskPanelShowsCompleted, showsAll: taskPanelShowsAll, now: now())
     }
 
+    /// Frame of the Tasks panel when the user dragged it somewhere (its
+    /// position does not depend on the layout); nil when automatic / hidden.
+    var fixedTaskPanelFrame: CGRect? {
+        TaskPanelLayout.fixedFrame(map: model.map, lingering: lingeringTaskIDs,
+                                   showsCompleted: taskPanelShowsCompleted, showsAll: taskPanelShowsAll)
+    }
+
     /// Panel checkbox: completes the task (undoable); the checked row stays
     /// for `taskLingerDelay`, then fades out. A done row reopens the task.
     func togglePanelTask(_ id: UUID) {

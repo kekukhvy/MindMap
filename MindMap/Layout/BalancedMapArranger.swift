@@ -1,9 +1,12 @@
 import CoreGraphics
 import Foundation
 
-/// XMind "Mind Map": children split into a right group (first children)
-/// and a left group, balanced by subtree height. The left group grows
-/// leftwards (mirrored) and its descendants inherit the left direction.
+/// XMind "Mind Map": children split into a right group and a left group.
+/// Each child keeps its stored `Node.side` (WP17: expanding / collapsing
+/// never moves a branch across the node); children without one are split
+/// by subtree height (`BalancedSplit.sides`). Each group keeps document
+/// order top to bottom. The left group grows leftwards (mirrored) and its
+/// descendants inherit the left direction.
 struct BalancedMapArranger: SubtreeArranger {
     func arrange(
         _ node: Node,
@@ -16,30 +19,29 @@ struct BalancedMapArranger: SubtreeArranger {
         let measured = node.children.map {
             ChildSubtree(id: $0.id, layout: layoutChild($0, context.horizontal(.right)))
         }
-        let rightCount = BalancedMapArranger.rightCount(heights: measured.map { $0.layout.bounds.height })
-        let right = Array(measured.prefix(rightCount))
-        let left = node.children.dropFirst(rightCount).map {
-            ChildSubtree(id: $0.id, layout: layoutChild($0, context.horizontal(.left)))
+        let heights = measured.map { $0.layout.bounds.height }
+        let sides = BalancedSplit.sides(stored: node.children.map(\.side), heights: heights)
+        var right: [ChildSubtree] = []
+        var left: [ChildSubtree] = []
+        for (index, child) in node.children.enumerated() {
+            if sides[index] == .right {
+                right.append(measured[index])
+            } else {
+                left.append(ChildSubtree(id: child.id, layout: layoutChild(child, context.horizontal(.left))))
+            }
         }
         HorizontalArranger.stack(right, side: .right, parentID: node.id, nodeSize: nodeSize,
                                  context: context, spacing: spacing, into: &result)
         HorizontalArranger.stack(left, side: .left, parentID: node.id, nodeSize: nodeSize,
                                  context: context, spacing: spacing, into: &result)
+        let ids = node.children.map(\.id)
+        result.balanced[node.id] = BalancedSplit(order: ids, sides: Dictionary(uniqueKeysWithValues: zip(ids, sides)),
+                                                 heights: Dictionary(uniqueKeysWithValues: zip(ids, heights)))
         return result
     }
 
-    /// Number of leading children placed on the right: the right side takes
-    /// children while its total height stays closest to half of the total.
+    /// Classic split (kept for callers / tests): see `BalancedSplit.rightCount`.
     static func rightCount(heights: [CGFloat]) -> Int {
-        guard heights.count > 1 else { return heights.count }
-        let total = heights.reduce(0, +)
-        var sum: CGFloat = 0
-        var count = 0
-        for height in heights {
-            if count > 0 && sum + height / 2 > total / 2 { break }
-            sum += height
-            count += 1
-        }
-        return min(count, heights.count - 1)
+        BalancedSplit.rightCount(heights: heights)
     }
 }

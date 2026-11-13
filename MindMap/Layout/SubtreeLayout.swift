@@ -15,6 +15,8 @@ struct SubtreeLayout {
     /// `bounds`): auto-laid sibling subtrees at every ancestor level are
     /// shifted out of their way (`ObstacleAvoidance`).
     var obstacles: [LayoutObstacle]
+    /// Side split of every balanced-map node inside (position-independent).
+    var balanced: [UUID: BalancedSplit] = [:]
 
     init(id: UUID, size: CGSize) {
         let frame = CGRect(origin: .zero, size: size)
@@ -36,7 +38,15 @@ struct SubtreeLayout {
         }
         connectors += child.connectors.map { $0.offsetBy(dx: dx, dy: dy) }
         obstacles += child.obstacles.map { $0.offsetBy(dx: dx, dy: dy) }
+        balanced.merge(child.balanced) { current, _ in current }
         if unionBounds { bounds = bounds.union(child.bounds.offsetBy(dx: dx, dy: dy)) }
+    }
+
+    /// Everything drawn: frames, boundary pieces and free subtrees.
+    var extent: CGRect {
+        let frames = self.frames.values.reduce(bounds) { $0.union($1) }
+        let pieces = boundaryRects.values.reduce(frames) { $0.union($1) }
+        return obstacles.reduce(pieces) { $0.union($1.rect) }
     }
 
     func offsetBy(dx: CGFloat, dy: CGFloat) -> SubtreeLayout {

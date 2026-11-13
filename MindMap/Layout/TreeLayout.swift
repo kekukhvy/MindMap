@@ -8,6 +8,14 @@ import Foundation
 ///
 /// Coordinates: the root node's center is at (0, 0); floating topics are
 /// centered on their `position`. Collapsed subtrees are omitted.
+///
+/// Collisions (WP17): user-placed things never move — free (manual)
+/// subtrees, floating topics and a dragged Tasks panel (`fixedObstacles`).
+/// Auto-laid sibling subtrees ("blocks", boundary pieces included) slide
+/// along their stacking axis off them at every level (`ObstacleAvoidance`;
+/// floating topics and fixed obstacles at the central topic's level), so
+/// the result has no overlaps, is deterministic and moves as little as
+/// possible.
 struct TreeLayout {
     struct Result: Equatable {
         /// Frame of every visible node (main tree and floating topics).
@@ -20,6 +28,8 @@ struct TreeLayout {
         var relationships: [UUID: RelationshipPath]
         /// Union of all frames and boundaries.
         var bounds: CGRect
+        /// Side split of every balanced-map topic (central topic), by its id.
+        var balanced: [UUID: BalancedSplit] = [:]
     }
 
     var spacing: LayoutSpacing
@@ -33,12 +43,18 @@ struct TreeLayout {
         layout(MindMap(root: root), size: size)
     }
 
+    /// - Parameter fixedObstacles: user-placed areas the main tree must keep
+    ///   clear of (map coordinates), e.g. a dragged Tasks panel.
     /// - Parameter size: node size provider (e.g. measured text + shape padding).
-    func layout(_ map: MindMap, size: (UUID) -> CGSize) -> Result {
-        withoutActuallyEscaping(size) { layout(map, escapingSize: $0) }
+    func layout(_ map: MindMap, fixedObstacles: [CGRect] = [], size: (UUID) -> CGSize) -> Result {
+        withoutActuallyEscaping(size) { layout(map, fixedObstacles: fixedObstacles, escapingSize: $0) }
     }
 
-    private func layout(_ map: MindMap, escapingSize size: @escaping (UUID) -> CGSize) -> Result {
+    /// Obstacle id of `fixedObstacles` (never a topic id).
+    static let fixedObstacleID = UUID(uuidString: "00000000-0000-0000-0000-00000000F1ED")!
+
+    private func layout(_ map: MindMap, fixedObstacles: [CGRect],
+                        escapingSize size: @escaping (UUID) -> CGSize) -> Result {
         // Every boundary member reserves padding around its subtree inside
         // the subtree layout, so neighbours keep clear of the outline.
         var reservations: [UUID: [Engine.Reservation]] = [:]
@@ -56,13 +72,26 @@ struct TreeLayout {
         let engine = Engine(spacing: spacing, size: size,
                             reservations: reservations.mapValues { $0.sorted { $0.rank < $1.rank } })
 
-        let rootSize = size(map.root.id)
-        var all = engine.layoutSubtree(map.root, inherited: .root, isCentral: true)
-            .offsetBy(dx: -rootSize.width / 2, dy: -rootSize.height / 2)
+        // Floating topics first: the main tree keeps clear of them.
+        var floating: [(layout: SubtreeLayout, dx: CGFloat, dy: CGFloat)] = []
+        var absolute: [LayoutObstacle] = fixedObstacles.map {
+            LayoutObstacle(id: TreeLayout.fixedObstacleID, rect: $0)
+        }
         for topic in map.floatingTopics {
             let nodeSize = size(topic.id)
             let local = engine.layoutSubtree(topic.node, inherited: .floating)
-            all.merge(local, dx: topic.position.x - nodeSize.width / 2, dy: topic.position.y - nodeSize.height / 2)
+            let dx = topic.position.x - nodeSize.width / 2, dy = topic.position.y - nodeSize.height / 2
+            floating.append((local, dx, dy))
+            absolute.append(LayoutObstacle(id: topic.id, rect: local.extent.offsetBy(dx: dx, dy: dy)))
+        }
+        let rootSize = size(map.root.id)
+        // Root-local coordinates: the central topic's frame origin is (0, 0).
+        let toLocal = CGPoint(x: rootSize.width / 2, y: rootSize.height / 2)
+        var all = engine.layoutSubtree(map.root, inherited: .root, isCentral: true,
+                                       extraObstacles: absolute.map { $0.offsetBy(dx: toLocal.x, dy: toLocal.y) })
+            .offsetBy(dx: -toLocal.x, dy: -toLocal.y)
+        for item in floating {
+            all.merge(item.layout, dx: item.dx, dy: item.dy)
         }
 
         var outlines: [UUID: BoundaryOutline] = [:]
@@ -84,7 +113,7 @@ struct TreeLayout {
         let frameBounds = all.frames.values.reduce(all.bounds) { $0.union($1) }
         let bounds = outlines.values.reduce(frameBounds) { $0.union($1.bounds) }
         return Result(frames: all.frames, connectors: all.connectors, boundaries: outlines,
-                      relationships: relationshipPaths, bounds: bounds)
+                      relationships: relationshipPaths, bounds: bounds, balanced: all.balanced)
     }
 
     /// Outline over the visible members' pieces (padded subtree areas; free
@@ -134,7 +163,10 @@ struct TreeLayout {
         }
 
         /// - Parameter isCentral: the main tree's root (uses the wider root gaps).
-        func layoutSubtree(_ node: Node, inherited: LayoutContext, isCentral: Bool = false) -> SubtreeLayout {
+        /// - Parameter extraObstacles: fixed areas (local coordinates) its
+        ///   child subtrees must keep clear of (floating topics, panel).
+        func layoutSubtree(_ node: Node, inherited: LayoutContext, isCentral: Bool = false,
+                           extraObstacles: [LayoutObstacle] = []) -> SubtreeLayout {
             let nodeSize = size(node.id)
             let spacing = isCentral ? self.spacing.forCentralTopic : self.spacing
             var layout: SubtreeLayout
@@ -163,7 +195,10 @@ struct TreeLayout {
                                     context: context, into: &layout)
                     }
                 }
+                let own = layout.obstacles.count
+                layout.obstacles += extraObstacles
                 avoidObstacles(node, style: context.style, spacing: spacing, in: &layout)
+                layout.obstacles.removeLast(layout.obstacles.count - own)
             }
             for reservation in reservations[node.id] ?? [] {
                 let rect = TreeLayout(spacing: spacing).padded(layout.bounds, hasLabel: reservation.hasLabel)

@@ -58,6 +58,27 @@ enum TaskPanelLayout {
                width: frame.width, height: rowHeight * scale)
     }
 
+    /// Frame of a panel the user dragged somewhere (`taskPanel.position`
+    /// set), without building its rows: topics keep clear of it (WP17).
+    /// Same frame as `content(...)`; nil when automatic or hidden.
+    static func fixedFrame(map: MindMap, lingering: Set<UUID>, showsCompleted: Bool, showsAll: Bool) -> CGRect? {
+        guard let state = map.taskPanel, let origin = state.position else { return nil }
+        var open = 0, kept = 0, done = 0
+        func visit(_ node: Node) {
+            if let task = node.task {
+                if !task.isDone { open += 1 } else if lingering.contains(node.id) { kept += 1 } else { done += 1 }
+            }
+            node.children.forEach(visit)
+        }
+        visit(map.root)
+        map.floatingTopics.forEach { visit($0.node) }
+        guard isVisible(openCount: open, lingeringCount: kept) else { return nil }
+        let rows = open + kept + (showsCompleted ? done : 0)
+        let overflow = rows > maxRows
+        let visible = showsAll || !overflow ? rows : maxRows
+        return CGRect(origin: origin, size: size(visibleRows: visible, hasFooter: overflow, isCollapsed: state.isCollapsed))
+    }
+
     /// Builds the panel for `map` (nil = hidden).
     static func content(map: MindMap, contentBounds: CGRect, lingering: Set<UUID>, showsCompleted: Bool,
                         showsAll: Bool, now: Date, calendar: Calendar = .current) -> TaskPanelContent? {

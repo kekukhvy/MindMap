@@ -90,7 +90,7 @@ extension EditorController {
     func toggleCollapse(_ id: UUID? = nil) {
         guard let id = id ?? selectedID, scene.nodes[id]?.hasChildren == true else { return }
         commitEditing()
-        model.toggleCollapse(id, undoManager: undoManager)
+        keepingOnScreen(id) { _ = model.toggleCollapse(id, undoManager: undoManager) }
     }
 
     // MARK: Inline editing
@@ -164,7 +164,7 @@ extension EditorController {
             switch drag.placement {
             case .child:
                 if model.map.parentID(of: drag.id) != target {
-                    model.reparent(drag.id, to: target, undoManager: undoManager)
+                    model.reparent(drag.id, to: target, side: dropSide(drag, onto: target), undoManager: undoManager)
                 }
             case .before, .after:
                 dropAsSibling(drag.id, of: target, placement: drag.placement)
@@ -186,7 +186,7 @@ extension EditorController {
         let ids = drag.movingIDs
         if let target = drag.targetID {
             switch drag.placement {
-            case .child: model.reparent(ids, to: target, undoManager: undoManager)
+            case .child: model.reparent(ids, to: target, side: dropSide(drag, onto: target), undoManager: undoManager)
             case .before, .after:
                 model.insert(ids, beside: target, after: drag.placement == .after, undoManager: undoManager)
             }
@@ -200,6 +200,14 @@ extension EditorController {
             }
             model.moveTopics(moves, undoManager: undoManager)
         }
+    }
+
+    /// Side of `target` the dragged topic was dropped on (map points; for
+    /// a balanced-map target such as the central topic).
+    func dropSide(_ drag: NodeDrag, onto target: UUID) -> BranchSide? {
+        guard let frame = scene.layout.frames[drag.id], let parent = scene.layout.frames[target] else { return nil }
+        let x = frame.midX + drag.translation.width / viewport.scale
+        return x < parent.midX ? .left : .right
     }
 
     /// Offset of the dropped topic's center from its parent's center (map points).
@@ -223,8 +231,10 @@ extension EditorController {
         let movingIndex = model.map.parentID(of: id) == parent ? siblings.firstIndex(of: id) : nil
         let index = DropTargetFinder.insertionIndex(targetIndex: targetIndex, placement: placement,
                                                     movingIndex: movingIndex)
-        guard index != movingIndex else { return }
-        model.reparent(id, to: parent, at: index, undoManager: undoManager)
+        // Beside a main topic = on its side of the central topic.
+        let side = model.map.isBalancedParent(parent) ? model.sideOf(target) : nil
+        guard index != movingIndex || (side != nil && model.map.node(withID: id)?.side != side) else { return }
+        model.reparent(id, to: parent, at: index, side: side, undoManager: undoManager)
     }
 
     // MARK: Format

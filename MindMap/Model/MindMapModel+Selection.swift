@@ -69,10 +69,12 @@ extension MindMapModel {
     }
 
     /// Moves topics under `parentID` (appended, keeping their order).
+    /// `side`: the side of a balanced-map parent they were dropped on.
     @discardableResult
-    func reparent(_ ids: [UUID], to parentID: UUID, undoManager: UndoManager?) -> Bool {
+    func reparent(_ ids: [UUID], to parentID: UUID, side: BranchSide? = nil, undoManager: UndoManager?) -> Bool {
         let targets = map.movableTopics(ids).filter { map.parentID(of: $0) != parentID }
-        let edits = map.composedEdits(for: targets) { try $0.reparentEdits($1, to: parentID) }
+        var edits = map.composedEdits(for: targets) { try $0.reparentEdits($1, to: parentID) }
+        if !edits.isEmpty { edits += map.sideEdits(targets, side: side, parent: parentID) }
         guard !edits.isEmpty else { return false }
         return perform(edits, actionName: targets.count == 1 ? "Move Topic" : "Move Topics", undoManager: undoManager)
     }
@@ -82,9 +84,23 @@ extension MindMapModel {
     func insert(_ ids: [UUID], beside target: UUID, after: Bool, undoManager: UndoManager?) -> Bool {
         let targets = map.movableTopics(ids).filter { $0 != target }
         guard !targets.contains(where: { map.node(withID: $0)?.contains(target) == true }) else { return false }
-        let edits = map.insertEdits(targets, beside: target, after: after)
+        var edits = map.insertEdits(targets, beside: target, after: after)
+        // Beside a main topic = on its side of the central topic.
+        if let parent = map.parentID(of: target), map.isBalancedParent(parent), let side = sideOf(target) {
+            let changing = targets.filter { map.node(withID: $0)?.side != side }
+            if !edits.isEmpty || !changing.isEmpty { edits += map.sideEdits(targets, side: side, parent: parent) }
+        }
         guard !edits.isEmpty else { return false }
         return perform(edits, actionName: targets.count == 1 ? "Move Topic" : "Move Topics", undoManager: undoManager)
+    }
+
+    /// Side of `id` under its balanced-map parent: stored, else as laid out.
+    func sideOf(_ id: UUID) -> BranchSide? {
+        guard let node = map.node(withID: id) else { return nil }
+        if let offset = node.manualPosition { return BranchSide(manualOffset: offset) }
+        if let side = node.side { return side }
+        guard let parent = map.parentID(of: id) else { return nil }
+        return ((sideSplitProvider?() ?? nil) ?? map.estimatedSplit())[parent]?.sides[id]
     }
 
     /// New free positions: floating roots get `position` (center, map

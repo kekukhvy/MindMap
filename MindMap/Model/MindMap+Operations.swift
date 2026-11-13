@@ -71,6 +71,7 @@ extension MindMap {
         edits.append(isFloatingRoot(id) ? .removeFloating(id: id) : .tree(.remove(id: id)))
         var inserted = moving
         inserted.manualPosition = nil
+        inserted.side = nil
         edits.append(.tree(.insert(inserted, parentID: newParentID, index: index ?? target.children.count)))
         return edits
     }

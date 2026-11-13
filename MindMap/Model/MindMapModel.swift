@@ -19,6 +19,9 @@ final class MindMapModel {
     var attachmentDrafts: [UUID: AttachmentDraft] = [:]
     /// Map / note lock state (WP12, see `DocumentLock`).
     let lock = DocumentLock()
+    /// Side split of the balanced-map topics as laid out on screen now
+    /// (measured; set by the editor). nil = estimated sizes (WP17).
+    @ObservationIgnored var sideSplitProvider: (() -> [UUID: BalancedSplit]?)?
 
     var root: Node { map.root }
 
@@ -64,6 +67,7 @@ final class MindMapModel {
     @discardableResult
     func perform(_ edits: [MapEdit], actionName: String, undoManager: UndoManager?,
                  coalesceKey: UUID? = nil) -> Bool {
+        let edits = withStableSides(edits, undoManager: undoManager)
         var newMap = map
         guard let inverses = try? newMap.apply(edits) else { return false }
         map = newMap
@@ -94,11 +98,65 @@ final class MindMapModel {
               last.manager == ObjectIdentifier(undoManager), !undoManager.canRedo else {
             return perform(edits, actionName: actionName, undoManager: undoManager)
         }
+        let edits = withStableSides(edits, undoManager: undoManager)
         var newMap = map
         guard let inverses = try? newMap.apply(edits) else { return false }
         map = newMap
         last.step.inverses = inverses + last.step.inverses
         return true
+    }
+
+    /// `edits` plus the side edits keeping balanced-map branches where
+    /// they are (WP17, part of the same undo step): sides the layout shows
+    /// are stored first for topics without one (older files), then new /
+    /// moved-in main topics get the lighter side and free ones the side
+    /// they were dropped on. Undo / redo replay their recorded edits as is.
+    private func withStableSides(_ edits: [MapEdit], undoManager: UndoManager?) -> [MapEdit] {
+        if let undoManager, undoManager.isUndoing || undoManager.isRedoing { return edits }
+        let parents = map.balancedParents()
+        guard !parents.isEmpty || edits.contains(where: MindMapModel.mayAddBalancedParent) else { return edits }
+        var cachedSplit: [UUID: BalancedSplit]?
+        let split = { () -> [UUID: BalancedSplit] in
+            if let cachedSplit { return cachedSplit }
+            let value = (self.sideSplitProvider?() ?? nil) ?? self.map.estimatedSplit()
+            cachedSplit = value
+            return value
+        }
+        let needsPins = parents.contains { $0.children.contains { $0.side == nil } }
+        // Only structural edits can give a balanced parent a child without a side.
+        guard needsPins || edits.contains(where: MindMapModel.mayNeedSide) else { return edits }
+        let pins = needsPins ? map.sidePinEdits(split: split()) : []
+        var scratch = map
+        guard (try? scratch.apply(pins + edits)) != nil else { return edits }
+        var explicit = Set<UUID>()
+        for case let .tree(.set(id, .side(_))) in edits { explicit.insert(id) }
+        // A topic created with a side (e.g. a sibling on its neighbour's side).
+        for case let .tree(.insert(node, _, _)) in edits where node.side != nil { explicit.insert(node.id) }
+        // Cheap check first: only compute heights when a side is missing.
+        let unsettled = scratch.sideAssignmentEdits(previous: map, explicit: explicit, split: [:])
+        let assigned = unsettled.isEmpty ? []
+            : scratch.sideAssignmentEdits(previous: map, explicit: explicit, split: split())
+        return pins + edits + assigned
+    }
+
+    /// Edits after which a child of a balanced map may need a (new) side.
+    private static func mayNeedSide(_ edit: MapEdit) -> Bool {
+        switch edit {
+        case .tree(.insert(_, _, _)), .tree(.move(_, _, _)), .tree(.set(_, .manualPosition(_))),
+             .tree(.set(_, .layoutStyle(_))), .tree(.set(_, .side(_))), .insertFloating(_, _):
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Edits that can make a topic a balanced map (layout change, a tree
+    /// arriving with one): side assignment must run even without one now.
+    private static func mayAddBalancedParent(_ edit: MapEdit) -> Bool {
+        switch edit {
+        case .tree(.set(_, .layoutStyle(_))), .tree(.insert(_, _, _)), .insertFloating(_, _): return true
+        default: return false
+        }
     }
 
     /// Ends coalescing: the next edit always registers its own undo step.
@@ -135,7 +193,12 @@ final class MindMapModel {
     /// Adds a new sibling after `siblingID`; returns its id. Fails for roots.
     @discardableResult
     func addSibling(after siblingID: UUID, text: String = "", undoManager: UndoManager?) -> UUID? {
-        let sibling = Node(text: text)
+        var sibling = Node(text: text)
+        // Under the central topic the new topic joins its neighbour's side.
+        if let parent = map.parentID(of: siblingID), map.isBalancedParent(parent),
+           let reference = map.node(withID: siblingID), reference.manualPosition == nil {
+            sibling.side = reference.side ?? (sideSplitProvider?() ?? nil)?[parent]?.sides[siblingID]
+        }
         guard let edits = try? map.addSiblingEdits(sibling, after: siblingID) else { return nil }
         return perform(edits, actionName: "Add Topic", undoManager: undoManager, coalesceKey: sibling.id)
             ? sibling.id : nil
@@ -149,9 +212,14 @@ final class MindMapModel {
 
     /// Moves `id` under `newParentID` (nil index = append), also attaching a
     /// floating topic into a tree. Rejects self/descendant targets.
+    /// `side`: the side of a balanced-map parent (central topic) it was
+    /// dropped on (nil = the lighter side when it comes from elsewhere).
     @discardableResult
-    func reparent(_ id: UUID, to newParentID: UUID, at index: Int? = nil, undoManager: UndoManager?) -> Bool {
-        perform("Move Topic", undoManager) { try map.reparentEdits(id, to: newParentID, at: index) }
+    func reparent(_ id: UUID, to newParentID: UUID, at index: Int? = nil, side: BranchSide? = nil,
+                  undoManager: UndoManager?) -> Bool {
+        perform("Move Topic", undoManager) {
+            try map.reparentEdits(id, to: newParentID, at: index) + map.sideEdits([id], side: side, parent: newParentID)
+        }
     }
 
     @discardableResult

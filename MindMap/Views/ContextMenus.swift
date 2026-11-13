@@ -124,8 +124,8 @@ struct CanvasBackgroundMenu: View {
 }
 
 /// Map-wide outline items: Collapse to Level 1-4, Expand All, Reset All
-/// Positions (context menus and the toolbar Outline menu; the menu bar
-/// View menu has the same items with Cmd+Option+1...4 / 0).
+/// Positions, Rebalance Map (context menus and the toolbar Outline menu;
+/// the menu bar View menu has the same items with Cmd+Option+1...4 / 0).
 struct OutlineMenuItems: View {
     let editor: EditorController
 
@@ -136,6 +136,8 @@ struct OutlineMenuItems: View {
         Button("Expand All", systemImage: "arrow.down.right.and.arrow.up.left") { editor.expandAll() }
         Button("Reset All Positions", systemImage: "arrow.uturn.backward.circle") { editor.resetPositions() }
             .disabled(!editor.hasManualPosition())
+        Button("Rebalance Map", systemImage: "arrow.left.arrow.right") { editor.rebalanceMap() }
+            .disabled(!editor.canRebalance)
     }
 }
 

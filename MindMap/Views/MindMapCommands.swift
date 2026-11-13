@@ -108,6 +108,8 @@ struct MindMapCommands: Commands {
                 .disabled(!canAct)
             Button("Reset All Positions") { editor?.resetPositions() }
                 .disabled(!canAct)
+            Button("Rebalance Map") { editor?.rebalanceMap() }
+                .disabled(!canAct)
         }
     }
 }

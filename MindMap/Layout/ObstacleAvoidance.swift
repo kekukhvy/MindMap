@@ -48,7 +48,11 @@ struct ObstacleAvoidance {
         var moved = false
         var bounds = nodeFrame
         for column in columns where !column.isEmpty {
-            let shifts = shifts(for: column.sorted { lo($0.rect) < lo($1.rect) }, obstacles: layout.obstacles)
+            // Stable order (ties keep document order): same input, same result.
+            let ordered = column.enumerated().sorted {
+                (lo($0.element.rect), $0.offset) < (lo($1.element.rect), $1.offset)
+            }.map(\.element)
+            let shifts = shifts(for: ordered, obstacles: layout.obstacles)
             for (block, delta) in shifts {
                 bounds = bounds.union(offset(block.rect, delta))
                 guard abs(delta) > 0.001 else { continue }
@@ -108,8 +112,12 @@ struct ObstacleAvoidance {
                 }
                 let conflict = owned(index).lazy.compactMap { o -> CGFloat? in
                     let moved = offset(obstacles[o].rect, delta)
-                    guard let k = (0..<index).first(where: { hits(rects[$0], moved) }) else { return nil }
-                    return hi(rects[k]) + gap - lo(moved)
+                    if let k = (0..<index).first(where: { hits(rects[$0], moved) }) {
+                        return hi(rects[k]) + gap - lo(moved)
+                    }
+                    // A free topic inside the block must clear foreign free topics.
+                    guard let f = blocking(index).first(where: { hits(moved, obstacles[$0].rect) }) else { return nil }
+                    return hi(obstacles[f].rect) + gap - lo(moved)
                 }.first
                 guard let push = conflict else { break }
                 start += max(push, 0.5)
@@ -130,10 +138,11 @@ struct ObstacleAvoidance {
                 }
                 let conflict = owned(index).lazy.compactMap { o -> CGFloat? in
                     let moved = offset(obstacles[o].rect, delta)
-                    guard let k = (index + 1..<column.count).first(where: { hits(rects[$0], moved) }) else {
-                        return nil
+                    if let k = (index + 1..<column.count).first(where: { hits(rects[$0], moved) }) {
+                        return hi(moved) - (lo(rects[k]) - gap)
                     }
-                    return hi(moved) - (lo(rects[k]) - gap)
+                    guard let f = blocking(index).first(where: { hits(moved, obstacles[$0].rect) }) else { return nil }
+                    return hi(moved) - (lo(obstacles[f].rect) - gap)
                 }.first
                 guard let pull = conflict else { break }
                 end -= max(pull, 0.5)

@@ -55,8 +55,11 @@ struct MapScene {
     /// - Parameter editing: node being edited and its draft text (sizes follow the draft).
     /// - Parameter now: "today" for due chips (overdue / Today / Tomorrow).
     /// - Parameter hidesAttachment: attachments without an icon (empty notes).
+    /// - Parameter fixedObstacles: user-placed areas topics keep clear of
+    ///   (a dragged Tasks panel), map coordinates.
     static func build(map: MindMap, measurer: NodeMeasurer, editing: (id: UUID, text: String)?,
-                      now: Date = Date(), hidesAttachment: (Attachment) -> Bool = { _ in false }) -> MapScene {
+                      now: Date = Date(), fixedObstacles: [CGRect] = [],
+                      hidesAttachment: (Attachment) -> Bool = { _ in false }) -> MapScene {
         let colors = ColorResolver.effectiveColors(in: map)
         var infos: [UUID: NodeInfo] = [:]
         var order: [UUID] = []
@@ -81,7 +84,7 @@ struct MapScene {
         visit(map.root, level: 0, isTreeRoot: true)
         for topic in map.floatingTopics { visit(topic.node, level: 1, isTreeRoot: true) }
 
-        let layout = TreeLayout().layout(map) { id in
+        let layout = TreeLayout().layout(map, fixedObstacles: fixedObstacles) { id in
             guard let info = infos[id] else { return CGSize(width: 40, height: 20) }
             return measurer.nodeSize(text: info.text, appearance: info.appearance, attachments: info.attachments,
                                      hasLink: info.link != nil, task: info.task)
