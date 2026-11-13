@@ -188,8 +188,13 @@ struct WelcomeEventTests {
         let welcome = WelcomeView(flow: flow, actions: actions, isShowingTour: .constant(false))
         _ = try await snapshot(welcome, size: CGSize(width: 940, height: 620), name: "welcome-mac.png")
 
-        for page in 0..<TourPage.all.count {
-            let tour = WelcomeTourView(isFirstLaunch: false, onFinish: { _ in }, initialPage: page)
+        // No iCloud: six feature pages. With the library: the storage page follows.
+        let available = await StorageFixtures.service(.available)
+        for page in 0...TourPage.all.count {
+            let isStoragePage = page == TourPage.all.count
+            let tour = WelcomeTourView(service: isStoragePage ? available : service, isFirstLaunch: isStoragePage,
+                                       onFinish: { _ in }, filesFolder: nil, chooseFilesFolder: { _ in },
+                                       initialPage: page)
             _ = try await snapshot(tour, size: CGSize(width: 880, height: 660), name: "tour-\(page + 1)-mac.png")
         }
     }

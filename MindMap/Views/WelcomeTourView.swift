@@ -32,19 +32,50 @@ struct TourPage: Identifiable {
     ]
 }
 
-/// The Welcome Tour (WP13): six feature pages. Arrows / ← → keys / swipe,
-/// page dots, Skip, Continue on the last page. New maps are always files:
-/// the first tour (finished or skipped) sets the Files storage mode.
+/// The Welcome Tour (WP13): six feature pages and, last, the storage
+/// choice, which is shown only while the iCloud Sync library is available
+/// when the tour opens (otherwise new maps are files and the first tour sets
+/// Files). Arrows / ← → keys / swipe, page dots, Skip. On the first launch
+/// with the storage page, Skip jumps to it (it has to be made once); later
+/// Skip closes the tour.
 struct WelcomeTourView: View {
+    var service: LibraryService = .shared
     let isFirstLaunch: Bool
-    /// The storage mode to set (Files on the first launch) or nil (keep it).
+    /// The storage page was confirmed (the mode) or the tour was closed (nil).
     let onFinish: (StorageMode?) -> Void
+    /// macOS: a Files folder must be chosen before Files can be confirmed.
+    var filesFolder: URL?
+    var chooseFilesFolder: ((URL) -> Void)?
     var initialPage = 0
 
     @State private var page = 0
     @State private var drag: CGFloat = 0
+    @State private var choice: StorageMode = .library
+    @State private var isChoosingFolder = false
+    /// Fixed when the tour opens: "checking" counts as not available.
+    @State private var hasStorageChoice: Bool
 
-    private var pageCount: Int { TourPage.all.count }
+    init(service: LibraryService = .shared, isFirstLaunch: Bool, onFinish: @escaping (StorageMode?) -> Void,
+         filesFolder: URL? = nil, chooseFilesFolder: ((URL) -> Void)? = nil, initialPage: Int = 0) {
+        self.service = service
+        self.isFirstLaunch = isFirstLaunch
+        self.onFinish = onFinish
+        self.filesFolder = filesFolder
+        self.chooseFilesFolder = chooseFilesFolder
+        self.initialPage = initialPage
+        _hasStorageChoice = State(initialValue: service.availability.isAvailable)
+    }
+
+    static func pageCount(hasStorageChoice: Bool) -> Int { TourPage.all.count + (hasStorageChoice ? 1 : 0) }
+
+    /// The mode the tour sets when it ends on its last page: the chosen one
+    /// on the storage page, else Files on the first launch.
+    static func finishMode(hasStorageChoice: Bool, isFirstLaunch: Bool, choice: StorageMode) -> StorageMode? {
+        if hasStorageChoice { return choice }
+        return isFirstLaunch ? .files : nil
+    }
+
+    var pageCount: Int { Self.pageCount(hasStorageChoice: hasStorageChoice) }
     private var isLastPage: Bool { page == pageCount - 1 }
 
     var body: some View {
@@ -54,6 +85,12 @@ struct WelcomeTourView: View {
                 HStack(spacing: 0) {
                     ForEach(TourPage.all) { item in
                         TourPageView(page: item)
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                    }
+                    if hasStorageChoice {
+                        StorageChoicePage(service: service, choice: $choice, filesFolder: filesFolder,
+                                          canChooseFolder: chooseFilesFolder != nil,
+                                          chooseFolder: { isChoosingFolder = true })
                             .frame(width: proxy.size.width, height: proxy.size.height)
                     }
                 }
@@ -81,19 +118,31 @@ struct WelcomeTourView: View {
             bottomBar
         }
         .background(TourBackground())
-        .onAppear { page = min(initialPage, pageCount - 1) }
+        .onAppear {
+            page = min(initialPage, pageCount - 1)
+            choice = service.settings.storageMode
+        }
+        .fileImporter(isPresented: $isChoosingFolder, allowedContentTypes: [.folder]) { result in
+            if case let .success(url) = result { chooseFilesFolder?(url) }
+        }
     }
 
     private var topBar: some View {
         HStack {
-            Text("Welcome to MindMap")
+            Text(isLastPage && hasStorageChoice ? "One last step" : "Welcome to MindMap")
                 .font(.headline)
                 .foregroundStyle(.secondary)
             Spacer()
             if !isLastPage {
-                Button("Skip", action: finish)
-                    .buttonStyle(.borderless)
-                    .keyboardShortcut(isFirstLaunch ? nil : .cancelAction)
+                Button("Skip") {
+                    if isFirstLaunch, hasStorageChoice {
+                        withAnimation(.snappy) { page = pageCount - 1 }
+                    } else {
+                        onFinish(isFirstLaunch && !hasStorageChoice ? .files : nil)
+                    }
+                }
+                .buttonStyle(.borderless)
+                .keyboardShortcut(isFirstLaunch ? nil : .cancelAction)
             } else if !isFirstLaunch {
                 Button("Close") { onFinish(nil) }
                     .buttonStyle(.borderless)
@@ -134,7 +183,7 @@ struct WelcomeTourView: View {
             Spacer()
 
             if isLastPage {
-                Button(action: finish) {
+                Button(action: confirm) {
                     Text("Continue")
                         .font(.body.weight(.semibold))
                         .padding(.horizontal, 22)
@@ -163,8 +212,12 @@ struct WelcomeTourView: View {
         .padding(.vertical, 18)
     }
 
-    private func finish() {
-        onFinish(isFirstLaunch ? .files : nil)
+    private func confirm() {
+        if hasStorageChoice, choice == .files, chooseFilesFolder != nil, filesFolder == nil {
+            isChoosingFolder = true
+            return
+        }
+        onFinish(Self.finishMode(hasStorageChoice: hasStorageChoice, isFirstLaunch: isFirstLaunch, choice: choice))
     }
 }
 
@@ -213,6 +266,161 @@ private struct TourBackground: View {
     }
 }
 
+/// Last tour page: iCloud Sync library or Files (WP14 storage mode), with
+/// the live iCloud state.
+struct StorageChoicePage: View {
+    let service: LibraryService
+    @Binding var choice: StorageMode
+    var filesFolder: URL?
+    var canChooseFolder: Bool
+    var chooseFolder: () -> Void
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    var body: some View {
+        VStack(spacing: 22) {
+            Spacer(minLength: 0)
+            VStack(spacing: 6) {
+                Image(systemName: "externaldrive.badge.icloud")
+                    .font(.system(size: 34))
+                    .foregroundStyle(WelcomeColors.brand)
+                Text("Choose where new maps are saved")
+                    .font(.system(size: 24, weight: .bold))
+                Text("You can change this any time in Settings ▸ Storage. Opening .mindmap files always works.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            if sizeClass == .compact {
+                VStack(spacing: 12) { cards }
+            } else {
+                HStack(alignment: .top, spacing: 16) { cards }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 780)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 32)
+    }
+
+    @ViewBuilder private var cards: some View {
+        StorageCard(mode: .library, isSelected: choice == .library, systemImage: "icloud",
+                    title: "iCloud Sync",
+                    subtitle: "Works without iCloud Drive, on all your devices.",
+                    points: ["Maps sync through your iCloud account", "Available offline, merged per topic"]) {
+            HStack(spacing: 6) {
+                Image(systemName: availabilityIcon)
+                    .foregroundStyle(service.availability.isAvailable ? Color.green : Color.orange)
+                Text(availabilityText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        } select: { choice = .library }
+        StorageCard(mode: .files, isSelected: choice == .files, systemImage: "folder",
+                    title: "Files",
+                    subtitle: filesSubtitle,
+                    points: ["Use any folder, iCloud Drive or a USB drive", "Share or back up maps like documents"]) {
+            HStack(spacing: 6) {
+                Image(systemName: "folder.fill").foregroundStyle(.secondary)
+                Text(folderText)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if canChooseFolder {
+                    Button(filesFolder == nil ? "Choose…" : "Change…", action: chooseFolder)
+                        .buttonStyle(.borderless)
+                        .font(.caption.weight(.semibold))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        } select: { choice = .files }
+    }
+
+    private var filesSubtitle: String {
+        #if os(macOS)
+        return ".mindmap files in a folder you choose, visible in Finder."
+        #else
+        return ".mindmap files in a folder, visible in the Files app."
+        #endif
+    }
+
+    private var availabilityIcon: String {
+        switch service.availability {
+        case .available: return "checkmark.circle.fill"
+        case .checking: return "clock"
+        case .unavailable: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var availabilityText: String {
+        switch service.availability {
+        case .available: return "iCloud is ready."
+        case .checking: return "Checking iCloud…"
+        case let .unavailable(reason):
+            return "Not available now (\(reason)). Maps stay on this device until it is."
+        }
+    }
+
+    private var folderText: String {
+        if let filesFolder { return RecentLocation.text(for: filesFolder.appendingPathComponent("x")) }
+        #if os(macOS)
+        return "No folder chosen yet"
+        #else
+        return "On My iPad or iCloud Drive › MindMap"
+        #endif
+    }
+}
+
+private struct StorageCard<Footer: View>: View {
+    let mode: StorageMode
+    let isSelected: Bool
+    let systemImage: String
+    let title: String
+    let subtitle: String
+    let points: [String]
+    @ViewBuilder let footer: () -> Footer
+    let select: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(WelcomeColors.brand)
+                    .frame(width: 30)
+                Text(title)
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20))
+                    .foregroundStyle(isSelected ? WelcomeColors.brand : Color.secondary.opacity(0.5))
+            }
+            Text(subtitle)
+                .font(.callout.weight(.medium))
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(points, id: \.self) { point in
+                    Label(point, systemImage: "checkmark")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Divider()
+            footer()
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 14).fill(WelcomeColors.card))
+        .overlay(RoundedRectangle(cornerRadius: 14)
+            .strokeBorder(isSelected ? WelcomeColors.brand : Color.primary.opacity(0.1), lineWidth: isSelected ? 2 : 1))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: select)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction(named: "Choose \(title)", select)
+    }
+}
+
 /// The tour as a sheet of the Welcome screen: finishing the first tour
 /// copies the samples into the chosen store and opens "MindMap Features".
 struct WelcomeTourSheet: View {
@@ -220,17 +428,24 @@ struct WelcomeTourSheet: View {
     let openMap: (URL) -> Void
     let dismiss: () -> Void
     @State private var isFirstLaunch = false
+    @State private var folder: URL?
     @State private var errorText: String?
 
     var body: some View {
-        WelcomeTourView(isFirstLaunch: isFirstLaunch, onFinish: finish, initialPage: initialPage)
+        WelcomeTourView(service: flow.service, isFirstLaunch: isFirstLaunch, onFinish: finish,
+                        filesFolder: folder, chooseFilesFolder: chooser, initialPage: initialPage)
             #if os(macOS)
             .frame(width: 880, height: 660)
             #else
             .pageSheetSizing() // page-sized sheet on iPad
             #endif
             .interactiveDismissDisabled(isFirstLaunch)
-            .onAppear { isFirstLaunch = !flow.isTourCompleted }
+            .onAppear {
+                isFirstLaunch = !flow.isTourCompleted
+                #if os(macOS)
+                folder = flow.chosenFilesFolder
+                #endif
+            }
             .alert("MindMap", isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
                 Button("OK", role: .cancel) { dismiss() }
             } message: {
@@ -246,10 +461,25 @@ struct WelcomeTourSheet: View {
         #endif
     }
 
+    private var chooser: ((URL) -> Void)? {
+        #if os(macOS)
+        return { url in
+            do {
+                try flow.setFilesFolder(url)
+                folder = flow.chosenFilesFolder
+            } catch {
+                errorText = "The folder could not be used (\(error.localizedDescription))."
+            }
+        }
+        #else
+        return nil
+        #endif
+    }
+
     private func finish(_ choice: StorageMode?) {
         Task {
             do {
-                let sample = try await flow.finishTour(choice: choice)
+                let sample = try await flow.finishTour(choice: choice ?? (isFirstLaunch ? flow.service.settings.storageMode : nil))
                 dismiss()
                 if let sample { openMap(sample) }
             } catch {

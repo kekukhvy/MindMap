@@ -114,6 +114,46 @@ struct WelcomeTests {
         #expect(WelcomeFlow(service: flow.service, defaults: flow.defaults).launchAction() == .reopenLast)
     }
 
+    // MARK: Tour storage page (only while the library is available)
+
+    @Test func tourHasTheStoragePageOnlyWhenTheLibraryIsAvailable() async throws {
+        let available = WelcomeTourView(service: await StorageFixtures.service(.available), isFirstLaunch: true,
+                                        onFinish: { _ in })
+        #expect(available.pageCount == TourPage.all.count + 1)
+        let unavailable = WelcomeTourView(service: await StorageFixtures.service(.unavailable("not signed")),
+                                          isFirstLaunch: true, onFinish: { _ in })
+        #expect(unavailable.pageCount == TourPage.all.count)
+    }
+
+    @Test func tourWhileCheckingHasNoStoragePage() {
+        // availability is .checking until refreshAvailability() has run.
+        let checking = LibraryService(cache: LibraryCache(root: StorageFixtures.temporaryFolder()),
+                                      accounts: FixedAccountProvider(result: .available),
+                                      settings: StorageSettings(defaults: StorageFixtures.defaults()),
+                                      mirrorSettings: LibraryMirrorSettings(defaults: StorageFixtures.defaults()))
+        #expect(WelcomeTourView(service: checking, isFirstLaunch: true, onFinish: { _ in }).pageCount == TourPage.all.count)
+    }
+
+    @Test func firstTourWithoutTheLibrarySetsFiles() async throws {
+        let (flow, _) = await flow(.unavailable("not signed"))
+        let mode = WelcomeTourView.finishMode(hasStorageChoice: false, isFirstLaunch: true, choice: .library)
+        #expect(mode == .files)
+        _ = try await flow.finishTour(choice: mode)
+        #expect(flow.service.settings.hasExplicitChoice)
+        #expect(flow.service.settings.storageMode == .files)
+        #expect(WelcomeTourView.finishMode(hasStorageChoice: false, isFirstLaunch: false, choice: .files) == nil)
+    }
+
+    @Test func tourWithTheLibrarySetsTheChosenMode() async throws {
+        let (flow, _) = await flow()
+        for choice in [StorageMode.library, .files] {
+            let mode = WelcomeTourView.finishMode(hasStorageChoice: true, isFirstLaunch: true, choice: choice)
+            #expect(mode == choice)
+            _ = try await flow.finishTour(choice: mode)
+            #expect(flow.service.settings.storageMode == choice)
+        }
+    }
+
     @Test func storageChoiceSetsTheMode() async throws {
         let (flow, _) = await flow()
         #expect(!flow.service.settings.hasExplicitChoice)
