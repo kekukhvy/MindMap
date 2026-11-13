@@ -15,6 +15,10 @@ struct NodeEditorField: View {
     let font: Font
     let textColor: Color
     @FocusState private var isFocused: Bool
+    #if os(macOS)
+    /// Window of this field (its field editor gets the line breaks).
+    @State private var window = WeakWindow()
+    #endif
 
     var body: some View {
         TextField("", text: Binding(get: { editor.draftText },
@@ -48,6 +52,9 @@ struct NodeEditorField: View {
                 if !focused { editor.commitEditing(ifEditing: nodeID) }
             }
             .task { await acquireFocus() }
+            #if os(macOS)
+            .background { HostWindowReader { window.value = $0 } }
+            #endif
     }
 
     /// Makes the field first responder right away (typing replaces the
@@ -77,10 +84,10 @@ struct NodeEditorField: View {
     /// Inserts "\n" at the caret of the focused field (replacing a selection).
     private func insertLineBreak() {
         #if os(macOS)
-        // The key window's field editor (NSApp.keyWindow can be nil while
-        // the app is not frontmost, e.g. a window made key by the tests).
-        let window = editor.hostWindow ?? NSApp.keyWindow ?? NSApp.windows.first(where: \.isKeyWindow)
-        if let fieldEditor = window?.firstResponder as? NSTextView {
+        // The field editor of this field's own window (NSApp.keyWindow can be
+        // another window, or nil while the app is not frontmost).
+        let host = window.value ?? editor.hostWindow ?? NSApp.keyWindow
+        if let fieldEditor = host?.firstResponder as? NSTextView {
             fieldEditor.insertNewlineIgnoringFieldEditor(nil)
         } else {
             NSApp.sendAction(#selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)), to: nil, from: nil)
@@ -101,3 +108,10 @@ struct NodeEditorField: View {
         #endif
     }
 }
+
+#if os(macOS)
+/// Weak window box kept in view state.
+final class WeakWindow {
+    weak var value: NSWindow?
+}
+#endif
