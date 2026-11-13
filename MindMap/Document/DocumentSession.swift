@@ -154,10 +154,15 @@ final class DocumentSession {
         }
     }
 
-    /// Window became active: its document is the one to reopen next launch.
+    /// Window became active: its document is the one to reopen next launch,
+    /// and it reads a file changed while the app was suspended. (Not queued:
+    /// `launch` expects to be the only pending operation.)
     func didBecomeActive() {
-        guard let url = document?.fileURL else { return }
-        Task { await self.remember(url) }
+        guard let document else { return }
+        Task {
+            await document.revertIfOutdated()
+            await self.remember(document.fileURL)
+        }
     }
 
     /// Window inactive / in background: write pending changes now.
@@ -269,7 +274,11 @@ final class DocumentSession {
 
     private func openNow(_ url: URL, reportErrors: Bool) async -> Bool {
         let key = LaunchEnvironment.key(url)
-        if let current = document, LaunchEnvironment.key(current.fileURL) == key { return true }
+        if let current = document, LaunchEnvironment.key(current.fileURL) == key {
+            // Back from Welcome: the open document may have missed a newer file.
+            await current.revertIfOutdated()
+            return true
+        }
         let name = url.deletingPathExtension().lastPathComponent
         if let owner = Self.openDocuments[key], owner != ObjectIdentifier(self) {
             if reportErrors { message = "“\(name)” is already open in another window." }

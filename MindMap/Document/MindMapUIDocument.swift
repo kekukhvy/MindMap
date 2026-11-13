@@ -35,6 +35,33 @@ final class MindMapUIDocument: UIDocument {
         hasLoaded = true
     }
 
+    /// The file was replaced (library sync, another device) after this
+    /// document last read or wrote it, and the change never reached it as a
+    /// file presenter (e.g. written while the app was suspended).
+    var isOutdated: Bool {
+        guard let known = fileModificationDate,
+              let onDisk = try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.modificationDate] as? Date
+        else { return false }
+        return onDisk > known
+    }
+
+    /// Reads the file again when it changed unnoticed (like UIDocument's
+    /// own revert on a reported change, unsaved changes included).
+    func revertIfOutdated() async {
+        guard isOutdated else { return }
+        _ = await revert(toContentsOf: fileURL)
+    }
+
+    /// Never writes a stale map over a newer file (autosave, close, Save
+    /// Now): reverts instead.
+    override func save(to url: URL, for saveOperation: UIDocument.SaveOperation,
+                       completionHandler: ((Bool) -> Void)? = nil) {
+        guard saveOperation == .forOverwriting, url == fileURL, isOutdated else {
+            return super.save(to: url, for: saveOperation, completionHandler: completionHandler)
+        }
+        revert(toContentsOf: fileURL) { completionHandler?($0) }
+    }
+
     /// Keeps the version being edited when iCloud reports a conflict.
     func resolveConflictsKeepingCurrent() {
         guard documentState.contains(.inConflict) else { return }
