@@ -142,15 +142,22 @@ final class LibraryService {
         sync.attach(engine)
     }
 
-    private func appDidBecomeActive() {
-        Task {
-            if engine == nil {
-                await refreshAvailability()
-            } else {
-                sync.scanForLocalChanges()
-                try? await engine?.fetchChanges()
-            }
+    /// Sync now: re-checks the account when there is no engine, else scans
+    /// for local changes, fetches and sends. Runs on app activation and when
+    /// the sync badge is tapped. Never called from inside an engine callback.
+    func syncNow() async {
+        if engine == nil {
+            await refreshAvailability()
+        } else {
+            sync.scanForLocalChanges()
+            try? await engine?.fetchChanges()
+            try? await engine?.sendChanges()
         }
+    }
+
+    @discardableResult
+    func appDidBecomeActive() -> Task<Void, Never> {
+        Task { await syncNow() }
     }
 
     private func observeActivation() {

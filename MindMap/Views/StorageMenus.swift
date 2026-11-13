@@ -64,29 +64,50 @@ struct StoreBadge: View {
     }
 
     var body: some View {
-        Menu {
-            Section(location) {
-                if let status { Text(status.title) }
-            }
-            MapStorageMenuItems(storage: storage)
-        } label: {
-            #if os(iOS)
-            // iPad: the badge is the window's title menu (icon + map name).
-            HStack(spacing: 6) {
-                Image(systemName: status?.systemImage ?? "doc")
-                Text(storage.title)
-                    .font(.headline)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: 220, alignment: .leading)
-            }
-            #else
-            Label(location, systemImage: status?.systemImage ?? "doc")
-            #endif
+        badge
+            .menuIndicator(.hidden)
+            .help(status.map { "\(location) — \($0.title)" } ?? location)
+            .accessibilityLabel(status.map { "iCloud Library, \($0.shortTitle)" } ?? "File")
+    }
+
+    /// Library map: a tap syncs, the menu opens on long-press / click-and-hold.
+    /// File map: a tap opens the menu.
+    @ViewBuilder private var badge: some View {
+        if storage.isLibraryMap {
+            Menu { menuContent } label: { badgeLabel } primaryAction: { syncNow() }
+        } else {
+            Menu { menuContent } label: { badgeLabel }
         }
-        .menuIndicator(.hidden)
-        .help(status.map { "\(location) — \($0.title)" } ?? location)
-        .accessibilityLabel(status.map { "iCloud Library, \($0.shortTitle)" } ?? "File")
+    }
+
+    @ViewBuilder private var menuContent: some View {
+        if storage.isLibraryMap {
+            Button("Sync Now", systemImage: "arrow.triangle.2.circlepath") { syncNow() }
+        }
+        Section(location) {
+            if let status { Text(status.title) }
+        }
+        MapStorageMenuItems(storage: storage)
+    }
+
+    @ViewBuilder private var badgeLabel: some View {
+        #if os(iOS)
+        // iPad: the badge is the window's title menu (icon + map name).
+        HStack(spacing: 6) {
+            Image(systemName: status?.systemImage ?? "doc")
+            Text(storage.title)
+                .font(.headline)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 220, alignment: .leading)
+        }
+        #else
+        Label(location, systemImage: status?.systemImage ?? "doc")
+        #endif
+    }
+
+    private func syncNow() {
+        Task { await service.syncNow() }
     }
 
     private var location: String {

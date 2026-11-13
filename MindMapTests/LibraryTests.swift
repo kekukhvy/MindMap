@@ -115,7 +115,11 @@ final class MockSyncEngine: LibrarySyncEngine {
 
     var pendingChanges: [LibraryRecordChange] { pending }
 
+    private(set) var sendCount = 0
+    private(set) var fetchCount = 0
+
     func sendChanges() async throws {
+        sendCount += 1
         var rounds = 0
         while !pending.isEmpty, rounds < 10, let sync {
             rounds += 1
@@ -142,6 +146,7 @@ final class MockSyncEngine: LibrarySyncEngine {
     }
 
     func fetchChanges() async throws {
+        fetchCount += 1
         let changes = database.changes(since: token)
         token = changes.token
         await sync?.handleFetched(modifications: changes.modified, deletions: changes.deleted)
@@ -804,6 +809,43 @@ final class MainThreadRelinquishingPresenter: NSObject, NSFilePresenter, @unchec
         service.attachEngine(engine)
         try await engine.sendChanges()
         #expect(db.mapRecord(try MockDevice(database: db).libraryID(summary)) != nil)
+    }
+
+    private func offlineService() -> LibraryService {
+        LibraryService(
+            cache: LibraryCache(root: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            accounts: FixedAccountProvider(result: .unavailable("not signed in to iCloud")),
+            settings: StorageSettings(defaults: defaults()))
+    }
+
+    @Test func syncNowWithEngineScansFetchesAndSends() async throws {
+        let db = MockCloudDatabase()
+        let service = offlineService()
+        let engine = MockSyncEngine(database: db)
+        engine.sync = service.sync
+        service.attachEngine(engine)
+        let summary = try service.store.createMap(titled: "Pending")
+        await service.syncNow()
+        #expect(engine.fetchCount == 1)
+        #expect(engine.sendCount == 1)
+        #expect(db.mapRecord(try MockDevice(database: db).libraryID(summary)) != nil)
+    }
+
+    @Test func syncNowWithoutEngineRefreshesAvailability() async {
+        let service = offlineService()
+        #expect(service.availability != .unavailable("not signed in to iCloud"))
+        await service.syncNow()
+        #expect(service.availability == .unavailable("not signed in to iCloud"))
+    }
+
+    @Test func activationRunsSyncNow() async {
+        let service = offlineService()
+        let engine = MockSyncEngine(database: MockCloudDatabase())
+        engine.sync = service.sync
+        service.attachEngine(engine)
+        await service.appDidBecomeActive().value
+        #expect(engine.fetchCount == 1)
+        #expect(engine.sendCount == 1)
     }
 
     @Test func storageModeDefaultsToLibraryOnlyWhenAvailableAndPersistsTheChoice() async {

@@ -59,10 +59,15 @@ struct LibraryBrowserView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("iCloud Library")
                     .font(.title2.weight(.semibold))
-                Label(service.status.shortTitle, systemImage: service.status.systemImage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .help(service.status.title)
+                Button {
+                    Task { await service.syncNow() }
+                } label: {
+                    Label(service.status.shortTitle, systemImage: service.status.systemImage)
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .help("\(service.status.title) — click to sync now")
             }
             Spacer()
             Picker("Sort By", selection: $sort) {

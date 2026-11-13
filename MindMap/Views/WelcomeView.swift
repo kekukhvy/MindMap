@@ -150,10 +150,15 @@ struct WelcomeView: View {
                 HStack(alignment: .firstTextBaseline) {
                     sectionTitle("Library")
                     Spacer()
-                    Label(service.status.shortTitle, systemImage: service.status.systemImage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .help(service.status.title)
+                    Button {
+                        Task { await service.syncNow() }
+                    } label: {
+                        Label(service.status.shortTitle, systemImage: service.status.systemImage)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help("\(service.status.title) — click to sync now")
                 }
                 if library.isEmpty {
                     emptyText(search.isEmpty ? "No maps in iCloud Sync yet. New maps go here when Storage is "
