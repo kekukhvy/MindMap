@@ -10,6 +10,9 @@
 set -uo pipefail
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# Build number = commit count, and the short commit, of the tree this script lives in (make_dmg.sh
+# runs the script of the tree it builds). Nothing to edit by hand; MARKETING_VERSION stays in the project.
+VERSION_ARGS=("CURRENT_PROJECT_VERSION=$(git -C "$ROOT" rev-list --count HEAD)" "MINDMAP_COMMIT=$(git -C "$ROOT" rev-parse --short HEAD)")
 LOCAL_ARGS=(CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= "CODE_SIGN_ENTITLEMENTS=$ROOT/Config/MindMap-macOS-local.entitlements" MINDMAP_CLOUDKIT_CONTAINER=)
 
 has_mac_profile() {
@@ -25,15 +28,15 @@ is_mac=0
 for a in "$@"; do [[ "$a" == *"platform=macOS"* ]] && is_mac=1; done
 mode="${MINDMAP_SIGNING:-auto}"
 if [[ $is_mac == 0 || $mode == team ]]; then
-  exec xcodebuild -allowProvisioningUpdates "$@"
+  exec xcodebuild -allowProvisioningUpdates "$@" "${VERSION_ARGS[@]}"
 fi
 if [[ $mode == local ]]; then
-  exec xcodebuild "$@" "${LOCAL_ARGS[@]}"
+  exec xcodebuild "$@" "${VERSION_ARGS[@]}" "${LOCAL_ARGS[@]}"
 fi
 if has_mac_profile; then
-  exec xcodebuild -allowProvisioningUpdates "$@"
+  exec xcodebuild -allowProvisioningUpdates "$@" "${VERSION_ARGS[@]}"
 fi
 # No profile yet (no Apple ID in Xcode, or the project was never built signed): build locally.
 # After adding the account, build once in Xcode or run with MINDMAP_SIGNING=team to create the profile.
 echo "xcb.sh: no macOS provisioning profile for com.kekukh.MindMap -> LOCAL ad-hoc signing (CloudKit off)" >&2
-exec xcodebuild "$@" "${LOCAL_ARGS[@]}"
+exec xcodebuild "$@" "${VERSION_ARGS[@]}" "${LOCAL_ARGS[@]}"

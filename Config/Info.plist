@@ -50,6 +50,8 @@
 			</array>
 		</dict>
 	</array>
+	<key>MindMapCommit</key>
+	<string>$(MINDMAP_COMMIT)</string>
 	<key>MindMapCloudKitContainer</key>
 	<string>$(MINDMAP_CLOUDKIT_CONTAINER)</string>
 	<key>NSFaceIDUsageDescription</key>

@@ -44,6 +44,7 @@ struct SettingsView: View {
             storageSection
             mirrorSection
             lockSection
+            versionSection
         }
         .formStyle(.grouped)
         .sheet(isPresented: $isShowingMoveMaps) {
@@ -177,6 +178,16 @@ struct SettingsView: View {
     }
 
     // MARK: Lock
+
+    private var versionSection: some View {
+        Section {
+        } footer: {
+            Text(AppVersion.text)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+        }
+    }
 
     private var lockSection: some View {
         Section {

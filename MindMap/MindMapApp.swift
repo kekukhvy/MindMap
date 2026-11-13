@@ -33,6 +33,13 @@ struct MindMapApp: App {
             MindMapCommands()
             LockCommands()
             WelcomeCommands()
+            // The standard About panel shows "Version 1.0 (142, 3f3fd45)": the build part
+            // carries the commit too.
+            CommandGroup(replacing: .appInfo) {
+                Button("About MindMap") {
+                    NSApplication.shared.orderFrontStandardAboutPanel(options: [.version: AppVersion.buildDetail])
+                }
+            }
         }
         // Attachments open in AppKit windows above their map (`AttachmentWindows`);
         // the Welcome window (WP13) is an AppKit window too (`WelcomeWindowController`).
