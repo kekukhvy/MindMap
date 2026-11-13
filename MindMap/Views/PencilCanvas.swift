@@ -2,6 +2,7 @@
 import PencilKit
 import SwiftUI
 import UIKit
+import UIKit.UIGestureRecognizerSubclass
 
 /// Lets SwiftUI controls (toolbar Undo/Redo) commit strokes that are still
 /// waiting for the debounce before acting on the undo stack.
@@ -110,10 +111,86 @@ final class PencilCanvasView: PKCanvasView {
     @objc func redoDocument() { forwarder.redo() }
 }
 
+/// Notices the touch resting still at the end of a stroke (Apple Notes' "draw
+/// a shape and hold"). It only observes: it never recognizes, never cancels
+/// or delays touches, and runs alongside PencilKit's drawing recognizer.
+final class StrokeHoldRecognizer: UIGestureRecognizer, UIGestureRecognizerDelegate {
+    /// How long the touch must rest (Notes: about half a second).
+    static let holdDuration: TimeInterval = 0.5
+    /// How far it may wander while resting (screen points).
+    static let holdRadius: CGFloat = 8
+
+    /// A touch went down (a new stroke starts).
+    var onBegin: (() -> Void)?
+    /// The touch has rested for `holdDuration`.
+    var onHold: (() -> Void)?
+    private var anchor: CGPoint?
+    private var timer: Timer?
+
+    init() {
+        super.init(target: nil, action: nil)
+        cancelsTouchesInView = false
+        delaysTouchesBegan = false
+        delaysTouchesEnded = false
+        delegate = self
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesBegan(touches, with: event)
+        onBegin?()
+        guard numberOfTouches == 1, let touch = touches.first else { return stopWaiting() }
+        restart(at: touch.location(in: nil))
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesMoved(touches, with: event)
+        guard let touch = touches.first, let anchor else { return }
+        let location = touch.location(in: nil)
+        if hypot(location.x - anchor.x, location.y - anchor.y) > Self.holdRadius { restart(at: location) }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesEnded(touches, with: event)
+        stopWaiting()
+        state = .failed
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesCancelled(touches, with: event)
+        stopWaiting()
+        state = .failed
+    }
+
+    override func reset() {
+        super.reset()
+        stopWaiting()
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+
+    private func restart(at location: CGPoint) {
+        anchor = location
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: Self.holdDuration, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.onHold?() }
+        }
+    }
+
+    private func stopWaiting() {
+        timer?.invalidate()
+        timer = nil
+        anchor = nil
+    }
+}
+
 /// SwiftUI wrapper of the iPad handwriting canvas. Changes are debounced
 /// (`commitDelay` after the last stroke, at most `maxCommitDelay` after the
 /// first) and committed as one "Draw" undo step; also committed when the
 /// canvas goes away (Done), before undo/redo, and when the app resigns active.
+/// Drawing a line, circle, ellipse, rectangle or triangle and holding at the
+/// end replaces the stroke with the clean shape (`ShapeRecognizer`), within
+/// the same "Draw" step.
 struct PencilCanvas: UIViewRepresentable {
     static let fingerDrawingKey = "MindMap.drawWithFinger"
     static let commitDelay: TimeInterval = 0.6
@@ -149,6 +226,10 @@ struct PencilCanvas: UIViewRepresentable {
         canvas.forwarder.hasPendingChanges = { [weak coordinator] in coordinator?.pending != nil }
         canvas.onLayout = { [weak coordinator] in coordinator?.updateLayout() }
         flusher.action = { [weak coordinator] in coordinator?.flush() }
+        let hold = StrokeHoldRecognizer()
+        hold.onBegin = { [weak coordinator] in coordinator?.strokeBegan() }
+        hold.onHold = { [weak coordinator] in coordinator?.strokeHeld() }
+        canvas.addGestureRecognizer(hold)
 
         let picker = PKToolPicker()
         picker.colorUserInterfaceStyle = .light
@@ -194,6 +275,11 @@ struct PencilCanvas: UIViewRepresentable {
         private var timer: Timer?
         private var isReloading = false
         private var resignObserver: NSObjectProtocol?
+        /// Between PencilKit's begin / end of using the tool (a stroke is being drawn).
+        private var isUsingTool = false
+        /// Strokes on the canvas when the current stroke was held: the stroke
+        /// that comes next is snapped to its shape.
+        private var heldStrokeCount: Int?
 
         init(_ parent: PencilCanvas) {
             self.parent = parent
@@ -215,6 +301,7 @@ struct PencilCanvas: UIViewRepresentable {
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
             updateContentSize()
             guard !isReloading else { return }
+            snapHeldStroke()
             let now = Date()
             if pending == nil { pending = now }
             timer?.invalidate()
@@ -223,6 +310,37 @@ struct PencilCanvas: UIViewRepresentable {
                             max(0, PencilCanvas.maxCommitDelay - now.timeIntervalSince(first)))
             timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
                 MainActor.assumeIsolated { self?.flush() }
+            }
+        }
+
+        func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) { isUsingTool = true }
+        func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) { isUsingTool = false }
+
+        // MARK: Shape snapping (draw and hold)
+
+        func strokeBegan() { heldStrokeCount = nil }
+
+        /// The touch rests while drawing with an inking tool (not eraser or lasso).
+        func strokeHeld() {
+            guard isUsingTool, let canvas, canvas.tool is PKInkingTool else { return }
+            heldStrokeCount = canvas.drawing.strokes.count
+        }
+
+        /// Replaces the held stroke, once PencilKit adds it, with its shape. It
+        /// changes the drawing inside this same change, so it is committed in
+        /// the same "Draw" step.
+        private func snapHeldStroke() {
+            guard let held = heldStrokeCount, let canvas, canvas.drawing.strokes.count == held + 1 else { return }
+            heldStrokeCount = nil
+            var drawing = canvas.drawing
+            guard let snapped = ShapeRecognizer.snapped(drawing.strokes[held]) else { return }
+            drawing.strokes[held] = snapped
+            canvas.drawing = drawing
+            if #available(iOS 17.5, *) {
+                let bounds = snapped.renderBounds
+                let zoom = canvas.zoomScale
+                UICanvasFeedbackGenerator(view: canvas)
+                    .alignmentOccurred(at: CGPoint(x: bounds.midX * zoom, y: bounds.midY * zoom))
             }
         }
 

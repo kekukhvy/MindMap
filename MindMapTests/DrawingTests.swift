@@ -542,6 +542,68 @@ struct PencilNoteInteractionTests {
         settle()
     }
 
+    /// Draw a shape and hold (Apple Notes): once PencilKit adds the held
+    /// stroke, it is replaced with the clean shape in the same ink, within
+    /// the same "Draw" undo step. Strokes not held, or held with the eraser,
+    /// stay as drawn.
+    @Test func heldStrokeSnapsToItsShapeInOneDrawStep() throws {
+        let model = MindMapModel(map: MindMap(root: Node(text: "Central")))
+        let undo = makeUndo()
+        let id = try #require(model.addDrawing(to: model.root.id, undoManager: undo))
+        let cover = Cover()
+        let window = try makeWindow(CoverHost(model: model, id: id, undo: undo, cover: cover))
+        defer { window.isHidden = true }
+        cover.isPresented = true
+        settle()
+        let presented = try #require(window.rootViewController?.presentedViewController)
+        let canvas = try #require(views(in: presented.view).compactMap { $0 as? PencilCanvasView }.first)
+        let coordinator = try #require(canvas.delegate as? PencilCanvas.Coordinator)
+        #expect(canvas.gestureRecognizers?.contains { $0 is StrokeHoldRecognizer } == true)
+
+        func wobblyCircle(at center: CGPoint) -> [CGPoint] {
+            (0...120).map { i in
+                let t = 2.05 * CGFloat.pi * CGFloat(i) / 120
+                let r = 70 * (1 + 0.04 * sin(CGFloat(i) * 1.7))
+                return CGPoint(x: center.x + r * cos(t), y: center.y + r * sin(t))
+            }
+        }
+        /// Pencil down, draw `stroke`, optionally rest, lift.
+        func draw(_ stroke: PKStroke, held: Bool) {
+            coordinator.strokeBegan()
+            coordinator.canvasViewDidBeginUsingTool(canvas)
+            if held { coordinator.strokeHeld() }
+            canvas.drawing.strokes.append(stroke)
+            coordinator.canvasViewDidEndUsingTool(canvas)
+        }
+
+        canvas.tool = PKInkingTool(.marker, color: .red, width: 7)
+        let circle = DebugDrawing.stroke(wobblyCircle(at: CGPoint(x: 300, y: 300)), color: .red, width: 7, ink: .marker)
+        let clean = try #require(ShapeRecognizer.snapped(circle))
+        draw(circle, held: true)
+        #expect(canvas.drawing.strokes.count == 1)
+        let shown = try #require(canvas.drawing.strokes.first)
+        #expect(shown.ink.inkType == .marker && shown.ink.color == circle.ink.color)
+        #expect(signature(canvas.drawing) == signature(PKDrawing(strokes: [clean])))
+        coordinator.flush()
+        #expect(signature(drawing(model, id)) == signature(PKDrawing(strokes: [clean])))
+        #expect(undo.undoActionName == "Draw")
+        undo.undo()
+        #expect(drawing(model, id).strokes.isEmpty)
+        #expect(undo.undoActionName == "Add Handwritten Note")
+        undo.redo()
+        coordinator.reloadIfChanged()
+        #expect(signature(canvas.drawing) == signature(PKDrawing(strokes: [clean])))
+
+        let unheld = DebugDrawing.stroke(wobblyCircle(at: CGPoint(x: 600, y: 300)), color: .blue)
+        draw(unheld, held: false)
+        canvas.tool = PKEraserTool(.vector)
+        let erasing = DebugDrawing.stroke(wobblyCircle(at: CGPoint(x: 600, y: 600)), color: .blue)
+        draw(erasing, held: true)
+        #expect(signature(canvas.drawing) == signature(PKDrawing(strokes: [clean, unheld, erasing])))
+        cover.isPresented = false
+        settle()
+    }
+
     @Test func mapPencilInteractionIsOffWhileANoteIsPresented() throws {
         let model = MindMapModel(map: MindMap(root: Node(text: "Central")))
         let editor = EditorController(model: model)
