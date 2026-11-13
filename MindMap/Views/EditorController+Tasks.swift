@@ -131,6 +131,15 @@ extension EditorController {
                                 showsCompleted: taskPanelShowsCompleted, showsAll: taskPanelShowsAll, now: now())
     }
 
+    /// Screen rect of the panel's scrolling row list (macOS: the scroll
+    /// wheel scrolls it instead of panning the canvas); nil when it does
+    /// not scroll.
+    var taskListScrollRect: CGRect? {
+        guard let panel = taskPanel, panel.scrollsRows, !panel.isCollapsed else { return nil }
+        let screen = viewport.toScreen(panel.frame)
+        return TaskPanelLayout.listFrame(in: screen, rows: TaskPanelLayout.maxExpandedRows, scale: viewport.scale)
+    }
+
     /// Frame of the Tasks panel when the user dragged it somewhere (its
     /// position does not depend on the layout); nil when automatic / hidden.
     var fixedTaskPanelFrame: CGRect? {
@@ -173,9 +182,17 @@ extension EditorController {
     }
 
     func updateTaskPanelDrag(_ translation: CGSize) {
-        // Read-only map (WP15): the panel stays where it is.
+        // Read-only map (WP15): the panel stays where it is and the drag
+        // pans the canvas, like dragging a topic there.
         guard canEdit else {
-            if taskPanelDrag == nil { showReadOnlyNotice() }
+            if lockedPanelPanStart == nil {
+                showReadOnlyNotice()
+                lockedPanelPanStart = viewport
+                beginCanvasGesture(.pan)
+            }
+            var panned = lockedPanelPanStart ?? viewport
+            panned.pan(dx: translation.width, dy: translation.height)
+            viewport = panned
             return
         }
         taskPanelDrag = translation
@@ -184,6 +201,10 @@ extension EditorController {
     /// Drop after dragging the header: the panel keeps that position (one
     /// undo step "Move Tasks Panel"; saved in map.json).
     func endTaskPanelDrag() {
+        if lockedPanelPanStart != nil {
+            lockedPanelPanStart = nil
+            endCanvasGesture(.pan)
+        }
         guard let translation = taskPanelDrag else { return }
         taskPanelDrag = nil
         guard translation != .zero, let frame = taskPanel?.frame else { return }

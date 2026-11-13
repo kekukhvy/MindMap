@@ -55,6 +55,7 @@ struct DocumentWindow: View {
         }
         .sheet(isPresented: $session.isShowingSettings) {
             SettingsView { session.isShowingSettings = false }
+                .pageSheetSizing()
         }
         .fullScreenCover(isPresented: Binding(get: { session.isShowingWelcome && session.document != nil },
                                               set: { session.isShowingWelcome = $0 })) {

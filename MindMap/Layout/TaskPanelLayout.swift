@@ -14,6 +14,9 @@ struct TaskPanelContent: Equatable {
     var hiddenCount: Int
     /// Footer row present ("Show N More" / "Show Less").
     var hasFooter: Bool
+    /// "Show all" with more rows than `TaskPanelLayout.maxExpandedRows`:
+    /// the rows scroll inside a list of that height.
+    var scrollsRows = false
     /// Panel rect in map coordinates (before any live drag).
     var frame: CGRect
     /// Position comes from the map's layout bounds (never dragged / reset).
@@ -31,6 +34,16 @@ enum TaskPanelLayout {
     static let cornerRadius: CGFloat = 10
     /// Rows shown before "Show N More".
     static let maxRows = 10
+    /// Height of the expanded list in rows; more rows scroll inside it.
+    static let maxExpandedRows = 20
+
+    /// Rows the panel's height is made of (`rows` drawn in a scrolling list
+    /// when that exceeds `maxExpandedRows`).
+    static func heightRows(rows: Int, showsAll: Bool) -> Int {
+        let overflow = rows > maxRows
+        guard overflow else { return rows }
+        return showsAll ? min(rows, maxExpandedRows) : maxRows
+    }
     /// Distance from the map's content bounds for the automatic position.
     static let margin: CGFloat = 56
 
@@ -50,6 +63,12 @@ enum TaskPanelLayout {
         guard !isCollapsed else { return CGSize(width: width, height: headerHeight) }
         let body = CGFloat(visibleRows) * rowHeight + (hasFooter ? footerHeight : 0) + bottomPadding
         return CGSize(width: width, height: headerHeight + body)
+    }
+
+    /// The scrolling row list inside a panel at `frame` (same space).
+    static func listFrame(in frame: CGRect, rows: Int, scale: CGFloat = 1) -> CGRect {
+        CGRect(x: frame.minX, y: frame.minY + headerHeight * scale, width: frame.width,
+               height: CGFloat(rows) * rowHeight * scale)
     }
 
     /// Row `index` inside a panel at `frame` (same coordinate space).
@@ -74,9 +93,8 @@ enum TaskPanelLayout {
         map.floatingTopics.forEach { visit($0.node) }
         guard isVisible(openCount: open, lingeringCount: kept) else { return nil }
         let rows = open + kept + (showsCompleted ? done : 0)
-        let overflow = rows > maxRows
-        let visible = showsAll || !overflow ? rows : maxRows
-        return CGRect(origin: origin, size: size(visibleRows: visible, hasFooter: overflow, isCollapsed: state.isCollapsed))
+        return CGRect(origin: origin, size: size(visibleRows: heightRows(rows: rows, showsAll: showsAll),
+                                                  hasFooter: rows > maxRows, isCollapsed: state.isCollapsed))
     }
 
     /// Builds the panel for `map` (nil = hidden).
@@ -89,11 +107,13 @@ enum TaskPanelLayout {
         let state = map.taskPanel ?? TaskPanelState()
         let overflow = entries.count > maxRows
         let visible = showsAll || !overflow ? entries : Array(entries.prefix(maxRows))
-        let size = TaskPanelLayout.size(visibleRows: visible.count, hasFooter: overflow, isCollapsed: state.isCollapsed)
+        let rows = heightRows(rows: entries.count, showsAll: showsAll)
+        let size = TaskPanelLayout.size(visibleRows: rows, hasFooter: overflow, isCollapsed: state.isCollapsed)
         let origin = state.position ?? defaultOrigin(contentBounds: contentBounds)
         return TaskPanelContent(entries: entries, visibleEntries: visible, openCount: openCount,
                                 isCollapsed: state.isCollapsed, hiddenCount: entries.count - visible.count,
-                                hasFooter: overflow, frame: CGRect(origin: origin, size: size),
+                                hasFooter: overflow, scrollsRows: visible.count > rows,
+                                frame: CGRect(origin: origin, size: size),
                                 isAutoPositioned: state.position == nil)
     }
 }

@@ -25,6 +25,24 @@ final class MapThumbnails {
         FileManager.default.fileExists(atPath: url.appendingPathComponent(LockHeader.fileName).path)
     }
 
+    /// Whether the map has "Lock Editing" on (WP15: `isReadOnly` in its
+    /// map.json); locked (encrypted) maps have no readable flag → false.
+    /// Cached per file + modification date.
+    static func isReadOnly(_ url: URL) -> Bool {
+        let date = modificationDate(of: url)
+        let key = LaunchEnvironment.key(url)
+        if let cached = readOnlyCache[key], cached.date == date { return cached.value }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        struct Flag: Decodable { var isReadOnly: Bool? }
+        let data = try? Data(contentsOf: url.appendingPathComponent(MindMapPackage.mapFileName))
+        let value = data.flatMap { try? JSONDecoder().decode(Flag.self, from: $0) }?.isReadOnly == true
+        readOnlyCache[key] = (date, value)
+        return value
+    }
+
+    private static var readOnlyCache: [String: (date: Date?, value: Bool)] = [:]
+
     /// When the map content last changed (map.json / map.json.enc / lock.json).
     nonisolated static func modificationDate(of url: URL) -> Date? {
         let scoped = url.startAccessingSecurityScopedResource()

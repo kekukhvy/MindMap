@@ -11,6 +11,9 @@ struct ScrollWheelHandler: NSViewRepresentable {
     var onScroll: (CGSize, CGPoint, Bool) -> Void
     /// Location in view coordinates of a secondary click.
     var onSecondaryClick: (CGPoint) -> Void = { _ in }
+    /// Plain scrolls at this location go to the view under the pointer
+    /// instead (the Tasks panel's scrolling list).
+    var passesScroll: (CGPoint) -> Bool = { _ in false }
     /// Modifier keys of the latest left-mouse event in the window (Option-drag).
     @MainActor static var lastMouseModifiers: NSEvent.ModifierFlags = []
 
@@ -18,12 +21,14 @@ struct ScrollWheelHandler: NSViewRepresentable {
         let view = CatcherView()
         view.onScroll = onScroll
         view.onSecondaryClick = onSecondaryClick
+        view.passesScroll = passesScroll
         return view
     }
 
     func updateNSView(_ nsView: CatcherView, context: Context) {
         nsView.onScroll = onScroll
         nsView.onSecondaryClick = onSecondaryClick
+        nsView.passesScroll = passesScroll
     }
 
     static func dismantleNSView(_ nsView: CatcherView, coordinator: ()) {
@@ -33,6 +38,7 @@ struct ScrollWheelHandler: NSViewRepresentable {
     final class CatcherView: NSView {
         var onScroll: ((CGSize, CGPoint, Bool) -> Void)?
         var onSecondaryClick: ((CGPoint) -> Void)?
+        var passesScroll: ((CGPoint) -> Bool)?
         private var monitor: Any?
 
         override var isFlipped: Bool { true }
@@ -53,6 +59,8 @@ struct ScrollWheelHandler: NSViewRepresentable {
                 guard self.bounds.contains(location) else { return event }
                 switch event.type {
                 case .scrollWheel:
+                    let zoomKeys = !event.modifierFlags.intersection([.command, .option]).isEmpty
+                    if !zoomKeys, self.passesScroll?(location) == true { return event }
                     let factor: CGFloat = event.hasPreciseScrollingDeltas ? 1 : 12
                     let delta = CGSize(width: event.scrollingDeltaX * factor, height: event.scrollingDeltaY * factor)
                     let zoom = !event.modifierFlags.intersection([.command, .option]).isEmpty

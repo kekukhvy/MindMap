@@ -411,7 +411,7 @@ struct WelcomeTourSheet: View {
             #if os(macOS)
             .frame(width: 880, height: 660)
             #else
-            .gestureHelpSizing() // page-sized sheet on iPad
+            .pageSheetSizing() // page-sized sheet on iPad
             #endif
             .interactiveDismissDisabled(isFirstLaunch)
             .onAppear {

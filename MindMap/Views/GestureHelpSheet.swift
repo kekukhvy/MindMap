@@ -137,7 +137,7 @@ struct GestureHelpSheet: View {
 extension View {
     /// Wide page sheet on iPad (two columns fit), large detent otherwise.
     @ViewBuilder
-    func gestureHelpSizing() -> some View {
+    func pageSheetSizing() -> some View {
         #if os(iOS)
         if #available(iOS 18.0, *) {
             presentationSizing(.page)

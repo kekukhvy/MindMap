@@ -115,6 +115,14 @@ extension EditorController {
             if selectedID != nil { scheduleSelectionPalette() }
             return .toggled
         }
+        let command = hardwareModifiers.contains(.command), shift = hardwareModifiers.contains(.shift)
+        if command || shift {
+            // Hardware keyboard: ⌘-tap toggles, ⇧-tap extends (as on the Mac).
+            tapSequence.reset()
+            clickTopic(id, command: command, shift: shift)
+            if selectedID != nil { scheduleSelectionPalette() }
+            return .toggled
+        }
         if TopicAccessoryTap.isAccessory(lastAccessoryTap, id: id, time: time) {
             // The checkbox / link / attachment button did its job (and
             // selected); the tap neither folds nor starts a double-tap.

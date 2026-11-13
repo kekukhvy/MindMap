@@ -1,5 +1,17 @@
 import SwiftUI
 
+/// "Lock Editing" is on for a map (WP15) — shown next to its name in the
+/// Welcome and Library lists.
+struct ReadOnlyBadge: View {
+    var body: some View {
+        Image(systemName: "pencil.slash")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .help("Read-only (Lock Editing is on)")
+            .accessibilityLabel("Read-only")
+    }
+}
+
 /// One map on the Welcome screen: thumbnail (lock for locked maps), name,
 /// location and modified date. Click / tap opens it.
 struct WelcomeMapRow: View {
@@ -16,10 +28,13 @@ struct WelcomeMapRow: View {
             HStack(spacing: 14) {
                 MapThumbnailView(url: url, isLocked: isLocked)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+                    HStack(spacing: 5) {
+                        Text(title)
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        if !isLocked, MapThumbnails.isReadOnly(url) { ReadOnlyBadge() }
+                    }
                     Text(location)
                         .font(.caption)
                         .foregroundStyle(.secondary)

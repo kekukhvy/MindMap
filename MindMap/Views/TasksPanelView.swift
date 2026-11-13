@@ -22,9 +22,14 @@ struct TasksPanelView: View {
         VStack(spacing: 0) {
             header
             if !panel.isCollapsed {
-                ForEach(panel.visibleEntries) { entry in
-                    TaskPanelRow(editor: editor, entry: entry, scale: scale, isSelected: editor.selectedID == entry.id)
-                        .transition(.opacity)
+                if panel.scrollsRows {
+                    // Long "Show all" list: fixed height, rows scroll inside.
+                    ScrollView(.vertical) {
+                        LazyVStack(spacing: 0) { rows }
+                    }
+                    .frame(height: CGFloat(TaskPanelLayout.maxExpandedRows) * TaskPanelLayout.rowHeight * scale)
+                } else {
+                    rows
                 }
                 if panel.hasFooter { footer }
             }
@@ -37,6 +42,13 @@ struct TasksPanelView: View {
         .position(x: screen.midX, y: screen.midY)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Tasks panel")
+    }
+
+    private var rows: some View {
+        ForEach(panel.visibleEntries) { entry in
+            TaskPanelRow(editor: editor, entry: entry, scale: scale, isSelected: editor.selectedID == entry.id)
+                .transition(.opacity)
+        }
     }
 
     // MARK: Header (drag handle)

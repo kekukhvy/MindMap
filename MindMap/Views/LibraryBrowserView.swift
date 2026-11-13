@@ -97,7 +97,9 @@ struct LibraryBrowserView: View {
     private func list(_ items: [MapSummary]) -> some View {
         List(selection: $selection) {
             ForEach(items) { map in
-                LibraryMapRow(map: map, status: map.libraryID.map(service.status(of:)))
+                LibraryMapRow(map: map, status: map.libraryID.map(service.status(of:)),
+                              isReadOnly: !map.isLocked
+                                  && (service.store.packageURL(for: map.location).map(MapThumbnails.isReadOnly) ?? false))
                     .tag(map.location)
                     #if os(iOS)
                     .contentShape(Rectangle())
@@ -193,6 +195,8 @@ struct LibraryBrowserView: View {
 struct LibraryMapRow: View {
     let map: MapSummary
     var status: LibrarySyncStatus?
+    /// "Lock Editing" is on (WP15).
+    var isReadOnly = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -201,8 +205,11 @@ struct LibraryMapRow: View {
                 .foregroundStyle(map.isLocked ? Color.orange : Color.accentColor)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
-                Text(map.title)
-                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Text(map.title)
+                        .lineLimit(1)
+                    if isReadOnly { ReadOnlyBadge() }
+                }
                 Text(Self.dateText(map.modified))
                     .font(.caption)
                     .foregroundStyle(.secondary)

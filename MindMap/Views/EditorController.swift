@@ -186,6 +186,12 @@ final class EditorController {
     @ObservationIgnored var taskLingerDelay: TimeInterval = 1.2
     /// Live translation (screen points) while the panel header is dragged.
     var taskPanelDrag: CGSize?
+    /// Viewport when a Tasks panel drag began on a read-only map (the drag
+    /// pans the canvas instead of moving the panel).
+    /// ⌘ / ⇧ held on an iPad hardware keyboard (`onModifierKeysChanged`):
+    /// a tap then toggles / extends the selection like a Mac click.
+    @ObservationIgnored var hardwareModifiers: EventModifiers = []
+    @ObservationIgnored var lockedPanelPanStart: Viewport?
     /// Last click on a topic's checkbox: a second click soon after must not
     /// count as a double-click on the topic (which adds a child).
     @ObservationIgnored var lastCheckboxClick: (id: UUID, time: Date)?

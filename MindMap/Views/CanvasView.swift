@@ -99,7 +99,7 @@ struct CanvasView: View {
         #if os(iOS)
         .sheet(isPresented: $editor.isGestureHelpPresented) {
             GestureHelpSheet()
-                .gestureHelpSizing()
+                .pageSheetSizing()
         }
         #endif
         .onChange(of: editor.editingID) { _, id in
@@ -134,6 +134,8 @@ struct CanvasView: View {
             #endif
             #if os(iOS)
             .background(PencilBridge(editor: editor))
+            // ⌘ / ⇧ on a hardware keyboard: taps multi-select, drags draw a marquee.
+            .background(ModifierTouchBridge { editor.hardwareModifiers = $0 })
             .background(TabKeyBridge(isActive: isFocused || editor.editingID != nil) {
                 editor.keyboardDidAct()
                 if editor.editingID != nil {
@@ -154,6 +156,8 @@ struct CanvasView: View {
                 }
             }, onSecondaryClick: { location in
                 editor.selectForContextMenu(at: location)
+            }, passesScroll: { location in
+                editor.taskListScrollRect?.contains(location) == true
             }))
             #endif
     }
@@ -164,7 +168,9 @@ struct CanvasView: View {
         DragGesture(minimumDistance: 2, coordinateSpace: .named(CanvasView.space))
             .onChanged { value in
                 if backgroundDrag == nil {
-                    backgroundDrag = editor.tapsToggleSelection || Self.isSelectionModifierPressed ? .marquee : .pan
+                    let keys = !editor.hardwareModifiers.isDisjoint(with: [.command, .shift])
+                    backgroundDrag = editor.tapsToggleSelection || Self.isSelectionModifierPressed || keys
+                        ? .marquee : .pan
                 }
                 if backgroundDrag == .marquee {
                     editor.updateMarquee(from: value.startLocation, to: value.location)

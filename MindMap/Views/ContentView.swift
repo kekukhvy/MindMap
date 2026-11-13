@@ -87,6 +87,7 @@ struct ContentView: View {
             #if os(iOS)
             .sheet(isPresented: $editor.isSettingsPresented) {
                 SettingsView { editor.isSettingsPresented = false }
+                    .pageSheetSizing()
             }
             .sheet(item: presentedAttachment(fullScreen: false)) { request in
                 AttachmentSheet(model: model, attachmentID: request.attachmentID, undoManager: undoManager)
