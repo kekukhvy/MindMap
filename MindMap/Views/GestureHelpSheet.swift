@@ -32,6 +32,7 @@ enum GestureHelp {
                 action: "Open the link (web page, topic or map); also Link › Go to in the menu"),
             Row(systemImage: "arrow.up.and.down.and.arrow.left.and.right", gesture: "Drag a topic",
                 action: "Move it onto another topic, between siblings or anywhere"),
+            Row(systemImage: "paperclip", gesture: "Drag a note or file icon sideways", action: "Change the order"),
             Row(systemImage: "hand.draw", gesture: "Drag empty canvas", action: "Pan"),
             Row(systemImage: "arrow.up.left.and.arrow.down.right", gesture: "Pinch", action: "Zoom"),
             Row(systemImage: "rectangle.dashed", gesture: "Double-tap empty canvas", action: "Floating topic there"),
@@ -53,6 +54,9 @@ enum GestureHelp {
             Row(systemImage: "keyboard", gesture: "Tab · Return", action: "Child · sibling topic"),
             Row(systemImage: "keyboard", gesture: "Space or F2 · Delete", action: "Rename · delete"),
             Row(systemImage: "keyboard", gesture: "⌘Z · ⇧⌘Z", action: "Undo · redo"),
+            Row(systemImage: "keyboard", gesture: "⇧Return while typing", action: "New line in the topic"),
+            Row(systemImage: "keyboard", gesture: "⌘C · ⌘X · ⌘V", action: "Copy · cut · paste topics"),
+            Row(systemImage: "keyboard", gesture: "⌘-tap · ⇧-tap", action: "Add a topic · a range to the selection"),
         ]),
     ]
 

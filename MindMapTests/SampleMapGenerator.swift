@@ -51,7 +51,10 @@ enum FeaturesSample {
             "Type a character — Rename with it",
             "Return / Esc — Finish Editing",
             "Tab while editing — Finish + Add Child",
+            "⇧Return / ⌥Return — New Line in Topic",
+            "⌘C / ⌘X / ⌘V — Copy / Cut / Paste Topics",
             "⌘Z / ⇧⌘Z — Undo / Redo",
+            "⌥⌘L — Lock Editing (read-only)",
             "⌥-drag — Free Move (Mac)",
         ])
         let hkNavigation = group("Navigation", [
@@ -86,7 +89,8 @@ enum FeaturesSample {
             "⇧⌘N — Add/Open Note",
             "⇧⌘D — Add/Open Handwritten Note",
             "⇧⌘A — Attach File…",
-            "⌘V — Paste File (Mac)",
+            "⌘V — Paste Files / Images",
+            "Drag an icon sideways — Reorder",
             "Esc — Close Note Window (Done)",
         ])
         let hkItems = group("Relationships & Boundaries", [
@@ -99,6 +103,9 @@ enum FeaturesSample {
             "⌘N — New Map",
             "⌥⌘N — New Window (iPad)",
             "⌘O — Open…",
+            "⇧⌘O — Open from Library…",
+            "⇧⌘1 — Welcome (Mac)",
+            "⌃⌘L — Lock Now (locked maps)",
         ])
         let hotkeys = Node(text: "Hotkeys", layoutStyle: .treeDown,
                            children: [hkEditing, hkNavigation, hkSelection, hkView, hkLinks, hkTasks, hkAttachments, hkItems,
@@ -109,7 +116,7 @@ enum FeaturesSample {
                            Collected from the app's code (Topic / View / File menus and the canvas key handler).
 
                            - Plain keys (Tab, Return, Delete, Space, arrows) work while the **canvas** has focus and no topic is being edited.
-                           - While editing, keys go to the text field: Return / Esc finish, Tab finishes and adds a child.
+                           - While editing, keys go to the text field: Return / Esc finish, Tab finishes and adds a child, ⇧Return / ⌥Return start a new line.
                            - On iPad the same shortcuts work with a hardware keyboard (hold ⌘ to see the list).
                            """)])
 
@@ -122,6 +129,7 @@ enum FeaturesSample {
                 Node(text: "Empty space — free position"),
             ]),
             Node(text: "Right-click / long press — menu"),
+            Node(text: "iPad: tap folds, double-tap adds child"),
             Node(text: "Pinch, ⌘-scroll — zoom; drag background — pan"),
         ])
         let editing = Node(text: "Editing & Keyboard", layoutStyle: .rightMap, children: [
@@ -136,6 +144,8 @@ enum FeaturesSample {
         2. Start typing to rename (or **Space** / **F2**); Return or Esc finishes.
         3. Drag a topic onto another to reparent it, onto its top/bottom edge to reorder.
         4. Every change is one undo step: **⌘Z** / **⇧⌘Z**.
+        5. **⇧Return** (or **⌥Return**) while typing starts a new line in the topic.
+        6. **⌘C / ⌘X / ⌘V** copy, cut and paste whole branches (with notes, files, tasks, links); text from other apps pastes as topics, one per line.
 
         The collapsed branch "Mouse & touch" shows the **+N** toggle: click it to expand.
         """)])
@@ -237,6 +247,7 @@ enum FeaturesSample {
         - **Note** (⇧⌘N): Markdown with Edit / Preview.
         - **Handwritten note** (⇧⌘D): PencilKit page — full screen on iPad, window with pen/eraser on Mac.
         - **File** (⇧⌘A, drag & drop, ⌘V): copied into the package, QuickLook preview, Share / Open / Export.
+        - Drag an icon sideways to change the order; the Preview shows headings, lists, tasks, quotes, code and tables.
 
         Click an icon to open it. Edits are part of the map's undo history.
         """)])
@@ -281,43 +292,42 @@ enum FeaturesSample {
         """)])
 
         // Documents & iCloud (org chart).
-        let ipad = Node(text: "iPad", children: leaves(["Opens last map", "Multi-window"]))
+        let ipad = Node(text: "iPad", children: leaves(["Welcome screen", "Multi-window"]))
         let package = Node(text: "Package", children: leaves(["map.json", "attachments/"]))
         let documents = Node(text: "Documents & iCloud", layoutStyle: .orgChartDown, children: [
-            Node(text: "Mac", children: leaves(["Reopens recent", "Map tabs"])),
+            Node(text: "Mac", children: leaves(["Welcome window", "Map tabs"])),
             ipad,
             package,
         ], attachments: [note("Documents", """
         # Documents & iCloud
 
         - A map is a `.mindmap` package: `map.json` + `attachments/` (plain files, no absolute paths).
-        - **Mac**: standard documents, recent maps reopen at launch, linked maps open as tabs.
-        - **iPad**: opens the last map directly (no file browser), New Map ⌘N, Open… ⌘O, several windows.
-        - Works from **iCloud Drive / Files**; the app's own iCloud container needs a developer team.
+        - **Storage** (Settings): **iCloud Sync** library (CloudKit, works without iCloud Drive, merges edits per topic) or **Files** (`.mindmap` in a folder you choose, also iCloud Drive).
+        - **Mac**: Welcome window (⇧⌘1) with the library and recent files; linked maps open as tabs.
+        - **iPad**: Welcome screen, New Map ⌘N, Open… ⌘O, Open from Library ⇧⌘O, several windows.
+        - **Lock Map** (File menu): encrypted, opens with Face ID / Touch ID; **Lock Editing** (⌥⌘L) only makes a map read-only.
         """)])
 
         // Known gaps / Roadmap (tree down, tasks).
         let gaps = Node(text: "Known gaps / Roadmap", layoutStyle: .treeDown, borderStyle: .dashed, lineDash: .dashed,
                         children: [
-                            Node(text: "Copy / paste & duplicate topics", task: TaskInfo(priority: .high, dueDate: day(3))),
-                            Node(text: "Multi-line topic editor", task: TaskInfo(priority: .high, dueDate: day(7))),
-                            Node(text: "Boundaries around any topics", task: TaskInfo(isDone: true, completedAt: day(-1))),
-                            Node(text: "iCloud container (needs a team)", task: TaskInfo(priority: .medium)),
-                            Node(text: "iPad: empty-canvas context menu", task: TaskInfo(priority: .low, dueDate: day(21))),
-                            Node(text: "Drag-reorder attachment icons", task: TaskInfo(priority: .low)),
-                            Node(text: "Inline relationship labels", task: TaskInfo(isDone: true, completedAt: day(-1))),
-                            Node(text: "Keep unknown link kinds on save", task: TaskInfo(isDone: true, completedAt: now)),
+                            Node(text: "Test iCloud Sync on two devices", task: TaskInfo(priority: .high, dueDate: day(3))),
+                            Node(text: "Sign the Mac app with the team", task: TaskInfo(priority: .high, dueDate: day(7))),
+                            Node(text: "Pencil & keyboard on a real iPad", task: TaskInfo(priority: .medium, dueDate: day(14))),
+                            Node(text: "Export PNG / PDF", task: TaskInfo(priority: .low, dueDate: day(21))),
+                            Node(text: "Search in a map", task: TaskInfo(priority: .low)),
+                            Node(text: "Copy / paste topics", task: TaskInfo(isDone: true, completedAt: now)),
+                            Node(text: "Multi-line topics", task: TaskInfo(isDone: true, completedAt: now)),
+                            Node(text: "Drag-reorder attachment icons", task: TaskInfo(isDone: true, completedAt: day(-1))),
                         ],
                         attachments: [note("Known gaps", """
                         # Known gaps / Roadmap
 
                         From REPORT.md. Open items are tasks — they appear in the Tasks panel.
 
-                        - Topic editor is single-line (text wraps, no manual line breaks).
-                        - Multi-select: ⌘-click / ⇧-click / ⌘A / area drag; a boundary can enclose any selected topics.
-                        - No copy/paste or duplicate of topics yet.
-                        - iCloud container needs a developer team.
-                        - Device-only checks (Pencil, hardware keyboard, trackpad) are manual.
+                        - iCloud Sync, and Mac ↔ iPad lock keys, need the Mac app signed with the developer team (an Apple ID in Xcode) and a real test on two devices.
+                        - Apple Pencil (Scribble, hover, squeeze, double-tap), hardware keyboard and trackpad are checked by hand on a device.
+                        - Ideas for later: export to PNG / PDF, search, presentation mode.
                         """)])
 
         let root = Node(text: "MindMap", children: [
@@ -367,8 +377,8 @@ enum FeaturesSample {
         and links back to it.
         """)
         let next = Node(text: "Next", children: [
-            Node(text: "Copy / paste topics"),
-            Node(text: "Multi-line editor"),
+            Node(text: "Export PNG / PDF"),
+            Node(text: "Search in a map"),
         ])
         let root = Node(text: "MindMap Roadmap", layoutStyle: .rightMap, children: [
             Node(text: "Done", children: [
@@ -376,12 +386,13 @@ enum FeaturesSample {
                 Node(text: "Stage 2 — attachments"),
                 Node(text: "Links, tasks, map links"),
                 Node(text: "Multi-select"),
+                Node(text: "iCloud Sync, lock, read-only"),
+                Node(text: "Copy / paste, multi-line topics"),
             ]),
             next,
             Node(text: "Later", children: [
                 Node(text: "Presentation mode"),
-                Node(text: "Export PNG / PDF"),
-                Node(text: "Search"),
+                Node(text: "Templates"),
             ]),
             Node(text: "Back to MindMap Features",
                  link: .map(MapReference(relativePath: featuresFileName, displayName: "MindMap Features"))),
