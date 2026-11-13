@@ -424,7 +424,6 @@ enum FeaturesSample {
         """)
         let next = Node(text: "Next", children: [
             Node(text: "Export PNG / PDF"),
-            Node(text: "Search in a map"),
         ])
         let root = Node(text: "MindMap Roadmap", layoutStyle: .rightMap, children: [
             Node(text: "Done", children: [
@@ -434,6 +433,14 @@ enum FeaturesSample {
                 Node(text: "Multi-select"),
                 Node(text: "iCloud Sync, lock, read-only"),
                 Node(text: "Copy / paste, multi-line topics"),
+                Node(text: "Find (⌘F)"),
+                Node(text: "Favorites panel"),
+                Node(text: "Sort Children A → Z / Z → A"),
+                Node(text: "Handwriting: endless canvas, zoom"),
+                Node(text: "Handwriting: hold to straighten shapes"),
+                Node(text: "Pencil double-tap: eraser and back"),
+                Node(text: "Tap the cloud badge to sync"),
+                Node(text: "App version in Settings / About"),
             ]),
             next,
             Node(text: "Later", children: [
