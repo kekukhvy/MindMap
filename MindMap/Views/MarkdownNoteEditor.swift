@@ -1,8 +1,8 @@
 import Combine
 import SwiftUI
 
-/// Title field + plain Markdown editor with a Preview toggle. A new note
-/// starts empty (placeholder text shown) and is a draft until its first
+/// Title field + plain Markdown editor with a Preview toggle. A note with
+/// text opens in Preview. A new note starts empty (placeholder text shown) and is a draft until its first
 /// text (`MindMapModel+Drafts`); closed empty, it disappears. Every text
 /// change is written to the document's `AttachmentStore` as an undoable
 /// "Edit Note" step on the document's undo manager (dirty + autosave);
@@ -27,8 +27,15 @@ struct MarkdownNoteEditor: View {
         self.model = model
         self.attachment = attachment
         self.undoManager = undoManager
-        _text = State(initialValue: MarkdownNote.text(model.content(of: attachment.id)))
+        let initialText = MarkdownNote.text(model.content(of: attachment.id))
+        _text = State(initialValue: initialText)
         _title = State(initialValue: attachment.title)
+        _isPreview = State(initialValue: Self.opensInPreview(initialText))
+    }
+
+    /// A note with text opens in Preview; an empty one opens in Edit.
+    static func opensInPreview(_ text: String) -> Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var store: AttachmentStore { model.attachmentStore }

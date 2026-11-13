@@ -6,6 +6,12 @@ import Testing
 /// Note preview fidelity (tables, setext headings, nested quotes, task
 /// variants, images) and dragging attachment icons to reorder them.
 struct NotePreviewAndIconTests {
+    @Test func noteWithTextOpensInPreview() {
+        #expect(MarkdownNoteEditor.opensInPreview("# Plan\n- tea"))
+        #expect(!MarkdownNoteEditor.opensInPreview(""))
+        #expect(!MarkdownNoteEditor.opensInPreview(" \n\t"))
+    }
+
     @Test func tablesAndHeadingVariants() {
         let markdown = """
         Title

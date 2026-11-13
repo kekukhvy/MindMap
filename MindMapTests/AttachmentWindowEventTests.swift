@@ -18,7 +18,16 @@ struct AttachmentWindowEventTests {
         return nil
     }
 
-    @Test func clickingNoteIconOpensEditableWindow() async throws {
+    private func segmentedControl(in view: NSView?) -> NSSegmentedControl? {
+        guard let view else { return nil }
+        if let found = view as? NSSegmentedControl { return found }
+        for sub in view.subviews {
+            if let found = segmentedControl(in: sub) { return found }
+        }
+        return nil
+    }
+
+    @Test func clickingNoteIconOpensPreviewThenEditableWindow() async throws {
         var topic = Node(text: "Topic with note")
         let note = Attachment(kind: .markdown, title: "Meeting")
         let plain = MindMap(root: Node(text: "Central", layoutStyle: .rightMap, children: [topic]))
@@ -45,11 +54,22 @@ struct AttachmentWindowEventTests {
         for _ in 0..<30 where noteWindow == nil {
             try await harness.wait(100)
             noteWindow = NSApp.windows.first {
-                !before.contains(ObjectIdentifier($0)) && $0.isVisible && textView(in: $0.contentView) != nil
+                !before.contains(ObjectIdentifier($0)) && $0.isVisible && $0.title == "Meeting"
             }
         }
         let window = try #require(noteWindow)
-        let editorView = try #require(textView(in: window.contentView))
+        // A note with text opens in Preview: no text view until Edit is picked.
+        try await harness.wait(300)
+        #expect(textView(in: window.contentView) == nil)
+        let mode = try #require(segmentedControl(in: window.contentView?.superview))
+        mode.selectedSegment = 0
+        mode.sendAction(mode.action, to: mode.target)
+        var editing: NoteTextView?
+        for _ in 0..<30 where editing == nil {
+            try await harness.wait(100)
+            editing = textView(in: window.contentView)
+        }
+        let editorView = try #require(editing)
         #expect(harness.editor.selectedID == topic.id)
         #expect(editorView.string == original)
         #expect(window.title == "Meeting")
