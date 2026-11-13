@@ -107,8 +107,8 @@ final class WelcomeFlow {
     /// Override for tests.
     @ObservationIgnored var filesFolderOverride: URL?
 
-    /// Where Files-mode samples go. macOS: the folder chosen on the tour's
-    /// storage page (security-scoped, kept accessible), else the app's
+    /// Where Files-mode samples go. macOS: the folder chosen earlier
+    /// (security-scoped, kept accessible), else the app's
     /// Documents folder. iPad: the app's iCloud Drive folder, else
     /// "On My iPad › MindMap".
     func filesFolder() async -> URL {

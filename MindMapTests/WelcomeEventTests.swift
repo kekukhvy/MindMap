@@ -188,9 +188,8 @@ struct WelcomeEventTests {
         let welcome = WelcomeView(flow: flow, actions: actions, isShowingTour: .constant(false))
         _ = try await snapshot(welcome, size: CGSize(width: 940, height: 620), name: "welcome-mac.png")
 
-        for page in 0...TourPage.all.count {
-            let tour = WelcomeTourView(service: service, isFirstLaunch: page == TourPage.all.count, onFinish: { _ in },
-                                       filesFolder: nil, chooseFilesFolder: { _ in }, initialPage: page)
+        for page in 0..<TourPage.all.count {
+            let tour = WelcomeTourView(isFirstLaunch: false, onFinish: { _ in }, initialPage: page)
             _ = try await snapshot(tour, size: CGSize(width: 880, height: 660), name: "tour-\(page + 1)-mac.png")
         }
     }
