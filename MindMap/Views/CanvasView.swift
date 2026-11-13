@@ -61,6 +61,7 @@ struct CanvasView: View {
                     PickBanner(editor: editor)
                     SelectionBanner(editor: editor)
                     ReadOnlyNoticeView(editor: editor)
+                    FindBar(editor: editor)
                 }
             }
             .overlay(alignment: .bottom) { BackPill(editor: editor) }

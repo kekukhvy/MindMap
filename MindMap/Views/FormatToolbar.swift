@@ -59,6 +59,9 @@ struct FormatToolbar: ToolbarContent {
             #endif
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            #if os(iOS)
+            Button("Find", systemImage: "magnifyingglass") { editor.openFind() }
+            #endif
             ReadOnlyToggle(editor: editor)
             Menu("Format", systemImage: "paintbrush") {
                 if let item = editor.selectedItem {

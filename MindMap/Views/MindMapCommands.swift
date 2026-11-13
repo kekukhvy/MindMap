@@ -102,6 +102,18 @@ struct MindMapCommands: Commands {
             .keyboardShortcut(ReadOnlyToggle.shortcut)
             .disabled(editor == nil)
         }
+        // Edit ▸ Find (⌘F), Find Next (⌘G), Find Previous (⇧⌘G).
+        CommandGroup(after: .textEditing) {
+            Button("Find…") { editor?.openFind() }
+                .keyboardShortcut("f", modifiers: .command)
+                .disabled(editor == nil)
+            Button("Find Next") { editor?.stepFind(forward: true) }
+                .keyboardShortcut("g", modifiers: .command)
+                .disabled(editor?.findMatches.isEmpty != false)
+            Button("Find Previous") { editor?.stepFind(forward: false) }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+                .disabled(editor?.findMatches.isEmpty != false)
+        }
         #if os(iOS)
         CommandGroup(replacing: .help) {
             Button("Gestures & Apple Pencil") { editor?.isGestureHelpPresented = true }

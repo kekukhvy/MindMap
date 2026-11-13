@@ -283,13 +283,23 @@ final class EditorController {
     nonisolated(unsafe) static var debugInstances: [WeakEditor] = []
     #endif
 
+    /// Find bar (⌘F, `EditorController+Find`): view state, never saved.
+    var isFindOpen = false
+    var findQuery = "" {
+        didSet { if findQuery != oldValue { refreshFind(newQuery: true) } }
+    }
+    var findMatches: [FindMatch] = []
+    var findIndex = 0
+    /// Bumped by every ⌘F so the field takes focus again.
+    var findFocusToken = 0
+
     /// Map-link topics whose map file cannot be found now (icon dimmed;
     /// `refreshMissingMapLinks`).
     var missingMapLinks: Set<UUID> = []
 
     /// Current scene; rebuilt only when the map or the edited draft changes.
     var scene: MapScene {
-        let map = model.map
+        let map = findFilteredMap ?? model.map
         let editing = editingID
         let draft = editing == nil ? "" : draftText
         let now = now()
