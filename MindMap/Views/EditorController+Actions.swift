@@ -22,8 +22,13 @@ extension EditorController {
     }
 
     func move(_ direction: MoveDirection) {
-        guard let current = selectedID, scene.nodes[current] != nil else {
+        guard let current = selectedID, let info = scene.nodes[current] else {
             select(model.root.id)
+            return
+        }
+        // The key towards a collapsed topic's children expands it.
+        if info.isCollapsed, info.hasChildren, scene.navigator.leadsToChildren(from: current, direction: direction) {
+            toggleCollapse(current)
             return
         }
         guard let target = scene.navigator.target(from: current, direction: direction) else { return }
@@ -82,7 +87,14 @@ extension EditorController {
             deleteSelectedTopics()
             return
         }
-        guard let id = selectedID, id != model.root.id else { return }
+        guard let id = selectedID else { return }
+        deleteTopic(id)
+    }
+
+    /// Deletes one topic (not the central one); the selection moves to its
+    /// neighbour or parent.
+    private func deleteTopic(_ id: UUID) {
+        guard id != model.root.id else { return }
         let next = model.map.isFloatingRoot(id) ? nil : model.map.tree(containing: id)?.selectionAfterDeleting(id)
         if model.delete(id, undoManager: undoManager) { selectedID = next }
     }
@@ -110,8 +122,9 @@ extension EditorController {
     }
 
     /// Commits the draft (one undo step if changed; naming a just-added
-    /// topic joins its "Add Topic" step). With `id`, only if that node is
-    /// still the one being edited.
+    /// topic joins its "Add Topic" step). A just-added topic committed
+    /// with no text is deleted instead (added by mistake). With `id`, only
+    /// if that node is still the one being edited.
     func commitEditing(ifEditing id: UUID? = nil) {
         if id == nil { commitLabelEdit() }
         guard let editingID, id == nil || id == editingID else { return }
@@ -119,6 +132,10 @@ extension EditorController {
         let coalesce = namingNewID == editingID
         namingNewID = nil
         setEditing(nil, text: "", selectAll: true)
+        if coalesce, text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            deleteTopic(editingID)
+            return
+        }
         model.rename(editingID, to: text, coalescing: coalesce, undoManager: undoManager)
         // The committed text may have grown the topic past the view edge.
         if selectedID == editingID { reveal(editingID) }

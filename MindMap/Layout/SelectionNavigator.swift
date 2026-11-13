@@ -65,6 +65,13 @@ struct SelectionNavigator {
         incoming[id].map(SelectionNavigator.directionToParent)
     }
 
+    /// The key leading from `id` to its children: away from its parent
+    /// (Right on right-side branches); for roots Left or Right.
+    func leadsToChildren(from id: UUID, direction: MoveDirection) -> Bool {
+        guard let toParent = directionToParent(of: id) else { return !direction.isVertical }
+        return direction == toParent.opposite
+    }
+
     func target(from id: UUID, direction: MoveDirection) -> UUID? {
         guard let frame = frames[id] else { return nil }
         let edge = incoming[id]

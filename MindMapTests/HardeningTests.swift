@@ -284,6 +284,8 @@ struct EdgeCaseTests {
         #expect(editor.selectedID == branch.id)
     }
 
+    /// An existing topic committed empty is kept (and still laid out); a
+    /// just-added one is deleted (EditingKeysTests).
     @Test func emptyTextCommitIsKept() throws {
         let undo = UndoTests.makeUndoManager()
         let editor = EditorController(model: MindMapModel())
@@ -293,8 +295,16 @@ struct EdgeCaseTests {
         let id = try #require(editor.editingID)
         editor.draftText = ""
         editor.commitEditing()
-        #expect(editor.model.map.node(withID: id)?.text == "")
-        #expect(editor.scene.layout.frames[id].map { $0.width > 0 && $0.height > 0 } == true)
+        #expect(editor.model.map.node(withID: id) == nil)
+
+        editor.perform(.addChild)
+        let kept = try #require(editor.editingID)
+        editor.commitEditing()
+        editor.beginEditing(kept)
+        editor.draftText = ""
+        editor.commitEditing()
+        #expect(editor.model.map.node(withID: kept)?.text == "")
+        #expect(editor.scene.layout.frames[kept].map { $0.width > 0 && $0.height > 0 } == true)
     }
 
     @Test func inlineLabelEditing() throws {
