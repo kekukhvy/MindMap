@@ -8,8 +8,9 @@ import PencilKit
 /// Coordinates: PencilKit's, origin at the top left. Notes made before the
 /// endless canvas live on a page `pageWidth` points wide starting at the
 /// origin; the canvas is now endless (Freeform-like): ink may lie anywhere,
-/// including negative coordinates. Strokes are never moved: the views extend
-/// their scrollable area around the ink instead (iPad and macOS alike).
+/// including negative coordinates. Stored strokes are never moved: the views
+/// extend their scrollable area around the ink instead (iPad and macOS
+/// alike; the iPad canvas shows the drawing shifted, see `canvasOrigin`).
 enum HandwrittenNote {
     /// Width of the original page; an empty note opens with this width fitted to the view.
     static let pageWidth: CGFloat = 1024
@@ -72,6 +73,18 @@ enum HandwrittenNote {
         var rect = visible.union(CGRect(x: 0, y: 0, width: pageWidth, height: visible.height))
         if let ink { rect = rect.union(ink) }
         return rect.insetBy(dx: -visible.width, dy: -visible.height)
+    }
+
+    /// Drawing coordinates of the iPad canvas's content origin. PencilKit
+    /// takes strokes only between the content origin and `contentSize`, so
+    /// the canvas never uses negative content coordinates: it shows the
+    /// drawing moved by `-origin`, and the origin stays at or above-left of
+    /// `content`. It moves only up / left and then `room` further, so the
+    /// drawing is shifted once per screen of scrolling, not on every frame;
+    /// integral, so moving the strokes back on save is exact.
+    static func canvasOrigin(current: CGPoint, content: CGRect, room: CGSize) -> CGPoint {
+        CGPoint(x: content.minX < current.x ? (content.minX - room.width).rounded(.down) : current.x,
+                y: content.minY < current.y ? (content.minY - room.height).rounded(.down) : current.y)
     }
 
     /// Default title of the `index`-th (0-based) handwritten note of a topic.

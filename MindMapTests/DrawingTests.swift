@@ -269,6 +269,24 @@ struct EndlessCanvasGeometryTests {
         #expect(moved.contains(ink) && moved.contains(far))
     }
 
+    @Test("BUG-deadzone-1: the canvas origin stays at or above-left of the scrollable area, moving a screen at a time")
+    func canvasOriginCoversTheScrollableArea() {
+        let room = CGSize(width: 1024, height: 700)
+        // Opening an empty page note: the area reaches a screen above / left of the page.
+        let content = HandwrittenNote.contentRect(ink: nil, visible: CGRect(origin: .zero, size: room))
+        let origin = HandwrittenNote.canvasOrigin(current: .zero, content: content, room: room)
+        #expect(origin == CGPoint(x: -2048, y: -1400))
+        #expect(origin.x <= content.minX && origin.y <= content.minY)
+        // Scrolling within that room, or right / down, does not move it (no shift every frame).
+        #expect(HandwrittenNote.canvasOrigin(current: origin, content: content.offsetBy(dx: 500, dy: 300), room: room)
+                == origin)
+        #expect(HandwrittenNote.canvasOrigin(current: origin, content: content.offsetBy(dx: -900, dy: -600), room: room)
+                == origin)
+        // Past it: a screen further, integral.
+        let past = CGRect(x: -2100.5, y: -1400.25, width: 3000, height: 2000)
+        #expect(HandwrittenNote.canvasOrigin(current: origin, content: past, room: room) == CGPoint(x: -3125, y: -2101))
+    }
+
     @Test func openingShowsThePageAsBeforeOrFitsAllTheInk() {
         let page = HandwrittenNote.pageZoom(viewport: viewport)
         // Empty note and a note within the page: the page width fitted from the origin, as before.
@@ -475,9 +493,31 @@ struct PencilNoteInteractionTests {
         return total == 0 ? 0 : Double(dark) / Double(total)
     }
 
+    /// PencilKit takes strokes only on its drawing surface, from the content
+    /// origin to `contentSize`: the whole visible area must lie on it.
+    private func expectEverythingVisibleIsDrawable(_ canvas: PKCanvasView,
+                                                   sourceLocation: SourceLocation = #_sourceLocation) {
+        let visible = CGRect(origin: canvas.contentOffset, size: canvas.bounds.size)
+        let area = CGRect(origin: .zero, size: canvas.contentSize).insetBy(dx: -0.5, dy: -0.5)
+        #expect(area.contains(visible), "visible \(visible) outside \(area)", sourceLocation: sourceLocation)
+        let surface = views(in: canvas).first { String(describing: type(of: $0)) == "PKCanvasAttachmentView" }
+        #expect(surface.map { $0.convert($0.bounds, to: canvas).insetBy(dx: -0.5, dy: -0.5).contains(visible) } == true,
+                "visible \(visible) outside PencilKit's surface \(String(describing: surface?.frame))",
+                sourceLocation: sourceLocation)
+    }
+
+    /// Stored drawing coordinates of the canvas's content origin (where
+    /// canvas drawing coordinates are 0).
+    private func contentOrigin(_ canvas: PKCanvasView, _ coordinator: PencilCanvas.Coordinator) -> CGPoint {
+        let visible = coordinator.visibleRect
+        return CGPoint(x: visible.minX - canvas.contentOffset.x / canvas.zoomScale,
+                       y: visible.minY - canvas.contentOffset.y / canvas.zoomScale)
+    }
+
     /// Endless canvas: an existing note opens with all its ink on screen; the
     /// scrollable area grows left/up (and wherever the user writes) while the
-    /// stored strokes keep their coordinates.
+    /// stored strokes keep their coordinates (the canvas shows them moved by
+    /// its content origin).
     @Test func noteOpensFittedToItsInkAndExtendsLeftAndUpWithoutMovingStrokes() throws {
         let model = MindMapModel(map: MindMap(root: Node(text: "Central")))
         let undo = makeUndo()
@@ -501,43 +541,110 @@ struct PencilNoteInteractionTests {
         #expect(abs(canvas.zoomScale - opening.zoom) < 0.001)
         #expect(coordinator.visibleRect.insetBy(dx: -1, dy: -1).contains(sketch.bounds))
         #expect(canvas.minimumZoomScale < canvas.zoomScale)
-        #expect(canvas.drawing.strokes.allSatisfy { $0.transform == .identity })
         #expect(signature(canvas.drawing) == signature(sketch))
+        expectEverythingVisibleIsDrawable(canvas)
         // Ink left of / above the origin is drawn on screen.
         let zoom = canvas.zoomScale
-        let topLeft = CGRect(x: ink.minX * zoom - canvas.contentOffset.x, y: ink.minY * zoom - canvas.contentOffset.y,
-                             width: 400 * zoom, height: 60 * zoom)
+        var origin = contentOrigin(canvas, coordinator)
+        let topLeft = CGRect(x: (ink.minX - origin.x) * zoom - canvas.contentOffset.x,
+                             y: (ink.minY - origin.y) * zoom - canvas.contentOffset.y, width: 400 * zoom, height: 60 * zoom)
         #expect(inkCoverage(of: canvas, in: topLeft) > 0.005)
 
         // Zooming out keeps the visible rect inside the scrollable area.
         canvas.setZoomScale(canvas.minimumZoomScale, animated: false)
-        let out = coordinator.visibleRect
-        #expect(-canvas.contentInset.left / canvas.zoomScale < out.minX && -canvas.contentInset.top / canvas.zoomScale < out.minY)
-        #expect(canvas.contentSize.width / canvas.zoomScale > out.maxX && canvas.contentSize.height / canvas.zoomScale > out.maxY)
+        expectEverythingVisibleIsDrawable(canvas)
         canvas.setZoomScale(opening.zoom, animated: false)
 
         // Panning to the top-left end of the scrollable area extends it; the view does not jump.
-        let before = canvas.contentInset
-        let corner = CGPoint(x: -before.left, y: -before.top)
-        canvas.contentOffset = corner
-        #expect(abs(canvas.contentOffset.x - corner.x) < 1 && abs(canvas.contentOffset.y - corner.y) < 1)
-        #expect(canvas.contentInset.left > before.left && canvas.contentInset.top > before.top)
+        origin = contentOrigin(canvas, coordinator)
+        canvas.contentOffset = .zero
+        let corner = CGRect(origin: origin, size: coordinator.visibleRect.size)
+        settle()
+        #expect(contentOrigin(canvas, coordinator).x < origin.x && contentOrigin(canvas, coordinator).y < origin.y)
+        #expect(canvas.contentOffset.x > 0 && canvas.contentOffset.y > 0)
         let shown = coordinator.visibleRect
+        #expect(abs(shown.minX - corner.minX) < 1 && abs(shown.minY - corner.minY) < 1)
         #expect(shown.maxX < ink.minX && shown.maxY < ink.minY)
+        expectEverythingVisibleIsDrawable(canvas)
 
         // Writing there (far left of and above the origin) is stored with its coordinates as drawn.
-        let far = line(from: CGPoint(x: shown.minX + 100, y: shown.minY + 100),
-                       to: CGPoint(x: shown.minX + 700, y: shown.minY + 160))
+        origin = contentOrigin(canvas, coordinator)
+        let farStart = CGPoint(x: shown.minX + 100, y: shown.minY + 100)
+        let farEnd = CGPoint(x: shown.minX + 700, y: shown.minY + 160)
+        let far = line(from: CGPoint(x: farStart.x - origin.x, y: farStart.y - origin.y),
+                       to: CGPoint(x: farEnd.x - origin.x, y: farEnd.y - origin.y))
+        let offset = canvas.contentOffset
         canvas.drawing.strokes.append(far)
         coordinator.flush()
         let stored = HandwrittenNote.drawing(model.content(of: id))
-        #expect(signature(stored) == signature(sketch) + signature(PKDrawing(strokes: [far])))
-        #expect(stored.strokes.allSatisfy { $0.transform == .identity })
-        let farView = CGRect(x: (shown.minX + 100) * zoom - canvas.contentOffset.x,
-                             y: (shown.minY + 90) * zoom - canvas.contentOffset.y, width: 600 * zoom, height: 80 * zoom)
+        #expect(stored.strokes.count == sketch.strokes.count + 1)
+        #expect(signature(PKDrawing(strokes: Array(stored.strokes.prefix(sketch.strokes.count)))) == signature(sketch))
+        #expect(stored.strokes.prefix(sketch.strokes.count).allSatisfy { $0.transform == .identity })
+        let expected = line(from: farStart, to: farEnd).renderBounds
+        let farStored = try #require(stored.strokes.last).renderBounds
+        #expect(abs(farStored.minX - expected.minX) < 0.01 && abs(farStored.minY - expected.minY) < 0.01)
+        #expect(abs(farStored.width - expected.width) < 0.01 && abs(farStored.height - expected.height) < 0.01)
+        let farView = CGRect(x: (farStart.x - origin.x) * zoom - canvas.contentOffset.x,
+                             y: (farStart.y - 10 - origin.y) * zoom - canvas.contentOffset.y,
+                             width: 600 * zoom, height: 80 * zoom)
         settle()
         #expect(inkCoverage(of: canvas, in: farView) > 0.005)
-        #expect(abs(canvas.contentOffset.x - corner.x) < 1 && abs(canvas.contentOffset.y - corner.y) < 1)
+        #expect(abs(canvas.contentOffset.x - offset.x) < 1 && abs(canvas.contentOffset.y - offset.y) < 1)
+        cover.isPresented = false
+        settle()
+    }
+
+    /// Owner's report: no ink in a zone at the top, nor after panning (left,
+    /// right, up, down, zoomed out): PencilKit drops strokes outside its
+    /// surface, which the endless canvas left at negative content coordinates.
+    @Test("BUG-deadzone-2: every visible point of the endless canvas can be written on, after any pan or zoom")
+    func everyVisiblePointIsDrawable() throws {
+        let model = MindMapModel(map: MindMap(root: Node(text: "Central")))
+        let undo = makeUndo()
+        let id = try #require(model.addDrawing(to: model.root.id, undoManager: undo))
+        let cover = Cover()
+        let window = try makeWindow(CoverHost(model: model, id: id, undo: undo, cover: cover))
+        defer { window.isHidden = true }
+        cover.isPresented = true
+        settle()
+        let presented = try #require(window.rootViewController?.presentedViewController)
+        let canvas = try #require(views(in: presented.view).compactMap { $0 as? PencilCanvasView }.first)
+        let coordinator = try #require(canvas.delegate as? PencilCanvas.Coordinator)
+        expectEverythingVisibleIsDrawable(canvas)
+
+        /// Scrolls to an end of the scrollable area (as far as a finger pan goes).
+        func pan(toLeft: Bool?, toTop: Bool?) {
+            let inset = canvas.contentInset
+            let x = toLeft.map { $0 ? -inset.left : canvas.contentSize.width + inset.right - canvas.bounds.width }
+            let y = toTop.map { $0 ? -inset.top : canvas.contentSize.height + inset.bottom - canvas.bounds.height }
+            canvas.contentOffset = CGPoint(x: x ?? canvas.contentOffset.x, y: y ?? canvas.contentOffset.y)
+            settle()
+        }
+        let start = coordinator.visibleRect
+        for _ in 0..<2 { pan(toLeft: nil, toTop: true) }
+        expectEverythingVisibleIsDrawable(canvas)
+        #expect(coordinator.visibleRect.minY < start.minY - start.height)
+        for _ in 0..<2 { pan(toLeft: true, toTop: nil) }
+        expectEverythingVisibleIsDrawable(canvas)
+        #expect(coordinator.visibleRect.minX < start.minX - start.width)
+        for _ in 0..<4 { pan(toLeft: false, toTop: false) }
+        expectEverythingVisibleIsDrawable(canvas)
+        #expect(coordinator.visibleRect.maxX > start.maxX + start.width)
+        canvas.setZoomScale(canvas.minimumZoomScale, animated: false)
+        settle()
+        pan(toLeft: true, toTop: true)
+        expectEverythingVisibleIsDrawable(canvas)
+
+        // A stroke drawn at the visible top-left corner is stored where it was drawn.
+        let shown = coordinator.visibleRect
+        let origin = contentOrigin(canvas, coordinator)
+        let a = CGPoint(x: shown.minX + 20, y: shown.minY + 20), b = CGPoint(x: shown.minX + 220, y: shown.minY + 60)
+        canvas.drawing.strokes.append(line(from: CGPoint(x: a.x - origin.x, y: a.y - origin.y),
+                                           to: CGPoint(x: b.x - origin.x, y: b.y - origin.y)))
+        coordinator.flush()
+        let stored = try #require(HandwrittenNote.drawing(model.content(of: id)).strokes.last).renderBounds
+        let expected = line(from: a, to: b).renderBounds
+        #expect(abs(stored.minX - expected.minX) < 0.01 && abs(stored.minY - expected.minY) < 0.01)
         cover.isPresented = false
         settle()
     }
