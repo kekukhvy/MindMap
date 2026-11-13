@@ -44,6 +44,29 @@ struct OutlineTests {
         #expect(collapsed(model, ids) == ["a", "a1", "f1"])
     }
 
+    @Test func sortChildrenIsOneUndoStepAndKeepsGrandchildren() {
+        let undo = UndoTests.makeUndoManager()
+        let grandchild = Node(text: "deep")
+        let parent = Node(text: "List", children: [
+            Node(text: "item 10"), Node(text: "Banana", children: [grandchild]), Node(text: "apple"), Node(text: "item 2"),
+        ])
+        let model = MindMapModel(map: MindMap(root: Node(text: "r", children: [parent])))
+        let texts = { model.map.node(withID: parent.id)?.children.map(\.text) ?? [] }
+
+        #expect(model.sortChildren(parent.id, ascending: true, undoManager: undo))
+        #expect(texts() == ["apple", "Banana", "item 2", "item 10"])
+        #expect(model.map.node(withID: parent.id)?.children[1].children.map(\.id) == [grandchild.id])
+        // Already sorted: nothing to do, no undo step.
+        #expect(!model.sortChildren(parent.id, ascending: true, undoManager: undo))
+        #expect(model.sortChildren(parent.id, ascending: false, undoManager: undo))
+        #expect(texts() == ["item 10", "item 2", "Banana", "apple"])
+        #expect(undo.undoActionName == "Sort Children")
+        undo.undo()
+        #expect(texts() == ["apple", "Banana", "item 2", "item 10"])
+        undo.undo()
+        #expect(texts() == ["item 10", "Banana", "apple", "item 2"])
+    }
+
     @Test func branchCollapseAndExpand() {
         let undo = UndoTests.makeUndoManager()
         let (model, ids) = makeModel()

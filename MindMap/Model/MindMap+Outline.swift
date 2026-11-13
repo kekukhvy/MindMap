@@ -49,6 +49,19 @@ extension MindMap {
             .map { .tree(.setCollapsed(id: $0.id, false)) }
     }
 
+    /// Reorders the direct children of `id` by their text, the Finder way
+    /// ("Item 2" before "Item 10", case ignored); empty when already sorted.
+    func sortChildrenEdits(_ id: UUID, ascending: Bool) -> [MapEdit] {
+        guard let node = node(withID: id) else { return [] }
+        let order: ComparisonResult = ascending ? .orderedAscending : .orderedDescending
+        let sorted = node.children.enumerated().sorted { a, b in
+            let result = a.element.text.localizedStandardCompare(b.element.text)
+            return result == .orderedSame ? a.offset < b.offset : result == order
+        }.map(\.element.id)
+        guard sorted != node.children.map(\.id) else { return [] }
+        return sorted.enumerated().map { .tree(.move(id: $0.element, parentID: id, index: $0.offset)) }
+    }
+
     /// Collapses `id` and all its descendants that have children.
     func collapseBranchEdits(_ id: UUID) -> [MapEdit] {
         guard let node = node(withID: id) else { return [] }

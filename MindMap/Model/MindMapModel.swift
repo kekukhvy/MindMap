@@ -318,6 +318,11 @@ final class MindMapModel {
     }
 
     @discardableResult
+    func sortChildren(_ id: UUID, ascending: Bool, undoManager: UndoManager?) -> Bool {
+        performIfAny(map.sortChildrenEdits(id, ascending: ascending), "Sort Children", undoManager)
+    }
+
+    @discardableResult
     func collapseBranch(_ id: UUID, undoManager: UndoManager?) -> Bool {
         performIfAny(map.collapseBranchEdits(id), "Collapse Branch", undoManager)
     }

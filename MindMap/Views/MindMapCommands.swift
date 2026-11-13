@@ -58,6 +58,11 @@ struct MindMapCommands: Commands {
                 .disabled(!hasNodeSelection || state?.selectionHasChildren != true)
             Button("Collapse Branch") { editor?.collapseBranch() }
                 .disabled(!hasNodeSelection || state?.selectionHasChildren != true)
+            Menu("Sort Children") {
+                Button("A → Z") { editor?.sortChildren(ascending: true) }
+                Button("Z → A") { editor?.sortChildren(ascending: false) }
+            }
+            .disabled(!hasNodeSelection || state?.selectionHasChildren != true || isReadOnly)
             Button("Reset Position") { editor?.resetPositions(in: editor?.selectedID) }
                 .disabled(!hasNodeSelection || state?.selectionIsFreelyPositioned != true || isReadOnly)
             Divider()

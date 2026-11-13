@@ -22,6 +22,13 @@ extension EditorController {
         keepingOnScreen(id) { _ = model.expandAll(in: id, undoManager: undoManager) }
     }
 
+    /// Sorts the direct children of `id` (default: selection) by text.
+    func sortChildren(_ id: UUID? = nil, ascending: Bool) {
+        guard let id = id ?? selectedID, requireEditable() else { return }
+        commitEditing()
+        keepingOnScreen(id) { _ = model.sortChildren(id, ascending: ascending, undoManager: undoManager) }
+    }
+
     func collapseBranch(_ id: UUID? = nil) {
         guard let id = id ?? selectedID else { return }
         commitEditing()

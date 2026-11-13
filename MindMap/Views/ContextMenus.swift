@@ -46,6 +46,8 @@ struct NodeContextMenu: View {
             }
             Button("Expand Branch", systemImage: "plus.square.on.square") { editor.expandBranch(id) }
             Button("Collapse Branch", systemImage: "minus.square") { editor.collapseBranch(id) }
+            SortChildrenMenu(editor: editor, id: id)
+                .disabled(locked)
         }
         if editor.isFreelyPositioned(id) {
             Button("Reset Position", systemImage: "arrow.uturn.backward.circle") { editor.resetPositions(in: id) }
@@ -139,6 +141,22 @@ struct CanvasBackgroundMenu: View {
         .disabled(!editor.canPaste)
         Divider()
         OutlineMenuItems(editor: editor)
+    }
+}
+
+/// Sort Children ▸ A → Z / Z → A: reorders a topic's direct children by
+/// their text (one undo step).
+struct SortChildrenMenu: View {
+    let editor: EditorController
+    let id: UUID
+
+    var body: some View {
+        Menu {
+            Button("A → Z", systemImage: "arrow.down") { editor.sortChildren(id, ascending: true) }
+            Button("Z → A", systemImage: "arrow.up") { editor.sortChildren(id, ascending: false) }
+        } label: {
+            Label("Sort Children", systemImage: "arrow.up.arrow.down")
+        }
     }
 }
 
