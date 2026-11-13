@@ -97,10 +97,10 @@ extension EditorCommand {
     var isEdit: Bool {
         switch self {
         case .addChild, .addSibling, .delete, .edit, .editReplacing, .addRelationship, .addBoundary, .attachFile,
-             .editLink, .toggleTaskDone:
+             .editLink, .toggleTaskDone, .cut, .paste:
             return true
         case .undo, .redo, .move, .toggleCollapse, .zoomIn, .zoomOut, .zoomToFit, .note, .handwrittenNote,
-             .collapseToLevel, .expandAll, .goBack, .selectAll, .cancel, .toggleReadOnly:
+             .collapseToLevel, .expandAll, .goBack, .selectAll, .cancel, .toggleReadOnly, .copy:
             return false
         }
     }

@@ -373,6 +373,12 @@ extension EditorController {
             addBoundaryFromSelection()
         case .selectAll:
             selectAllTopics()
+        case .copy:
+            return copySelection()
+        case .cut:
+            return cutSelection()
+        case .paste:
+            return paste()
         case .toggleReadOnly:
             toggleReadOnly()
         case .note:

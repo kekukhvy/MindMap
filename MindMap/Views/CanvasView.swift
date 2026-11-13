@@ -76,8 +76,12 @@ struct CanvasView: View {
         .focusEffectDisabled()
         .focused($isFocused)
         #if os(macOS)
-        // Cmd+V with files / images on the clipboard attaches them.
-        .onPasteCommand(of: [.fileURL, .image, .pdf]) { _ in editor.pasteFiles() }
+        // Edit ▸ Copy / Cut / Paste (⌘C / ⌘X / ⌘V): topics with their
+        // subtrees; Paste also takes text (lines → topics) and files /
+        // images (attached, WP6).
+        .onCopyCommand { editor.copySelection() ? TopicPasteboard.itemProviders() : [] }
+        .onCutCommand { editor.cutSelection() ? TopicPasteboard.itemProviders() : [] }
+        .onPasteCommand(of: [.mindMapTopics, .fileURL, .image, .pdf, .plainText]) { _ in editor.paste() }
         #endif
         // Published only while the canvas (or its inline editor) has focus, so
         // plain-key menu shortcuts never steal keys from other text inputs.

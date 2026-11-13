@@ -43,7 +43,13 @@ struct CanvasLogicTests {
         #expect(KeyCommandMap.command(key: "z", modifiers: [.command, .shift], characters: "Z") == .redo)
         #expect(KeyCommandMap.command(key: "a", modifiers: [], characters: "a") == .editReplacing("a"))
         #expect(KeyCommandMap.command(key: "A", modifiers: .shift, characters: "A") == .editReplacing("A"))
+        // ⌘C: the Edit menu on macOS (onCopyCommand), the canvas key map on iPad.
+        #if os(macOS)
         #expect(KeyCommandMap.command(key: "c", modifiers: .command, characters: "c") == nil)
+        #else
+        #expect(KeyCommandMap.command(key: "c", modifiers: .command, characters: "c") == .copy)
+        #endif
+        #expect(KeyCommandMap.command(key: "c", modifiers: [.command, .shift], characters: "c") == nil)
         #expect(KeyCommandMap.command(key: .tab, modifiers: .shift, characters: "\t") == nil)
     }
 

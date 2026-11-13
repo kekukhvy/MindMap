@@ -190,6 +190,20 @@ final class CanvasEventHarness {
         try await wait(60)
     }
 
+    /// Edit ▸ Copy / Cut / Paste as the menu sends it: the standard action
+    /// to the first responder in the window's chain that handles it (the
+    /// hosted test app is inactive, so its main menu has no key window to
+    /// send ⌘C / ⌘V to).
+    func editMenu(_ action: Selector) async throws {
+        var responder = window.firstResponder
+        while let current = responder, !current.responds(to: action) { responder = current.nextResponder }
+        let target = try #require(responder)
+        // Enabled in the menu (validation), then performed.
+        #expect((target as? NSUserInterfaceValidations)?.validateUserInterfaceItem(EditMenuItem(action: action)) == true)
+        target.perform(action, with: nil)
+        try await wait(300)
+    }
+
     /// Press at `from`, move in steps to `to`; `check` runs before release.
     func drag(from: CGPoint, to: CGPoint, steps: Int = 12, modifiers: NSEvent.ModifierFlags = [],
               beforeRelease check: () -> Void = {}) async throws {
@@ -204,6 +218,13 @@ final class CanvasEventHarness {
         try await send(.leftMouseUp, at: to, modifiers: modifiers)
         try await wait(400)
     }
+}
+
+/// Stand-in menu item for validating an Edit menu action.
+final class EditMenuItem: NSObject, NSValidatedUserInterfaceItem {
+    let action: Selector?
+    let tag = 0
+    init(action: Selector) { self.action = action }
 }
 
 /// Real-event gesture tests on macOS (see `CanvasEventHarness`); each runs
@@ -398,6 +419,31 @@ struct CanvasEventTests {
         // Next Return on the selected topic adds a sibling as before.
         try await harness.key("\r", keyCode: 36)
         #expect(editor.model.map.node(withID: a)?.children.count == 2)
+    }
+
+    /// Edit ▸ Copy / Paste (⌘C / ⌘V: `copy:` / `paste:` to the focused
+    /// canvas → its onCopyCommand / onPasteCommand): the copied
+    /// branch is pasted inside the selected topic. Restores the clipboard.
+    @Test(arguments: [true]) func commandCopyAndPasteThroughTheEditMenu(real: Bool) async throws {
+        TopicPasteboard.board = .general
+        let saved = NSPasteboard.general.string(forType: .string)
+        defer {
+            NSPasteboard.general.clearContents()
+            if let saved { NSPasteboard.general.setString(saved, forType: .string) }
+        }
+        let (map, _, a, b, _) = makeMap()
+        let harness = try await harness(map, real)
+        defer { harness.close() }
+        let editor = harness.editor
+        try await harness.humanClick(harness.center(of: a))
+        #expect(editor.selectedID == a)
+        try await harness.editMenu(#selector(NSText.copy(_:)))
+        #expect(TopicPasteboard.readTopics()?.topics.map(\.id) == [a])
+        try await harness.humanClick(harness.center(of: b))
+        try await harness.editMenu(#selector(NSText.paste(_:)))
+        let pasted = try #require(editor.model.map.node(withID: b)?.children.last)
+        #expect(pasted.text == editor.model.map.node(withID: a)?.text && pasted.id != a)
+        #expect(editor.selectedID == pasted.id)
     }
 
     /// Tab (child) and Return (sibling) on a selected topic: typing names the

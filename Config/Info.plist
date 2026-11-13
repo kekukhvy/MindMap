@@ -39,6 +39,16 @@
 				</array>
 			</dict>
 		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.kekukh.mindmap.topics</string>
+			<key>UTTypeDescription</key>
+			<string>Mind Map Topics</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+		</dict>
 	</array>
 	<key>MindMapCloudKitContainer</key>
 	<string>$(MINDMAP_CLOUDKIT_CONTAINER)</string>

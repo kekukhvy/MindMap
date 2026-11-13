@@ -38,6 +38,7 @@ struct NodeContextMenu: View {
             LayoutStyleMenu(editor: editor, id: id)
         }
         .disabled(locked)
+        ClipboardMenuItems(editor: editor, id: id)
         if info?.hasChildren == true {
             Button(info?.isCollapsed == true ? "Expand" : "Collapse",
                    systemImage: info?.isCollapsed == true ? "plus.circle" : "minus.circle") {
@@ -104,6 +105,7 @@ struct MultiTopicMenuItems: View {
                 editor.toggleCollapseTargets(id)
             }
         }
+        ClipboardMenuItems(editor: editor, id: id)
         Divider()
         // Task ▸ applies to all; Link / Note / Attachments ▸ are disabled
         // (one topic only).
@@ -130,8 +132,39 @@ struct CanvasBackgroundMenu: View {
             editor.addFloatingTopic(at: editor.contextPoint)
         }
         .disabled(editor.isReadOnly)
+        Button("Paste", systemImage: "doc.on.clipboard") {
+            editor.select(nil)
+            editor.paste()
+        }
+        .disabled(!editor.canPaste)
         Divider()
         OutlineMenuItems(editor: editor)
+    }
+}
+
+/// Cut / Copy / Paste of a topic or of the multi-selection it belongs to
+/// (Paste puts the clipboard's topics inside `id`).
+struct ClipboardMenuItems: View {
+    let editor: EditorController
+    let id: UUID
+
+    var body: some View {
+        let isRoot = id == editor.model.root.id
+        Divider()
+        Button("Cut", systemImage: "scissors") {
+            if !editor.isSelected(id) { editor.select(id) }
+            editor.cutSelection()
+        }
+        .disabled(editor.isReadOnly || (isRoot && !editor.isMultiSelection))
+        Button("Copy", systemImage: "doc.on.doc") {
+            if !editor.isSelected(id) { editor.select(id) }
+            editor.copySelection()
+        }
+        Button("Paste", systemImage: "doc.on.clipboard") {
+            editor.select(id)
+            editor.paste()
+        }
+        .disabled(!editor.canPaste)
     }
 }
 

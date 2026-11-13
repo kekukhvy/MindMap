@@ -26,6 +26,9 @@ enum EditorCommand: Equatable {
     case selectAll
     /// Option+Cmd+L: Lock Editing on / off (WP15).
     case toggleReadOnly
+    /// Cmd+C / Cmd+X / Cmd+V: copy / cut / paste topics (iPad hardware
+    /// keyboard; macOS uses the Edit menu: `onCopyCommand` & co.).
+    case copy, cut, paste
     /// Esc: cancel picking / member editing, keep only the primary of a
     /// multi-selection, or deselect a relationship/boundary.
     case cancel
@@ -80,6 +83,11 @@ enum KeyCommandMap {
             case "k" where !modifiers.contains(.shift): return .editLink
             case "[" where !modifiers.contains(.shift): return .goBack
             case "a" where !modifiers.contains(.shift): return .selectAll
+            #if os(iOS)
+            case "c" where !modifiers.contains(.shift): return .copy
+            case "x" where !modifiers.contains(.shift): return .cut
+            case "v" where !modifiers.contains(.shift): return .paste
+            #endif
             default: return nil
             }
         }
