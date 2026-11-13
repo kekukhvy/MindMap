@@ -95,13 +95,23 @@ enum BoundaryHull {
         var obstacleMargin: CGFloat = 3
     }
 
-    static func outline(pieces: [CGRect], labelPiece: Int = 0, obstacles: [CGRect],
-                        parameters: Parameters = Parameters()) -> BoundaryOutline? {
+    /// - Parameters:
+    ///   - obstacles: foreign topics (never covered if avoidable).
+    ///   - boundaries: other boundaries' areas this one should keep out of
+    ///     (its box and necks avoid them, at a lower priority than topics).
+    ///   - lines: relationship lines, thin rects (necks prefer not to run
+    ///     along / across them).
+    static func outline(pieces: [CGRect], labelPiece: Int = 0, obstacles: [CGRect], boundaries: [CGRect] = [],
+                        lines: [CGRect] = [], parameters: Parameters = Parameters()) -> BoundaryOutline? {
         // Layout runs on every edit: reuse the outline while nothing moved.
-        let key = CacheKey(pieces: pieces, labelPiece: labelPiece,
-                           obstacles: obstacles.sorted { ($0.minY, $0.minX) < ($1.minY, $1.minX) })
+        func sorted(_ rects: [CGRect]) -> [CGRect] { rects.sorted { ($0.minY, $0.minX) < ($1.minY, $1.minX) } }
+        let key = CacheKey(pieces: pieces, labelPiece: labelPiece, obstacles: sorted(obstacles),
+                           boundaries: sorted(boundaries), lines: sorted(lines))
         if let cached = cache.value(for: key) { return cached }
-        let result = computeOutline(pieces: pieces, labelPiece: labelPiece, obstacles: key.obstacles,
+        let margin = parameters.obstacleMargin
+        let all = HullObstacles(topics: key.obstacles.map { $0.insetBy(dx: -margin, dy: -margin) },
+                                boundaries: key.boundaries, lines: key.lines)
+        let result = computeOutline(pieces: pieces, labelPiece: labelPiece, obstacles: all,
                                     parameters: parameters)
         cache.store(result, for: key)
         return result
@@ -111,6 +121,8 @@ enum BoundaryHull {
         var pieces: [CGRect]
         var labelPiece: Int
         var obstacles: [CGRect]
+        var boundaries: [CGRect]
+        var lines: [CGRect]
     }
 
     /// Last outlines computed (any thread).
@@ -135,14 +147,13 @@ enum BoundaryHull {
 
     private static let cache = Cache()
 
-    private static func computeOutline(pieces: [CGRect], labelPiece: Int, obstacles: [CGRect],
+    private static func computeOutline(pieces: [CGRect], labelPiece: Int, obstacles: HullObstacles,
                                        parameters: Parameters) -> BoundaryOutline? {
         let pieces = pieces.filter { !$0.isNull && $0.width > 0 && $0.height > 0 }
         guard !pieces.isEmpty else { return nil }
         let labelIndex = pieces.indices.contains(labelPiece) ? labelPiece : 0
-        let obstacles = obstacles.map { $0.insetBy(dx: -parameters.obstacleMargin, dy: -parameters.obstacleMargin) }
         let box = pieces.dropFirst().reduce(pieces[0]) { $0.union($1) }
-        if pieces.count == 1 || cost(box, obstacles) == 0 {
+        if pieces.count == 1 || !obstacles.blocksBox(box) {
             var outline = BoundaryOutline(rect: box)
             let label = pieces[labelIndex]
             outline.labelOrigin = CGPoint(x: label.minX, y: label.minY)
@@ -153,7 +164,7 @@ enum BoundaryHull {
         rects += joinGroups(pieces, obstacles: obstacles, parameters: parameters)
         // Aligning must not push an edge onto another topic.
         rects = zip(rects, snapped(rects, distance: parameters.snap)).map { original, aligned in
-            cost(aligned, obstacles) > cost(original, obstacles) + 0.5 ? original : aligned
+            obstacles.cost(aligned) > obstacles.cost(original) + 0.5 ? original : aligned
         }
         guard let polygon = unionOutline(rects) else {
             return BoundaryOutline(rect: box)
@@ -166,7 +177,7 @@ enum BoundaryHull {
     // MARK: Joining groups
 
     /// Extra rects (boxes / necks) connecting all touching groups of `pieces`.
-    static func joinGroups(_ pieces: [CGRect], obstacles: [CGRect], parameters: Parameters) -> [CGRect] {
+    static func joinGroups(_ pieces: [CGRect], obstacles: HullObstacles, parameters: Parameters) -> [CGRect] {
         var groups: [[CGRect]] = []
         for piece in pieces {
             let touching = groups.indices.filter { index in groups[index].contains { touches($0, piece) } }
@@ -196,24 +207,24 @@ enum BoundaryHull {
 
     /// Cheapest connection of two groups: their box when free of foreign
     /// topics, else a neck between their closest pieces.
-    private static func join(_ a: [CGRect], _ b: [CGRect], obstacles: [CGRect],
+    private static func join(_ a: [CGRect], _ b: [CGRect], obstacles: HullObstacles,
                              parameters: Parameters) -> (rects: [CGRect], score: CGFloat) {
         let box = (a + b).dropFirst().reduce((a + b)[0]) { $0.union($1) }
-        if cost(box, obstacles) == 0 { return ([box], 0) }
+        if !obstacles.blocksBox(box) { return ([box], 0) }
         var best: (rects: [CGRect], score: CGFloat)?
         for ra in a {
             for rb in b {
                 let rects = neck(between: ra, and: rb, obstacles: obstacles, width: parameters.neck)
-                let overlap = rects.reduce(0) { $0 + cost($1, obstacles) }
+                let overlap = rects.reduce(0) { $0 + obstacles.cost($1) }
                 let length = rects.reduce(0) { $0 + max($1.width, $1.height) }
                 let score = 1 + overlap * 100 + length
                 if best == nil || score < best!.score { best = (rects, score) }
             }
         }
         // A straight neck would cross topics: route one around them.
-        if let straight = best, straight.rects.reduce(0, { $0 + cost($1, obstacles) }) > 0,
+        if let straight = best, straight.rects.reduce(0, { $0 + obstacles.cost($1) }) > 0,
            let routed = routedNeck(from: a, to: b, obstacles: obstacles, width: parameters.neck * 0.6) {
-            let overlap = routed.reduce(0) { $0 + cost($1, obstacles) }
+            let overlap = routed.reduce(0) { $0 + obstacles.cost($1) }
             let length = routed.reduce(0) { $0 + max($1.width, $1.height) }
             let score = 1 + overlap * 100 + length
             if score < straight.score { best = (routed, score) }
@@ -224,7 +235,8 @@ enum BoundaryHull {
     /// Neck following the shortest grid path (few turns) from group `a` to
     /// group `b` that keeps a strip of `width` clear of foreign topics
     /// (crossing one only if there is no other way). Nil if not found.
-    static func routedNeck(from a: [CGRect], to b: [CGRect], obstacles: [CGRect], width: CGFloat) -> [CGRect]? {
+    static func routedNeck(from a: [CGRect], to b: [CGRect], obstacles: HullObstacles,
+                           width: CGFloat) -> [CGRect]? {
         let all = a + b
         let region = all.dropFirst().reduce(all[0]) { $0.union($1) }.insetBy(dx: -width * 3, dy: -width * 3)
         let cell = max(5, max(region.width, region.height) / 90)
@@ -234,9 +246,12 @@ enum BoundaryHull {
             CGPoint(x: region.minX + (CGFloat(index % columns) + 0.5) * cell,
                     y: region.minY + (CGFloat(index / columns) + 0.5) * cell)
         }
-        // Cells whose neck square would touch a foreign topic.
-        var blocked = [Bool](repeating: false, count: columns * rows)
-        for obstacle in obstacles {
+        // Cells whose neck square would touch a foreign topic (hard: 60 cells
+        // extra), another boundary (10) or a relationship line (4).
+        var blocked = [CGFloat](repeating: 0, count: columns * rows)
+        let weighted = obstacles.topics.map { ($0, CGFloat(60)) } + obstacles.boundaries.map { ($0, CGFloat(10)) }
+            + obstacles.lines.map { ($0, CGFloat(4)) }
+        for (obstacle, penalty) in weighted {
             let grown = obstacle.insetBy(dx: -width / 2, dy: -width / 2).intersection(region)
             guard !grown.isNull else { continue }
             let c0 = max(0, Int(((grown.minX - region.minX) / cell - 0.5).rounded(.up)))
@@ -244,7 +259,9 @@ enum BoundaryHull {
             let r0 = max(0, Int(((grown.minY - region.minY) / cell - 0.5).rounded(.up)))
             let r1 = min(rows - 1, Int(((grown.maxY - region.minY) / cell - 0.5).rounded(.down)))
             guard c0 <= c1, r0 <= r1 else { continue }
-            for row in r0...r1 { for column in c0...c1 { blocked[row * columns + column] = true } }
+            for row in r0...r1 {
+                for column in c0...c1 { blocked[row * columns + column] = max(blocked[row * columns + column], penalty) }
+            }
         }
         func inside(_ rects: [CGRect], _ index: Int) -> Bool {
             let point = center(index)
@@ -276,7 +293,7 @@ enum BoundaryHull {
                 let next = row * columns + column
                 var value = cost + cell
                 if newHeading != heading { value += cell * 3 }
-                if blocked[next] && !inside(a, next) && !inside(b, next) { value += cell * 60 }
+                if blocked[next] > 0 && !inside(a, next) && !inside(b, next) { value += cell * blocked[next] }
                 let nextState = next * 4 + newHeading
                 if value < distance[nextState] {
                     distance[nextState] = value
@@ -348,6 +365,10 @@ enum BoundaryHull {
     /// both) and get narrower to pass through the gap next to a column of
     /// topics, e.g. the connector space between a parent and its children.
     static func neck(between a: CGRect, and b: CGRect, obstacles: [CGRect], width: CGFloat) -> [CGRect] {
+        neck(between: a, and: b, obstacles: HullObstacles(topics: obstacles), width: width)
+    }
+
+    static func neck(between a: CGRect, and b: CGRect, obstacles: HullObstacles, width: CGFloat) -> [CGRect] {
         let overlapX = min(a.maxX, b.maxX) - max(a.minX, b.minX)
         let overlapY = min(a.maxY, b.maxY) - max(a.minY, b.minY)
         if overlapX > 0 {
@@ -367,14 +388,14 @@ enum BoundaryHull {
         // Diagonal: L-shaped (horizontal leg from one, vertical into the other).
         let first = lShape(from: a, to: b, width: width)
         let second = lShape(from: b, to: a, width: width)
-        let firstCost = first.reduce(0) { $0 + cost($1, obstacles) }
-        let secondCost = second.reduce(0) { $0 + cost($1, obstacles) }
+        let firstCost = first.reduce(0) { $0 + obstacles.cost($1) }
+        let secondCost = second.reduce(0) { $0 + obstacles.cost($1) }
         return firstCost <= secondCost ? first : second
     }
 
     /// Strip across the common range [lo, hi] of two pieces: least foreign
     /// area, then widest, then closest to an outer edge (straight sides).
-    private static func bestStrip(lo: CGFloat, hi: CGFloat, width: CGFloat, obstacles: [CGRect],
+    private static func bestStrip(lo: CGFloat, hi: CGFloat, width: CGFloat, obstacles: HullObstacles,
                                   rect: (_ start: CGFloat, _ width: CGFloat) -> CGRect) -> CGRect {
         let minOverlap = min(6, hi - lo)
         var best: (rect: CGRect, cost: CGFloat, width: CGFloat, edge: CGFloat)?
@@ -383,7 +404,7 @@ enum BoundaryHull {
             var start = first
             while true {
                 let candidate = rect(start, w)
-                let value = cost(candidate, obstacles)
+                let value = obstacles.cost(candidate)
                 let edge = min(start - first, last - start)
                 let better: Bool
                 if let best {
@@ -412,6 +433,28 @@ enum BoundaryHull {
         let vertical = CGRect(x: legX, y: down ? legY : b.maxY - 1,
                               width: w, height: down ? b.minY + 1 - legY : legY + w - (b.maxY - 1))
         return [horizontal, vertical].map(\.standardized)
+    }
+
+    /// Everything a boundary outline keeps clear of, by priority.
+    struct HullObstacles {
+        /// Foreign topics (with margin): worst.
+        var topics: [CGRect]
+        /// Other boundaries' areas: avoided unless that costs a topic.
+        var boundaries: [CGRect] = []
+        /// Relationship lines (thin rects): mildly avoided by necks.
+        var lines: [CGRect] = []
+
+        /// Weighted covered area (topics 1, boundaries 0.3, lines 0.15).
+        func cost(_ rect: CGRect) -> CGFloat {
+            BoundaryHull.cost(rect, topics) + 0.3 * BoundaryHull.cost(rect, boundaries)
+                + 0.15 * BoundaryHull.cost(rect, lines)
+        }
+
+        /// A plain box is not usable when it covers a topic or another
+        /// boundary (lines may cross a box: they cross its edge anyway).
+        func blocksBox(_ rect: CGRect) -> Bool {
+            BoundaryHull.cost(rect, topics) > 0 || BoundaryHull.cost(rect, boundaries) > 0
+        }
     }
 
     /// Foreign topic area covered by `rect`.

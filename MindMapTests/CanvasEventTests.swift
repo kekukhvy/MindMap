@@ -124,6 +124,18 @@ final class CanvasEventHarness {
         try await Task.sleep(for: .milliseconds(milliseconds))
     }
 
+    /// Polls `condition` every 50 ms until it holds or `timeout` ms pass
+    /// (out-of-process / asynchronous UI: no fixed sleeps).
+    @discardableResult
+    func waitUntil(timeout: Int = 5000, _ condition: () -> Bool) async throws -> Bool {
+        let deadline = Date().addingTimeInterval(Double(timeout) / 1000)
+        while !condition() {
+            if Date() > deadline { return false }
+            try await wait(50)
+        }
+        return true
+    }
+
     /// Screen (canvas) center of a topic.
     func center(of id: UUID) -> CGPoint {
         let frame = editor.viewport.toScreen(editor.scene.layout.frames[id]!)

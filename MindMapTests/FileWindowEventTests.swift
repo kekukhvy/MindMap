@@ -54,34 +54,35 @@ struct FileWindowEventTests {
         let before = Set(NSApp.windows.map(ObjectIdentifier.init))
         try await harness.click(point)
         var fileWindow: NSWindow?
-        for _ in 0..<30 where fileWindow == nil {
-            try await harness.wait(100)
+        try await harness.waitUntil(timeout: 8000) {
             fileWindow = NSApp.windows.first {
                 !before.contains(ObjectIdentifier($0)) && $0.isVisible && find(QLPreviewView.self, in: $0.contentView) != nil
             }
+            return fileWindow != nil
         }
         let window = try #require(fileWindow)
         window.setContentSize(CGSize(width: 700, height: 800))
         #expect(harness.editor.selectedID == topic.id)
         #expect(window.title == "Project Brief.pdf")
         let preview = try #require(find(QLPreviewView.self, in: window.contentView))
+        // The preview gets its item once the copy is written (async).
+        try await harness.waitUntil { preview.previewItem != nil }
         let previewURL = try #require((preview.previewItem as? NSURL) as URL?)
         // A temp copy named after the original file, byte-identical.
         #expect(previewURL.lastPathComponent == "Project Brief.pdf")
         #expect(try Data(contentsOf: previewURL) == model.content(of: file))
         #expect(!previewURL.path.contains(".mindmap"))
+        // The preview fills the window (in-process layout, deterministic).
+        try await harness.waitUntil { preview.frame.width >= 600 && preview.frame.height >= 500 }
+        #expect(preview.frame.width >= 600 && preview.frame.height >= 500)
 
-        // QuickLook draws out of process (NSRemoteView inside QLPreviewView),
-        // which an in-process snapshot cannot capture. Check that the remote
-        // view fills the preview, and that QuickLook renders this very copy
-        // (thumbnail of the PDF: colored header and bars; PNG for a look).
-        // QuickLook attaches its remote view asynchronously.
-        for _ in 0..<50 where preview.subviews.first?.subviews.first == nil {
-            try await harness.wait(100)
-        }
-        let remote = try #require(preview.subviews.first?.subviews.first)
-        #expect(String(describing: type(of: remote)).contains("RemoteView"))
-        #expect(remote.frame.width >= 600 && remote.frame.height >= 500)
+        // QuickLook draws out of process (an NSRemoteView inside QLPreviewView
+        // that it attaches when its service answers — not on a fixed
+        // schedule, sometimes not at all in the hosted test app), which an
+        // in-process snapshot cannot capture. So the drawing itself is
+        // checked through QLThumbnailGenerator on this very copy (thumbnail
+        // of the PDF: colored header and bars; PNG for a look); if the
+        // remote view does attach, it must be QuickLook's.
         let thumbnail = try await QLThumbnailGenerator.shared.generateBestRepresentation(
             for: QLThumbnailGenerator.Request(fileAt: previewURL, size: CGSize(width: 400, height: 520), scale: 2,
                                               representationTypes: .thumbnail))
@@ -89,10 +90,16 @@ struct FileWindowEventTests {
         try rep.representation(using: .png, properties: [:])?
             .write(to: FileManager.default.temporaryDirectory.appendingPathComponent("file-window-preview.png"))
         #expect(coverage(rep) > 0.05)
+        if let remote = preview.subviews.first?.subviews.first {
+            #expect(String(describing: type(of: remote)).contains("RemoteView"))
+        }
 
         // Rename from the map side: the window title and the preview copy follow.
         model.renameAttachment(file, to: "Brief v2.pdf", undoManager: harness.undo)
-        try await harness.wait(600)
+        try await harness.waitUntil {
+            window.title == "Brief v2.pdf" && (find(QLPreviewView.self, in: window.contentView)?.previewItem as? NSURL)?
+                .lastPathComponent == "Brief v2.pdf"
+        }
         #expect(window.title == "Brief v2.pdf")
         let renamed = try #require(find(QLPreviewView.self, in: window.contentView))
         #expect(((renamed.previewItem as? NSURL) as URL?)?.lastPathComponent == "Brief v2.pdf")
@@ -100,7 +107,7 @@ struct FileWindowEventTests {
         harness.undo.removeAllActions()
         harness.close()
         closed = true
-        try await harness.wait(800)
+        try await harness.waitUntil { !window.isVisible }
         #expect(!window.isVisible)
     }
 }

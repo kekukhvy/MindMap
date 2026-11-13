@@ -102,3 +102,39 @@ struct PanelAndListTests {
     }
     #endif
 }
+
+/// Boundary necks keep out of other (unrelated) boundaries and prefer not
+/// to run over relationship lines.
+struct BoundaryAvoidanceTests {
+    private func layout(_ map: MindMap) -> TreeLayout.Result {
+        TreeLayout().layout(map) { _ in CGSize(width: 90, height: 28) }
+    }
+
+    @Test func neckGoesAroundAnotherBoundary() throws {
+        let kids = (1...5).map { Node(text: "c\($0)") }
+        var map = MindMap(root: Node(text: "Root", layoutStyle: .rightMap, children: kids))
+        let inner = Boundary(memberIDs: [kids[2].id], label: "B")
+        let outer = Boundary(memberIDs: [kids[1].id, kids[3].id], label: "A")
+        map.boundaries = [inner, outer]
+        let result = layout(map)
+        let a = try #require(result.boundaries[outer.id])
+        let b = try #require(result.boundaries[inner.id])
+        #expect(!LayoutAudit.polygonsIntersect(a, b))
+        #expect(!LayoutAudit.intersects(a, try #require(result.frames[kids[2].id])))
+        #expect(LayoutAudit.violations(map: map, layout: result).isEmpty)
+    }
+
+    @Test func outlinesStillFormWithRelationshipsAcross() throws {
+        let kids = (1...4).map { Node(text: "k\($0)") }
+        var map = MindMap(root: Node(text: "Root", layoutStyle: .rightMap, children: kids))
+        let boundary = Boundary(memberIDs: [kids[0].id, kids[3].id])
+        map.boundaries = [boundary]
+        map.relationships = [Relationship(from: kids[1].id, to: kids[2].id), Relationship(from: map.root.id, to: kids[3].id)]
+        let result = layout(map)
+        let outline = try #require(result.boundaries[boundary.id])
+        #expect(!LayoutAudit.intersects(outline, try #require(result.frames[kids[1].id])))
+        #expect(!LayoutAudit.intersects(outline, try #require(result.frames[kids[2].id])))
+        // Same input → same outline (cache + determinism).
+        #expect(layout(map).boundaries[boundary.id] == outline)
+    }
+}

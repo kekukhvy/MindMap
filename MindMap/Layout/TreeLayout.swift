@@ -94,19 +94,23 @@ struct TreeLayout {
             all.merge(item.layout, dx: item.dx, dy: item.dy)
         }
 
-        var outlines: [UUID: BoundaryOutline] = [:]
-        for boundary in map.boundaries {
-            if let outline = outline(of: boundary, members: members[boundary.id] ?? [], map: map, layout: all) {
-                outlines[boundary.id] = outline
-            }
-        }
-
         var relationshipPaths: [UUID: RelationshipPath] = [:]
+        var lines: [CGRect] = []
         for relationship in map.relationships {
             guard let from = all.frames[relationship.fromNodeID], let to = all.frames[relationship.toNodeID] else {
                 continue
             }
-            relationshipPaths[relationship.id] = RelationshipGeometry.path(from: from, to: to, relationship: relationship)
+            let path = RelationshipGeometry.path(from: from, to: to, relationship: relationship)
+            relationshipPaths[relationship.id] = path
+            if !map.boundaries.isEmpty { lines += Self.lineRects(path, style: relationship.style.path) }
+        }
+
+        var outlines: [UUID: BoundaryOutline] = [:]
+        for boundary in map.boundaries {
+            if let outline = outline(of: boundary, members: members[boundary.id] ?? [], map: map, layout: all,
+                                     lines: lines) {
+                outlines[boundary.id] = outline
+            }
         }
 
         // Freely positioned subtrees are not in the stacking bounds.
@@ -120,7 +124,7 @@ struct TreeLayout {
     /// descendants outside them get their own padded piece) avoiding the
     /// other topics (`BoundaryHull`).
     private func outline(of boundary: Boundary, members: [UUID], map: MindMap,
-                         layout: SubtreeLayout) -> BoundaryOutline? {
+                         layout: SubtreeLayout, lines: [CGRect] = []) -> BoundaryOutline? {
         var pieces: [CGRect] = []
         var labelPiece = 0
         var enclosed = Set<UUID>()
@@ -137,7 +141,25 @@ struct TreeLayout {
         }
         guard !pieces.isEmpty else { return nil }
         let obstacles = layout.frames.compactMap { enclosed.contains($0.key) ? nil : $0.value }
-        return BoundaryHull.outline(pieces: pieces, labelPiece: labelPiece, obstacles: obstacles)
+        // Other boundaries' areas apart from this one (nested / overlapping
+        // ones are meant to share space): the outline keeps out of them.
+        let related = Set(layout.boundaryRects.compactMap { piece, rect in
+            pieces.contains(where: { $0.intersects(rect) }) ? piece.boundaryID : nil
+        })
+        let others = layout.boundaryRects.compactMap { piece, rect -> CGRect? in
+            piece.boundaryID == boundary.id || related.contains(piece.boundaryID) ? nil : rect
+        }
+        return BoundaryHull.outline(pieces: pieces, labelPiece: labelPiece, obstacles: obstacles, boundaries: others,
+                                    lines: lines)
+    }
+
+    /// A relationship line as thin rects along its drawn polyline.
+    static func lineRects(_ path: RelationshipPath, style: RelationshipPathStyle) -> [CGRect] {
+        let points = RelationshipCurve.polyline(path, style: style, segments: 12)
+        return zip(points, points.dropFirst()).map { a, b in
+            CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))
+                .insetBy(dx: -2, dy: -2)
+        }
     }
 
     fileprivate func padded(_ rect: CGRect, hasLabel: Bool) -> CGRect {
