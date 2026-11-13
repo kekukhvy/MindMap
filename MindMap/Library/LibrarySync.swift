@@ -52,16 +52,17 @@ final class LibrarySync {
 
     // MARK: - Local changes
 
-    /// A library package was saved (file presenter): upload after the
-    /// debounce interval.
+    /// A library package was saved (file presenter): after the debounce
+    /// interval, queue what changed and send it at once instead of waiting
+    /// for the engine's own scheduling.
     func localMapDidChange(_ id: UUID) {
         debounceTasks[id]?.cancel()
         let delay = debounceInterval
         debounceTasks[id] = Task { [weak self] in
             try? await Task.sleep(for: delay)
-            guard !Task.isCancelled else { return }
-            self?.debounceTasks[id] = nil
-            self?.checkForLocalChanges(id)
+            guard !Task.isCancelled, let self else { return }
+            debounceTasks[id] = nil
+            if checkForLocalChanges(id) { try? await engine?.sendChanges() }
         }
         onStateChanged?()
     }
@@ -85,14 +86,16 @@ final class LibrarySync {
         for id in Set(cache.mapIDs()).union(state.maps.keys) { checkForLocalChanges(id) }
     }
 
-    /// Queues the record changes of map `id` that the server does not have.
-    func checkForLocalChanges(_ id: UUID) {
+    /// Queues the record changes of map `id` that the server does not have;
+    /// true when it queued any.
+    @discardableResult
+    func checkForLocalChanges(_ id: UUID) -> Bool {
         guard let url = cache.packageURL(for: id) else {
             // Package removed outside `deleteMap` (e.g. Finder).
             if state.maps[id] != nil { deleteMap(id) }
-            return
+            return false
         }
-        guard let snapshot = try? LibraryPackageSnapshot.read(at: url, mapID: id) else { return }
+        guard let snapshot = try? LibraryPackageSnapshot.read(at: url, mapID: id) else { return false }
         var meta = state.maps[id] ?? MapSyncMeta()
         meta.title = snapshot.title
         meta.isEncrypted = snapshot.isEncrypted
@@ -106,8 +109,10 @@ final class LibrarySync {
         persist()
         // Files of the server version still downloading: uploading now
         // would drop them from the map's attachment list everywhere.
-        guard meta.missingAttachments.isEmpty else { return }
-        engine?.add(Self.pendingChanges(for: snapshot, meta: meta))
+        guard meta.missingAttachments.isEmpty else { return false }
+        let changes = Self.pendingChanges(for: snapshot, meta: meta)
+        engine?.add(changes)
+        return !changes.isEmpty
     }
 
     /// Map record first (attachments reference it).
