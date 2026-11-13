@@ -352,6 +352,7 @@ enum MapMerge {
             }
             map.theme = scalar(baseMap.theme, localSide.map.theme, remoteSide.map.theme)
             map.taskPanel = scalar(baseMap.taskPanel, localSide.map.taskPanel, remoteSide.map.taskPanel)
+            map.favoritesPanel = scalar(baseMap.favoritesPanel, localSide.map.favoritesPanel, remoteSide.map.favoritesPanel)
             map.title = scalar(baseMap.title, localSide.map.title, remoteSide.map.title)
             map.isReadOnly = scalar(baseMap.isReadOnly, localSide.map.isReadOnly, remoteSide.map.isReadOnly)
             let existing = Set(map.allNodeIDsForMerge)

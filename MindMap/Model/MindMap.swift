@@ -13,6 +13,8 @@ struct MindMap: Equatable, Codable {
     var boundaries: [Boundary]
     /// Position / collapse of the virtual Tasks panel (nil = defaults).
     var taskPanel: TaskPanelState?
+    /// Position / fold state of the Favorites panel (same shape as the Tasks panel's).
+    var favoritesPanel: TaskPanelState?
     /// Name of a library map (WP14b; files are named by their file name).
     /// nil = not set: listings fall back to the central topic text.
     var title: String?
@@ -32,6 +34,7 @@ struct MindMap: Equatable, Codable {
         relationships: [Relationship] = [],
         boundaries: [Boundary] = [],
         taskPanel: TaskPanelState? = nil,
+        favoritesPanel: TaskPanelState? = nil,
         title: String? = nil,
         isReadOnly: Bool = false
     ) {
@@ -42,12 +45,13 @@ struct MindMap: Equatable, Codable {
         self.relationships = relationships
         self.boundaries = boundaries
         self.taskPanel = taskPanel
+        self.favoritesPanel = favoritesPanel
         self.title = title
         self.isReadOnly = isReadOnly
     }
 
     private enum CodingKeys: String, CodingKey {
-        case formatVersion, root, theme, floatingTopics, relationships, boundaries, taskPanel, title
+        case formatVersion, root, theme, floatingTopics, relationships, boundaries, taskPanel, favoritesPanel, title
         case readOnlyFlag = "isReadOnly"
     }
 
@@ -60,6 +64,7 @@ struct MindMap: Equatable, Codable {
         relationships = try c.decodeIfPresent([Relationship].self, forKey: .relationships) ?? []
         boundaries = try c.decodeIfPresent([Boundary].self, forKey: .boundaries) ?? []
         taskPanel = (try? c.decodeIfPresent(TaskPanelState.self, forKey: .taskPanel)) ?? nil
+        favoritesPanel = (try? c.decodeIfPresent(TaskPanelState.self, forKey: .favoritesPanel)) ?? nil
         title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? nil
         readOnlyFlag = (try? c.decodeIfPresent(Bool.self, forKey: .readOnlyFlag)) == true ? true : nil
     }

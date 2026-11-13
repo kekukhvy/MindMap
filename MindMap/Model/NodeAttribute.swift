@@ -19,6 +19,7 @@ enum NodeAttribute: Equatable {
     case side(BranchSide?)
     case link(TopicLink?)
     case task(TaskInfo?)
+    case favorite(Bool)
     /// The whole attachment list (add/remove/rename/reorder = one set).
     case attachments([Attachment])
 
@@ -39,6 +40,7 @@ enum NodeAttribute: Equatable {
         case .side: return .side(node.side)
         case .link: return .link(node.link)
         case .task: return .task(node.task)
+        case .favorite: return .favorite(node.isFavorite)
         case .attachments: return .attachments(node.attachments)
         }
     }
@@ -59,6 +61,7 @@ enum NodeAttribute: Equatable {
         case let .side(v): node.side = v
         case let .link(v): node.link = v
         case let .task(v): node.task = v
+        case let .favorite(v): node.isFavorite = v
         case let .attachments(v): node.attachments = v
         }
     }

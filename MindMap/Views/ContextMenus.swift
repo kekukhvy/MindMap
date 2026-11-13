@@ -57,6 +57,7 @@ struct NodeContextMenu: View {
             Divider()
             OutlineMenuItems(editor: editor)
         }
+        FavoriteMenuItem(editor: editor, id: id)
         Divider()
         TopicSubmenusView(facts: editor.menuFacts(for: id)) { editor.performMenuAction($0, on: id) }
         Divider()
@@ -108,6 +109,7 @@ struct MultiTopicMenuItems: View {
             }
         }
         ClipboardMenuItems(editor: editor, id: id)
+        FavoriteMenuItem(editor: editor, id: id)
         Divider()
         // Task ▸ applies to all; Link / Note / Attachments ▸ are disabled
         // (one topic only).
@@ -141,6 +143,21 @@ struct CanvasBackgroundMenu: View {
         .disabled(!editor.canPaste)
         Divider()
         OutlineMenuItems(editor: editor)
+    }
+}
+
+/// "Mark as Favorite" / "Remove from Favorites" for a topic or the
+/// multi-selection it belongs to (one undo step).
+struct FavoriteMenuItem: View {
+    let editor: EditorController
+    let id: UUID
+
+    var body: some View {
+        let remove = editor.targetsAreFavorites(for: id)
+        Button(remove ? "Remove from Favorites" : "Mark as Favorite", systemImage: remove ? "star.slash" : "star") {
+            editor.toggleFavorite(id)
+        }
+        .disabled(editor.isReadOnly)
     }
 }
 

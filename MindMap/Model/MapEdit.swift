@@ -19,6 +19,7 @@ enum MapEdit: Equatable {
     case updateBoundary(Boundary)
     /// Replaces the Tasks panel state (position / collapsed).
     case setTaskPanel(TaskPanelState?)
+    case setFavoritesPanel(TaskPanelState?)
     /// Replaces the map title (library maps, WP14b).
     case setTitle(String?)
     /// "Lock Editing" on / off (WP15).
@@ -93,6 +94,11 @@ extension MindMap {
             let old = taskPanel
             taskPanel = state
             return .setTaskPanel(old)
+
+        case let .setFavoritesPanel(state):
+            let old = favoritesPanel
+            favoritesPanel = state
+            return .setFavoritesPanel(old)
 
         case let .setTitle(title):
             let old = self.title

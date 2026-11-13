@@ -40,7 +40,7 @@ extension EditorController {
     /// Editor states in which the palette and "+" handle stay hidden.
     var isTouchBusy: Bool {
         editingID != nil || labelEditing != nil || pickMode != nil || marquee != nil || drag != nil
-            || boundaryMemberEditing != nil || controlDrag != nil || taskPanelDrag != nil
+            || boundaryMemberEditing != nil || controlDrag != nil || taskPanelDrag != nil || favoritesPanelDrag != nil
     }
 
     /// Palette on screen now (nil = hidden).

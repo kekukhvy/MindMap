@@ -186,6 +186,8 @@ final class EditorController {
     @ObservationIgnored var taskLingerDelay: TimeInterval = 1.2
     /// Live translation (screen points) while the panel header is dragged.
     var taskPanelDrag: CGSize?
+    /// Live translation (screen points) while the Favorites panel header is dragged.
+    var favoritesPanelDrag: CGSize?
     /// Viewport when a Tasks panel drag began on a read-only map (the drag
     /// pans the canvas instead of moving the panel).
     /// ⌘ / ⇧ held on an iPad hardware keyboard (`onModifierKeysChanged`):
@@ -241,7 +243,7 @@ final class EditorController {
 
     @ObservationIgnored let measurer = NodeMeasurer()
     @ObservationIgnored private var cachedScene: (map: MindMap, editing: UUID?, draft: String, day: Date,
-                                                  panel: CGRect?, missing: Set<UUID>, scene: MapScene)?
+                                                  panel: [CGRect], missing: Set<UUID>, scene: MapScene)?
     /// Current time (due chips, completion stamps); replaced by tests.
     @ObservationIgnored var now: () -> Date = Date.init
     @ObservationIgnored private var didPlaceViewport = false
@@ -288,14 +290,14 @@ final class EditorController {
         // Due chips say "Today" / overdue: rebuild when the day changes.
         let day = Calendar.current.startOfDay(for: now)
         // A dragged Tasks panel stays put: topics keep clear of it (WP17).
-        let panel = fixedTaskPanelFrame
+        let panel = [fixedTaskPanelFrame, fixedFavoritesPanelFrame].compactMap { $0 }
         let missing = missingMapLinks
         if let cachedScene, cachedScene.editing == editing, cachedScene.draft == draft, cachedScene.day == day,
            cachedScene.panel == panel, cachedScene.missing == missing, cachedScene.map == map {
             return cachedScene.scene
         }
         let scene = MapScene.build(map: map, measurer: measurer, editing: editing.map { ($0, draft) }, now: now,
-                                   fixedObstacles: panel.map { [$0] } ?? [], hidesAttachment: hidesAttachmentIcon,
+                                   fixedObstacles: panel, hidesAttachment: hidesAttachmentIcon,
                                    missingMapLinks: missing)
         cachedScene = (map, editing, draft, day, panel, missing, scene)
         return scene
@@ -316,6 +318,7 @@ final class EditorController {
                                   canGoBack: backTargetID != nil,
                                   selectionIsTask: selected?.task != nil,
                                   selectionIsDoneTask: selected?.task?.isDone == true,
+                                  selectionIsFavorite: selected != nil && targetsAreFavorites(),
                                   selectionCount: selectedIDs.count,
                                   menu: selected == nil ? TopicMenuFacts() : selectedID.map(menuFacts(for:)) ?? TopicMenuFacts())
     }
@@ -435,6 +438,7 @@ struct EditorCommandState: Equatable {
     var canGoBack: Bool = false
     var selectionIsTask: Bool = false
     var selectionIsDoneTask: Bool = false
+    var selectionIsFavorite: Bool = false
     /// Selected topics (> 1 = multi-selection).
     var selectionCount: Int = 0
     /// Task / Link / Note / Attachments submenus of the selection.

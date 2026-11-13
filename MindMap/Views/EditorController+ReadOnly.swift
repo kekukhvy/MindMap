@@ -65,6 +65,7 @@ extension EditorController {
         drag = nil
         controlDrag = nil
         taskPanelDrag = nil
+        favoritesPanelDrag = nil
         dueDatePickerID = nil
         linkEditor = nil
         colorSheet = nil

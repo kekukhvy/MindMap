@@ -38,6 +38,13 @@ struct Node: Identifiable, Equatable, Codable {
     var link: TopicLink?
     /// Set when the topic is a task (checkbox, priority, due day); nil = topic.
     var task: TaskInfo?
+    /// Marked as a favorite (listed in the Favorites panel). Stored only
+    /// when true, so maps without favorites stay unchanged.
+    var isFavorite: Bool {
+        get { favoriteMark == true }
+        set { favoriteMark = newValue ? true : nil }
+    }
+    private var favoriteMark: Bool?
     var children: [Node]
     var attachments: [Attachment]
 
@@ -57,6 +64,7 @@ struct Node: Identifiable, Equatable, Codable {
         side: BranchSide? = nil,
         link: TopicLink? = nil,
         task: TaskInfo? = nil,
+        isFavorite: Bool = false,
         children: [Node] = [],
         attachments: [Attachment] = []
     ) {
@@ -75,6 +83,7 @@ struct Node: Identifiable, Equatable, Codable {
         self.side = side
         self.link = link
         self.task = task
+        self.favoriteMark = isFavorite ? true : nil
         self.children = children
         self.attachments = attachments
     }
@@ -82,6 +91,7 @@ struct Node: Identifiable, Equatable, Codable {
     private enum CodingKeys: String, CodingKey {
         case id, text, isCollapsed, colorTag, customColor, layoutStyle, shape, borderStyle
         case connectorStyle, lineWidth, lineDash, manualPosition, side, link, task, children, attachments
+        case favoriteMark = "isFavorite"
     }
 
     /// Tolerant decoding: every field except `id` is optional in the file;
@@ -103,6 +113,7 @@ struct Node: Identifiable, Equatable, Codable {
         side = (try? c.decodeIfPresent(BranchSide.self, forKey: .side)) ?? nil
         link = (try? c.decodeIfPresent(TopicLink.self, forKey: .link)) ?? nil
         task = (try? c.decodeIfPresent(TaskInfo.self, forKey: .task)) ?? nil
+        favoriteMark = (try? c.decodeIfPresent(Bool.self, forKey: .favoriteMark)) == true ? true : nil
         children = try c.decodeIfPresent([Node].self, forKey: .children) ?? []
         attachments = try c.decodeIfPresent([Attachment].self, forKey: .attachments) ?? []
     }

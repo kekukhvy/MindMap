@@ -223,7 +223,7 @@ extension EditorController {
     /// Map content plus the Tasks panel (Zoom to Fit).
     var contentBoundsIncludingPanel: CGRect {
         let bounds = scene.layout.bounds
-        guard let panel = taskPanel else { return bounds }
-        return bounds.union(panel.frame)
+        let frames = [taskPanel?.frame, favoritesPanel?.frame].compactMap { $0 }
+        return frames.reduce(bounds) { $0.union($1) }
     }
 }

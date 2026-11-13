@@ -33,6 +33,8 @@ extension MapEdit {
         case let .setTaskPanel(state):
             // Folding the panel is fine, dragging it somewhere is an edit.
             return state?.position == map.taskPanel?.position
+        case let .setFavoritesPanel(state):
+            return state?.position == map.favoritesPanel?.position
         default:
             return false
         }

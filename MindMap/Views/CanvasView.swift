@@ -41,6 +41,10 @@ struct CanvasView: View {
                         TasksPanelView(editor: editor, panel: panel, viewport: viewport)
                             .transition(.opacity.combined(with: .scale(scale: 0.92)))
                     }
+                    if let panel = editor.favoritesPanel {
+                        FavoritesPanelView(editor: editor, panel: panel, viewport: viewport)
+                            .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                    }
                 }
                 .animation(.snappy(duration: 0.25), value: editor.model.map)
                 CanvasOverlays(editor: editor, viewport: viewport)
@@ -158,6 +162,7 @@ struct CanvasView: View {
                 editor.selectForContextMenu(at: location)
             }, passesScroll: { location in
                 editor.taskListScrollRect?.contains(location) == true
+                    || editor.favoritesListScrollRect?.contains(location) == true
             }))
             #endif
     }

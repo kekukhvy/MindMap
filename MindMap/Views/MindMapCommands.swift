@@ -63,6 +63,10 @@ struct MindMapCommands: Commands {
                 Button("Z → A") { editor?.sortChildren(ascending: false) }
             }
             .disabled(!hasNodeSelection || state?.selectionHasChildren != true || isReadOnly)
+            Button(state?.selectionIsFavorite == true ? "Remove from Favorites" : "Mark as Favorite") {
+                editor?.toggleFavorite()
+            }
+            .disabled(!hasNodeSelection || isReadOnly)
             Button("Reset Position") { editor?.resetPositions(in: editor?.selectedID) }
                 .disabled(!hasNodeSelection || state?.selectionIsFreelyPositioned != true || isReadOnly)
             Divider()
