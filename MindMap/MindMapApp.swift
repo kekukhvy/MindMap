@@ -9,6 +9,9 @@ struct MindMapApp: App {
     init() {
         // iCloud map library (WP14): cache bookkeeping + CloudKit sync.
         LibraryService.startAtLaunch()
+        #if DEBUG
+        WelcomeDebugHook.prepare()
+        #endif
     }
 
     #if os(macOS)
@@ -19,20 +22,16 @@ struct MindMapApp: App {
             MapLockGate(model: file.document.model, title: Self.title(of: file.fileURL), documentURL: file.fileURL) {
                 ContentView(model: file.document.model, documentURL: file.fileURL)
             }
+            .modifier(MapWindowHooks(url: file.fileURL))
         }
         .commands {
             StorageCommands()
             MindMapCommands()
             LockCommands()
+            WelcomeCommands()
         }
-        // Attachments open in AppKit windows above their map (`AttachmentWindows`).
-
-        // File ▸ Open from Library… (WP13 turns it into the Welcome window).
-        Window("Map Library", id: LibraryWindow.id) {
-            LibraryWindow()
-        }
-        .windowResizability(.contentMinSize)
-        .defaultSize(width: 520, height: 480)
+        // Attachments open in AppKit windows above their map (`AttachmentWindows`);
+        // the Welcome window (WP13) is an AppKit window too (`WelcomeWindowController`).
 
         Settings {
             SettingsView()
@@ -47,6 +46,7 @@ struct MindMapApp: App {
             DocumentCommands()
             MindMapCommands()
             LockCommands()
+            WelcomeTourCommands()
         }
     }
     #endif

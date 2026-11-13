@@ -265,7 +265,7 @@ enum LibraryDebugHook {
     static let presentRequest = Notification.Name("MindMapLibraryDebugPresent")
 
     /// Sample maps for screenshots (once per cache).
-    private static func seedSamples(_ service: LibraryService) {
+    static func seedSamples(_ service: LibraryService) {
         guard !service.store.maps().contains(where: { $0.title == "Product Roadmap" }) else { return }
         let samples: [(String, [String], Double)] = [
             ("Product Roadmap", ["Research", "Design", "Launch"], -5),

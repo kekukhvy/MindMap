@@ -100,14 +100,14 @@ struct StoreBadge: View {
 /// (⇧⌘O), and the focused map's store actions.
 struct StorageCommands: Commands {
     @FocusedValue(\.mindMapEditor) private var editor
-    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             // Replaces only the standard "New" (Open… / Open Recent stay).
             Button("New Map") { MapHost.newMap() }
                 .keyboardShortcut("n", modifiers: .command)
-            Button("Open from Library…") { openWindow(id: LibraryWindow.id) }
+            // The Welcome window lists the library (WP13).
+            Button("Open from Library…") { WelcomeWindowController.shared.show() }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
         }
         CommandGroup(after: .saveItem) {

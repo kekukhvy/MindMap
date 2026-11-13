@@ -58,9 +58,15 @@ extension LibraryMapStore {
         }
     }
 
+    /// Adds an in-memory package as library map `id` (WP13 sample maps,
+    /// whose links to each other need the IDs up front).
+    @discardableResult
+    func importWrapper(_ wrapper: FileWrapper, title: String, id: UUID = UUID()) throws -> MapSummary {
+        try add(wrapper, title: title, id: id)
+    }
+
     /// Adds a package (plain: `title` written into its map) as a new map.
-    private func add(_ wrapper: FileWrapper, title: String) throws -> MapSummary {
-        let id = UUID()
+    private func add(_ wrapper: FileWrapper, title: String, id: UUID = UUID()) throws -> MapSummary {
         let isLocked = wrapper.fileWrappers?[LockHeader.fileName] != nil
         if !isLocked, let data = wrapper.fileWrappers?[MindMapPackage.mapFileName]?.regularFileContents {
             var map = try MindMapPackage.decode(data)

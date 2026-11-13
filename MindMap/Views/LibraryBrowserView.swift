@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The iCloud map library as a list (WP14b "Open from Library…"; WP13 builds
-/// the Welcome screen from it): search, sort, open, delete (confirmed),
+/// The iCloud map library as a list (WP14b "Open from Library…" sheet on
+/// iPad; the macOS Welcome window lists the library itself): search, sort, open, delete (confirmed),
 /// New Map. Platform-neutral — the host decides how a map opens.
 struct LibraryBrowserView: View {
     var service: LibraryService = .shared
@@ -235,25 +235,3 @@ struct LibraryMapRow: View {
         return date.formatted(date: .abbreviated, time: .shortened)
     }
 }
-
-#if os(macOS)
-/// macOS "Open from Library…" window (⇧⌘O). Closes when a map opens.
-struct LibraryWindow: View {
-    static let id = "library"
-    @Environment(\.dismissWindow) private var dismissWindow
-
-    var body: some View {
-        LibraryBrowserView(onOpen: { url in
-            MapHost.open(url)
-            dismissWindow(id: Self.id)
-        }, onNewMap: {
-            if let summary = try? LibraryService.shared.store.createUntitledMap(),
-               let url = LibraryService.shared.store.packageURL(for: summary.location) {
-                MapHost.open(url)
-                dismissWindow(id: Self.id)
-            }
-        }, onCancel: { dismissWindow(id: Self.id) })
-        .frame(minWidth: 460, idealWidth: 520, minHeight: 380, idealHeight: 480)
-    }
-}
-#endif

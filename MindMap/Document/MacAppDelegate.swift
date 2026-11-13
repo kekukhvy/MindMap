@@ -5,8 +5,11 @@ import ObjectiveC
 /// macOS launch: no open panel. Window restoration / autosaved untitled
 /// documents may reopen windows on their own; AppKit asks the app delegate
 /// `applicationShouldOpenUntitledFile` only when nothing was restored or
-/// opened, and then the most recent document is reopened instead (falling
-/// back to the next recent one, then a new map).
+/// opened, and then (WP13) the Welcome window appears — with the Welcome
+/// Tour on the very first launch — or, with "Show Welcome on launch" off,
+/// the most recent document is reopened (falling back to the next recent
+/// one, then a new map). A Dock click with no windows shows Welcome too
+/// (when it is on).
 ///
 /// SwiftUI's own app delegate answers that question itself and does not
 /// forward it to the adaptor delegate, so the answer is intercepted on
@@ -19,30 +22,66 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         // at launch and on Dock reopen when iCloud Drive is enabled).
         UserDefaults.standard.register(defaults: ["NSShowAppCentricOpenPanelInsteadOfUntitledFile": false])
         Self.interceptUntitledDecision()
+        LibraryMoveGuard.install()
         #if DEBUG
         LaunchReport.scheduleIfRequested()
         #endif
     }
 
-    /// Used if a future SwiftUI forwards the call to the adaptor delegate.
-    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
-        !Self.reopenRecentAtLaunch()
+    /// The very first launch shows the Welcome Tour even when window
+    /// restoration reopened maps (then AppKit never asks for an untitled
+    /// document), e.g. the first launch after an update.
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        guard !LaunchEnvironment.isTesting else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            let flow = WelcomeFlow.shared
+            guard flow.launchAction() == .tour, !WelcomeWindowController.shared.isShown else { return }
+            #if DEBUG
+            LaunchReport.note("first launch with restored windows: tour")
+            #endif
+            WelcomeWindowController.shared.show(tour: true)
+        }
     }
 
-    /// First untitled request of the process (= launch with nothing
-    /// restored): starts reopening the most recent document; true if it did
-    /// (the caller must then not open an untitled one). Later requests (Dock
-    /// click with no windows) and test runs keep the standard new map.
+    /// Used if a future SwiftUI forwards the call to the adaptor delegate.
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        !MainActor.assumeIsolated { Self.reopenRecentAtLaunch() }
+    }
+
+    /// Untitled request (launch with nothing restored, or Dock click with
+    /// no windows): true if it was answered here (Welcome window / reopened
+    /// recent; the caller must then not open an untitled document). Test
+    /// runs keep the standard new map.
+    @MainActor
     static func reopenRecentAtLaunch() -> Bool {
-        guard !handledLaunch else { return false }
-        handledLaunch = true
         guard !LaunchEnvironment.isTesting else { return false }
+        guard !handledLaunch else {
+            // Dock click with no windows.
+            guard WelcomeFlow.shared.showsWelcomeOnLaunch else { return false }
+            WelcomeWindowController.shared.show()
+            return true
+        }
+        handledLaunch = true
+        let action = WelcomeFlow.shared.launchAction()
+        #if DEBUG
+        LaunchReport.note("untitled request at launch: \(action)")
+        #endif
+        switch action {
+        case .tour:
+            DispatchQueue.main.async { WelcomeWindowController.shared.show(tour: true) }
+            return true
+        case .welcome:
+            DispatchQueue.main.async { WelcomeWindowController.shared.show() }
+            return true
+        case .reopenLast:
+            break
+        }
         let controller = NSDocumentController.shared
         let candidates = LaunchEnvironment.reopenCandidates(
             recents: controller.recentDocumentURLs,
             alreadyOpen: controller.documents.compactMap(\.fileURL))
         #if DEBUG
-        LaunchReport.note("untitled request at launch: candidates=\(candidates.map(\.lastPathComponent))")
+        LaunchReport.note("reopen candidates=\(candidates.map(\.lastPathComponent))")
         #endif
         guard !candidates.isEmpty else { return false }
         reopen(candidates[...])
@@ -75,7 +114,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         typealias Original = @convention(c) (AnyObject, Selector, NSApplication) -> Bool
         let original = unsafeBitCast(method_getImplementation(method), to: Original.self)
         let replacement: @convention(block) (AnyObject, NSApplication) -> Bool = { object, app in
-            reopenRecentAtLaunch() ? false : original(object, selector, app)
+            MainActor.assumeIsolated { reopenRecentAtLaunch() } ? false : original(object, selector, app)
         }
         method_setImplementation(method, imp_implementationWithBlock(replacement))
     }
@@ -118,6 +157,7 @@ enum LaunchReport {
             for window in NSApp.windows where window.isVisible {
                 lines.append("window \(type(of: window)) title=\"\(window.title)\" panel=\(window is NSPanel)")
             }
+            lines.append("welcome=\(WelcomeWindowController.shared.isShown) tour=\(WelcomeFlow.shared.isShowingTour)")
             for document in NSDocumentController.shared.documents {
                 lines.append("document \(document.displayName ?? "?") url=\(document.fileURL?.path ?? "nil")")
             }

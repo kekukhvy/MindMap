@@ -20,6 +20,11 @@ final class DocumentSession {
     var isShowingLibrary = false
     /// Settings sheet.
     var isShowingSettings = false
+    /// Welcome screen over the open map (folder button ▸ Welcome); without
+    /// a map the window shows Welcome anyway (WP13).
+    var isShowingWelcome = false
+    /// Welcome Tour sheet on this window's Welcome screen.
+    var isShowingTour = false
     /// Maps this window showed before following map links in place (no
     /// multi-window support): Back returns to the last one.
     private(set) var backStack: [MapBackEntry] = []
@@ -130,6 +135,12 @@ final class DocumentSession {
         enqueue { await self.createNow() }
     }
 
+    /// Help ▸ Welcome Tour: the Welcome screen with the tour on top.
+    func showTour() {
+        if document != nil { isShowingWelcome = true }
+        isShowingTour = true
+    }
+
     func rename(to name: String) {
         enqueue { await self.renameNow(name) }
     }
@@ -226,11 +237,25 @@ final class DocumentSession {
     // MARK: Operations
 
     private func launch(sceneBookmark: Data?) async {
-        let mayRestoreLast = !Self.launchRestoreClaimed && !LaunchEnvironment.isTesting
+        let isFirstWindow = !Self.launchRestoreClaimed && !LaunchEnvironment.isTesting
+        let mayRestoreLast = isFirstWindow
         Self.launchRestoreClaimed = true
         // A document from Files (onOpenURL) / a map link is already queued
         // behind or was opened.
         guard pending == 1, document == nil else { return }
+        if isFirstWindow {
+            // WP13: the first window starts on the Welcome screen (with the
+            // tour on the very first launch) unless Welcome is turned off.
+            switch WelcomeFlow.shared.launchAction() {
+            case .tour:
+                isShowingTour = true
+                return
+            case .welcome:
+                return
+            case .reopenLast:
+                break
+            }
+        }
         if let sceneBookmark, let url = try? SystemBookmarkCoder().resolve(sceneBookmark).url,
            LastDocumentStore.itemExists(url), await openNow(url, reportErrors: false) {
             return
@@ -301,6 +326,8 @@ final class DocumentSession {
             MainActor.assumeIsolated { self?.documentStateChanged() }
         }
         onOpen?(try? SystemBookmarkCoder().bookmark(for: opened.fileURL))
+        isShowingWelcome = false
+        WelcomeFlow.shared.noteOpened(opened.fileURL)
         await remember(opened.fileURL)
     }
 
@@ -363,6 +390,7 @@ final class DocumentSession {
         title = name
         blankMap = nil
         onOpen?(try? SystemBookmarkCoder().bookmark(for: new))
+        WelcomeFlow.shared.noteOpened(new)
         await remember(new)
     }
 

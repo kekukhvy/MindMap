@@ -37,6 +37,12 @@ final class MapStorageController {
         controllers[ObjectIdentifier(model)]?.controller
     }
 
+    /// The controller of the open map whose package is `url` (macOS Move To… guard).
+    static func controller(forDocumentAt url: URL) -> MapStorageController? {
+        let key = LaunchEnvironment.key(url)
+        return controllers.values.compactMap(\.controller).first { $0.documentURL.map(LaunchEnvironment.key) == key }
+    }
+
     var documentURL: URL? { editor?.documentURL }
     /// Library map ID of this document (nil = a `.mindmap` file).
     var libraryID: UUID? { service.libraryMapID(of: documentURL) }

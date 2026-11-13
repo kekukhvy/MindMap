@@ -56,6 +56,11 @@ struct DocumentWindow: View {
         .sheet(isPresented: $session.isShowingSettings) {
             SettingsView { session.isShowingSettings = false }
         }
+        .fullScreenCover(isPresented: Binding(get: { session.isShowingWelcome && session.document != nil },
+                                              set: { session.isShowingWelcome = $0 })) {
+            WelcomeView(actions: welcomeActions(closing: { session.isShowingWelcome = false }),
+                        isShowingTour: $session.isShowingTour)
+        }
         .onOpenURL { url in session.open(url) }
         #if DEBUG
         .onReceive(NotificationCenter.default.publisher(for: LibraryDebugHook.openRequest)) { note in
@@ -93,14 +98,26 @@ struct DocumentWindow: View {
         } else if session.isWorking {
             ProgressView()
         } else {
-            ContentUnavailableView {
-                Label("No Map Open", systemImage: "point.3.connected.trianglepath.dotted")
-            } actions: {
-                Button("New Map") { session.newMap() }
-                Button("Open…") { session.isImporting = true }
-                Button("Open from Library…") { session.isShowingLibrary = true }
-            }
+            // No map in this window: the Welcome screen (WP13).
+            WelcomeView(actions: welcomeActions(closing: nil), isShowingTour: $session.isShowingTour)
         }
+    }
+
+    /// Welcome screen actions for this window; `closing` = the Welcome
+    /// screen is shown over the open map (Back to Map).
+    private func welcomeActions(closing: (() -> Void)?) -> WelcomeActions {
+        WelcomeActions(newMap: {
+            session.isShowingWelcome = false
+            session.newMap()
+        }, openFile: {
+            guard session.isShowingWelcome else { return session.isImporting = true }
+            // The picker can only appear once the Welcome cover is gone.
+            session.isShowingWelcome = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { session.isImporting = true }
+        }, open: { url in
+            session.isShowingWelcome = false
+            session.open(url)
+        }, close: closing)
     }
 
     private var documentsMenu: some View {
@@ -108,6 +125,8 @@ struct DocumentWindow: View {
             Button("New Map", systemImage: "doc.badge.plus") { session.newMap() }
             Button("Open…", systemImage: "folder") { session.isImporting = true }
             Button("Open from Library…", systemImage: "icloud") { session.isShowingLibrary = true }
+            Button("Welcome", systemImage: "house") { session.isShowingWelcome = true }
+            Button("Welcome Tour", systemImage: "play.rectangle") { session.showTour() }
             Divider()
             if let document = session.document {
                 // Library: Duplicate / Export as File…; file: Import / Move to Library, Duplicate.
@@ -186,6 +205,20 @@ struct DocumentCommands: Commands {
                 .disabled(session == nil)
             Button("Open from Library…") { session?.isShowingLibrary = true }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
+                .disabled(session == nil)
+        }
+    }
+}
+
+/// Help ▸ Welcome Tour (iPad menu bar) for the focused window.
+struct WelcomeTourCommands: Commands {
+    @FocusedValue(\.documentSession) private var session
+
+    var body: some Commands {
+        CommandGroup(after: .help) {
+            Button("Welcome") { session?.isShowingWelcome = true }
+                .disabled(session == nil)
+            Button("Welcome Tour") { session?.showTour() }
                 .disabled(session == nil)
         }
     }
