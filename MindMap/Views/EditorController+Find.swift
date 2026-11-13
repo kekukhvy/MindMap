@@ -3,12 +3,6 @@ import SwiftUI
 /// Find (⌘F). All of it is view state: the filter hides topics in the
 /// scene only, nothing here touches the document or the undo stack.
 extension EditorController {
-    /// The map with the filter applied while the find bar shows a phrase.
-    var findFilteredMap: MindMap? {
-        guard isFindOpen, !findQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        return model.map.filtered(keeping: model.map.findVisibleIDs(findMatches))
-    }
-
     var currentFindMatch: FindMatch? {
         findMatches.indices.contains(findIndex) ? findMatches[findIndex] : nil
     }
@@ -24,13 +18,25 @@ extension EditorController {
     /// Esc / close button: the full map comes back, the selected topic
     /// stays where it is on screen.
     func closeFind() {
-        keepingOnScreen(selectedID) { isFindOpen = false }
+        isFindFieldFocused = false
+        keepingOnScreen(selectedID) {
+            isFindOpen = false
+            findFilteredMap = nil
+        }
     }
 
-    /// Recomputes the matches (query or map changed). A new query starts at
-    /// the first match and shows it.
+    /// Canvas key shortcuts apply: no topic or label is edited and the find
+    /// field does not have focus (its keys edit the query only).
+    var acceptsCanvasKeys: Bool {
+        editingID == nil && labelEditing == nil && !isFindFieldFocused
+    }
+
+    /// Recomputes the matches and the filtered map (query or map changed).
+    /// A new query starts at the first match and shows it.
     func refreshFind(newQuery: Bool = false) {
         findMatches = model.findMatches(findQuery)
+        let filters = isFindOpen && MindMap.findPhrase(findQuery) != nil
+        findFilteredMap = filters ? model.map.filtered(keeping: model.map.findVisibleIDs(findMatches)) : nil
         findIndex = newQuery ? 0 : min(findIndex, max(findMatches.count - 1, 0))
         if newQuery { showCurrentFindMatch() }
     }

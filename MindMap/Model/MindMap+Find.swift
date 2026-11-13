@@ -12,14 +12,21 @@ struct FindMatch: Equatable {
 extension MindMap {
     /// Longest note snippet shown in the find bar.
     static let findSnippetLength = 80
+    /// Shortest phrase Find searches for (shorter = no matches, no filter).
+    static let findMinimumLength = 3
+
+    /// `query` without surrounding spaces, or nil when it is too short to search.
+    static func findPhrase(_ query: String) -> String? {
+        let phrase = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return phrase.count >= findMinimumLength ? phrase : nil
+    }
 
     /// Topics (main tree first, then floating topics, pre-order) whose text
     /// or markdown note contains `query` as a whole phrase (case and
-    /// diacritic insensitive). Locked notes are never searched. Empty query
-    /// = no matches. `noteText` reads a note's text.
+    /// diacritic insensitive). Locked notes are never searched. A query
+    /// shorter than `findMinimumLength` = no matches. `noteText` reads a note's text.
     func findMatches(_ query: String, noteText: (Attachment) -> String?) -> [FindMatch] {
-        let phrase = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !phrase.isEmpty else { return [] }
+        guard let phrase = Self.findPhrase(query) else { return [] }
         var result: [FindMatch] = []
         func visit(_ node: Node) {
             if node.text.localizedStandardContains(phrase) {

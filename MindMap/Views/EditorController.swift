@@ -290,6 +290,12 @@ final class EditorController {
     }
     var findMatches: [FindMatch] = []
     var findIndex = 0
+    /// The map with the filter applied (matches and their ancestors) while
+    /// the bar shows a phrase; built once per query / map change (`refreshFind`).
+    var findFilteredMap: MindMap?
+    /// The find field has keyboard focus: canvas keys and plain-key menu
+    /// shortcuts stay off, as while a topic is edited (set by `FindBar`).
+    var isFindFieldFocused = false
     /// Bumped by every ⌘F so the field takes focus again.
     var findFocusToken = 0
 
@@ -321,7 +327,7 @@ final class EditorController {
 
     var commandState: EditorCommandState {
         let selected = selectedID.flatMap { scene.nodes[$0] }
-        return EditorCommandState(isEditing: editingID != nil || labelEditing != nil,
+        return EditorCommandState(isEditing: !acceptsCanvasKeys,
                                   isReadOnly: isReadOnly, hasSelection: selected != nil || selectedItem != nil,
                                   hasNodeSelection: selected != nil,
                                   selectionIsMainRoot: selectedID == model.root.id,
