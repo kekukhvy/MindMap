@@ -150,6 +150,9 @@ final class EditorController {
     @ObservationIgnored var namingNewID: UUID?
     private(set) var editingID: UUID?
     var draftText = ""
+    /// Line breaks the topic editor asked its field to insert (Shift/Option+
+    /// Return) that are not a commit (`TopicTextInput.classify`).
+    @ObservationIgnored var expectedNewlines = 0
     /// Whether the inline editor selects all text when it appears.
     private(set) var editSelectsAll = true
     var viewport = Viewport()
@@ -313,6 +316,7 @@ final class EditorController {
     }
 
     func setEditing(_ id: UUID?, text: String, selectAll: Bool) {
+        expectedNewlines = 0
         draftText = text
         editSelectsAll = selectAll
         editingID = id
@@ -344,8 +348,27 @@ final class EditorController {
         } else {
             // Keep the content center fixed on resize.
             viewport.pan(dx: (size.width - viewSize.width) / 2, dy: (size.height - viewSize.height) / 2)
+            // iPad software keyboard (the canvas shrinks above it): the topic
+            // or label being edited stays visible.
+            if let rect = editedItemRect() { viewport.reveal(rect, in: size) }
         }
         viewSize = size
+    }
+
+    /// Map rect of the inline editor's target (topic or relationship /
+    /// boundary label), nil when nothing is edited.
+    func editedItemRect() -> CGRect? {
+        if let editingID { return scene.layout.frames[editingID] }
+        switch labelEditing {
+        case let .relationship(id)?:
+            guard let point = relationshipPath(id)?.labelPoint else { return nil }
+            return CGRect(x: point.x - 80, y: point.y - 11, width: 160, height: 22)
+        case let .boundary(id)?:
+            guard let outline = scene.layout.boundaries[id] else { return nil }
+            return CGRect(x: outline.labelOrigin.x, y: outline.labelOrigin.y, width: 176, height: 28)
+        case nil:
+            return nil
+        }
     }
 
     // MARK: Undo state

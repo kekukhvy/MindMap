@@ -6,6 +6,7 @@ import UIKit
 #endif
 
 /// Inline text editor of a topic. Return / Esc / focus loss commit,
+/// Shift+Return / Option+Return insert a line break (multi-line topics),
 /// Tab commits and adds a child (XMind). New topics start with all text
 /// selected; typing on a selected topic starts with the caret at the end.
 struct NodeEditorField: View {
@@ -16,13 +17,24 @@ struct NodeEditorField: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        TextField("", text: $editor.draftText)
+        TextField("", text: Binding(get: { editor.draftText },
+                                    set: { editor.updateDraft($0, editing: nodeID) }),
+                  axis: .vertical)
             .textFieldStyle(.plain)
             .font(font)
             .foregroundStyle(textColor)
             .multilineTextAlignment(.center)
+            .lineLimit(1...NodeMeasurer.maxLines)
             .focused($isFocused)
             .onSubmit { editor.commitEditing(ifEditing: nodeID) }
+            .onKeyPress(.return, phases: .down) { press in
+                let modifiers = press.modifiers
+                if editor.handleEditorReturn(shift: modifiers.contains(.shift), option: modifiers.contains(.option),
+                                             editing: nodeID) {
+                    insertLineBreak()
+                }
+                return .handled
+            }
             .onKeyPress(.escape) {
                 editor.commitEditing(ifEditing: nodeID)
                 return .handled
@@ -61,6 +73,22 @@ struct NodeEditorField: View {
     /// Focus outcome of each editor (real-app focus probe).
     @MainActor static var debugFocusLog: [Bool] = []
     #endif
+
+    /// Inserts "\n" at the caret of the focused field (replacing a selection).
+    private func insertLineBreak() {
+        #if os(macOS)
+        // The key window's field editor (NSApp.keyWindow can be nil while
+        // the app is not frontmost, e.g. a window made key by the tests).
+        let window = editor.hostWindow ?? NSApp.keyWindow ?? NSApp.windows.first(where: \.isKeyWindow)
+        if let fieldEditor = window?.firstResponder as? NSTextView {
+            fieldEditor.insertNewlineIgnoringFieldEditor(nil)
+        } else {
+            NSApp.sendAction(#selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)), to: nil, from: nil)
+        }
+        #else
+        UIApplication.shared.sendAction(#selector(UIKeyInput.insertText(_:)), to: nil, from: "\n" as NSString, for: nil)
+        #endif
+    }
 
     private func applyInitialSelection(selectAll: Bool) {
         #if os(macOS)

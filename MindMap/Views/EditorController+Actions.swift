@@ -115,13 +115,43 @@ extension EditorController {
     func commitEditing(ifEditing id: UUID? = nil) {
         if id == nil { commitLabelEdit() }
         guard let editingID, id == nil || id == editingID else { return }
-        let text = draftText
+        let text = TopicTextInput.committed(draftText)
         let coalesce = namingNewID == editingID
         namingNewID = nil
         setEditing(nil, text: "", selectAll: true)
         model.rename(editingID, to: text, coalescing: coalesce, undoManager: undoManager)
         // The committed text may have grown the topic past the view edge.
         if selectedID == editingID { reveal(editingID) }
+    }
+
+    /// Text field update of the topic editor: a bare Return that reached
+    /// the multi-line field (iPad software keyboard) commits; anything else,
+    /// including a requested Shift/Option+Return line break, is typing.
+    func updateDraft(_ text: String, editing id: UUID) {
+        guard editingID == id else { return }
+        let expects = expectedNewlines > 0
+        switch TopicTextInput.classify(old: draftText, new: text, expectsNewline: expects) {
+        case let .text(new):
+            if expects, TopicTextInput.insertedText(old: draftText, new: new) == "\n" { expectedNewlines -= 1 }
+            draftText = new
+        case .returnPressed:
+            // After the field's own update: it is removed by the commit.
+            DispatchQueue.main.async { [weak self] in self?.commitEditing(ifEditing: id) }
+        }
+    }
+
+    /// Return in the topic editor: commit, or a line break with Shift/Option.
+    /// Returns true when the editor should insert the line break itself.
+    func handleEditorReturn(shift: Bool, option: Bool, editing id: UUID) -> Bool {
+        switch TopicTextInput.returnAction(shift: shift, option: option) {
+        case .commit:
+            commitEditing(ifEditing: id)
+            return false
+        case .newline:
+            guard editingID == id else { return false }
+            expectedNewlines += 1
+            return true
+        }
     }
 
     // MARK: Drag to reparent / reorder / move floating

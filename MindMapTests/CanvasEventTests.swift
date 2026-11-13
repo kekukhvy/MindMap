@@ -177,10 +177,10 @@ final class CanvasEventHarness {
     }
 
     /// One key press: Return = "\r" (keyCode 36), Tab = "\t" (48), Esc = "\u{1b}" (53).
-    func key(_ characters: String, keyCode: UInt16) async throws {
+    func key(_ characters: String, keyCode: UInt16, modifiers: NSEvent.ModifierFlags = []) async throws {
         for type in [NSEvent.EventType.keyDown, .keyUp] {
             time = max(time + 0.001, ProcessInfo.processInfo.systemUptime)
-            let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: time,
+            let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: modifiers, timestamp: time,
                                          windowNumber: window.windowNumber, context: nil, characters: characters,
                                          charactersIgnoringModifiers: characters, isARepeat: false,
                                          keyCode: keyCode)!
@@ -371,6 +371,33 @@ struct CanvasEventTests {
         try await harness.key("\r", keyCode: 36)
         #expect(editor.editingID == nil)
         #expect(editor.model.map.node(withID: child)?.text == "abc")
+    }
+
+    /// Multi-line topics: Shift+Return and Option+Return insert line breaks
+    /// in the real field (at the caret), plain Return commits.
+    @Test(arguments: [false, true]) func shiftAndOptionReturnInsertLineBreaks(real: Bool) async throws {
+        let (map, _, a, _, _) = makeMap()
+        let harness = try await harness(map, real)
+        defer { harness.close() }
+        let editor = harness.editor
+        try await harness.humanClick(harness.center(of: a), count: 2)
+        let child = try #require(editor.model.map.node(withID: a)?.children.first?.id)
+        #expect(editor.editingID == child)
+        let height = try #require(editor.scene.layout.frames[child]).height
+        try await harness.typeText("ab")
+        try await harness.key("\r", keyCode: 36, modifiers: .shift)
+        try await harness.typeText("cd")
+        try await harness.key("\r", keyCode: 36, modifiers: .option)
+        try await harness.typeText("ef")
+        #expect(editor.editingID == child)
+        #expect(editor.draftText == "ab\ncd\nef")
+        #expect(try #require(editor.scene.layout.frames[child]).height > height * 2)
+        try await harness.key("\r", keyCode: 36)
+        #expect(editor.editingID == nil)
+        #expect(editor.model.map.node(withID: child)?.text == "ab\ncd\nef")
+        // Next Return on the selected topic adds a sibling as before.
+        try await harness.key("\r", keyCode: 36)
+        #expect(editor.model.map.node(withID: a)?.children.count == 2)
     }
 
     /// Tab (child) and Return (sibling) on a selected topic: typing names the

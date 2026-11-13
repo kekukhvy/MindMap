@@ -130,7 +130,7 @@ struct CanvasView: View {
             #endif
             #if os(iOS)
             .background(PencilBridge(editor: editor))
-            .background(TabKeyBridge {
+            .background(TabKeyBridge(isActive: isFocused || editor.editingID != nil) {
                 editor.keyboardDidAct()
                 if editor.editingID != nil {
                     editor.commitEditing()
