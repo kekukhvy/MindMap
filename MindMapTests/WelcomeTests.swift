@@ -233,7 +233,7 @@ struct WelcomeTests {
         let roadmap = try SampleMaps.archive(SampleMaps.roadmapResource)
         #expect(features.name == SampleMaps.featuresName && roadmap.name == SampleMaps.roadmapName)
         let map = try MindMapPackage.read(features.fileWrapper())
-        #expect(map.root.children.count == 10)
+        #expect(map.root.children.count == 11)
         #expect(map.referencedAttachmentFileNames.allSatisfy { features.files["attachments/" + $0] != nil })
         // Archive round trip through a folder.
         let folder = StorageFixtures.temporaryFolder("Archive").appendingPathComponent("Copy.mindmap")
