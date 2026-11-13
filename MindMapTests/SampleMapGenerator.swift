@@ -59,10 +59,17 @@ enum FeaturesSample {
         ])
         let hkNavigation = group("Navigation", [
             "Arrow keys — Select Neighbour Topic",
+            "Arrow towards the children — Expand a Folded Topic",
             "⌘= / ⌘- — Zoom In / Out",
             "⌘0 — Zoom to Fit",
             "⌘-scroll / pinch — Zoom",
             "Esc — Cancel Pick / Deselect",
+        ])
+        let hkFind = group("Find", [
+            "⌘F — Find in Topics and Notes",
+            "⌘G / ⇧⌘G — Next / Previous Match",
+            "Return — Next Match (opens the note of a note match)",
+            "Esc — Close Find",
         ])
         let hkSelection = group("Selection", [
             "⌘-click topic — Add / Remove from Selection",
@@ -108,8 +115,8 @@ enum FeaturesSample {
             "⌃⌘L — Lock Now (locked maps)",
         ])
         let hotkeys = Node(text: "Hotkeys", layoutStyle: .treeDown,
-                           children: [hkEditing, hkNavigation, hkSelection, hkView, hkLinks, hkTasks, hkAttachments, hkItems,
-                                      hkDocuments],
+                           children: [hkEditing, hkNavigation, hkFind, hkSelection, hkView, hkLinks, hkTasks, hkAttachments,
+                                      hkItems, hkDocuments],
                            attachments: [note("Hotkeys", """
                            # Hotkeys
 
@@ -136,6 +143,8 @@ enum FeaturesSample {
             Node(text: "Tab — child, Return — sibling"),
             Node(text: "Just type to rename"),
             Node(text: "One undo step per action"),
+            Node(text: "Sort Children A → Z / Z → A"),
+            Node(text: "Arrow towards children — unfolds"),
             mouse,
         ], attachments: [note("How to edit", """
         # Editing & Keyboard
@@ -146,6 +155,9 @@ enum FeaturesSample {
         4. Every change is one undo step: **⌘Z** / **⇧⌘Z**.
         5. **⇧Return** (or **⌥Return**) while typing starts a new line in the topic.
         6. **⌘C / ⌘X / ⌘V** copy, cut and paste whole branches (with notes, files, tasks, links); text from other apps pastes as topics, one per line.
+
+        7. **Sort Children** (topic menu, right-click): reorders a topic's direct children A → Z or Z → A by their text, in one undo step.
+        8. An arrow key towards a folded topic's children unfolds it. A new topic left empty is removed when you finish editing.
 
         The collapsed branch "Mouse & touch" shows the **+N** toggle: click it to expand.
         """)])
@@ -207,6 +219,8 @@ enum FeaturesSample {
             Node(text: "Relationships (⌘L)"),
             Node(text: "Boundaries (⌘B)"),
             Node(text: "Collapse & levels", children: leaves(["+N toggle on the topic", "⌥⌘1…4 / ⌥⌘0"])),
+            Node(text: "Favorites", children: leaves(["Mark as Favorite (topic menu)", "Favorites panel — click a row to jump"])),
+            Node(text: "View ▸ Rebalance Map"),
             freeDemo,
             floatingDemo,
         ], attachments: [note("Structure", """
@@ -217,21 +231,28 @@ enum FeaturesSample {
         - **Boundary**: select a topic, **⌘B**. Double-click the tab to label it.
         - **Free position**: drop a topic on empty space (⌥-drag on Mac); "Reset Position" puts it back.
         - **Collapse**: the −/+N toggle, ⌘/, or View ▸ Collapse to Level 1–4 / Expand All.
+        - **Favorites**: topic menu ▸ **Mark as Favorite** (several selected topics at once; "Remove from Favorites" undoes it). The **Favorites** panel appears on the canvas while any topic is a favorite: click a row to select the topic and scroll to it; drag the header to move the panel, the chevron folds it. Marks and panel position are saved with the map.
+        - **Rebalance Map** (View menu): main branches never change side by themselves; this command balances them again.
         """)])
 
         // Attachments.
-        let markdownDemo = Node(text: "Markdown notes", attachments: [note("Example note", """
+        let markdownDemo = Node(text: "Markdown notes", children: leaves(["Opens in Preview when it has text", "Lock Note — encrypted"]),
+                                attachments: [note("Example note", """
         # Example note
 
         Notes are plain **Markdown** files inside the package (`attachments/<UUID>.md`), readable in Obsidian.
 
-        - [x] Edit / Preview switch
+        - [x] Edit / Preview switch (a note with text opens in Preview, an empty one in Edit)
         - [ ] Add your own text here
         """)])
         let drawing = Attachment(kind: .drawing, title: "Arrow sketch", createdAt: created)
         files[drawing.fileName] = arrowDrawing().dataRepresentation()
         let handwriting = Node(text: "Handwriting (PencilKit)",
                                link: .web(URL(string: "https://developer.apple.com/documentation/pencilkit")!),
+                               children: leaves(["Endless canvas — draw in any direction",
+                                                 "Pinch to zoom; opens fitted to the ink",
+                                                 "iPad: hold a shape to straighten it",
+                                                 "iPad: Pencil double-tap — eraser and back"]),
                                attachments: [drawing])
         let icon = Attachment(kind: .file, title: "MindMap Icon.png", originalExtension: "png", createdAt: created)
         files[icon.fileName] = iconPNG(side: 256)
@@ -245,9 +266,12 @@ enum FeaturesSample {
         A topic can hold any number of attachments; they show as small icons after the text.
 
         - **Note** (⇧⌘N): Markdown with Edit / Preview.
-        - **Handwritten note** (⇧⌘D): PencilKit page — full screen on iPad, window with pen/eraser on Mac.
+        - **Handwritten note** (⇧⌘D): PencilKit page — full screen on iPad, window with pen/eraser on Mac. The canvas is endless: draw in any direction, pinch to zoom; a note whose ink is bigger than the page opens zoomed out to show it all.
+        - On iPad, draw a line, circle, ellipse, rectangle or triangle and **hold** the pen still: the shape is straightened, as in Apple Notes (one Draw undo step).
+        - On iPad, the **Pencil double-tap** does what Settings ▸ Apple Pencil says; "Switch between current tool and eraser" swaps to the eraser and back.
         - **File** (⇧⌘A, drag & drop, ⌘V): copied into the package, QuickLook preview, Share / Open / Export.
         - Drag an icon sideways to change the order; the Preview shows headings, lists, tasks, quotes, code and tables.
+        - **Lock Note** (note menu): encrypts a note; locked notes are skipped by Find.
 
         Click an icon to open it. Edits are part of the map's undo history.
         """)])
@@ -298,6 +322,8 @@ enum FeaturesSample {
             Node(text: "Mac", children: leaves(["Welcome window", "Map tabs"])),
             ipad,
             package,
+            Node(text: "iCloud Sync", children: leaves(["Tap the cloud badge — Sync Now", "Tour asks for storage if available"])),
+            Node(text: "Settings", children: leaves(["Version, build, commit", "Mirror library to folder"])),
         ], attachments: [note("Documents", """
         # Documents & iCloud
 
@@ -305,6 +331,9 @@ enum FeaturesSample {
         - **Storage** (Settings): **iCloud Sync** library (CloudKit, works without iCloud Drive, merges edits per topic) or **Files** (`.mindmap` in a folder you choose, also iCloud Drive).
         - **Mac**: Welcome window (⇧⌘1) with the library and recent files; linked maps open as tabs.
         - **iPad**: Welcome screen, New Map ⌘N, Open… ⌘O, Open from Library ⇧⌘O, several windows.
+        - **Cloud badge** (title bar): on a library map, a tap syncs now; a long press (click and hold on Mac) opens the menu, which also has Sync Now.
+        - The **Welcome tour** asks where new maps go only while the iCloud Sync library is available; otherwise the first tour sets Files.
+        - **Settings** shows the app version, build number and commit (the Mac About panel too); **Mirror library to folder** writes each library map as a plain `.md` for Obsidian (one way, locked maps never).
         - **Lock Map** (File menu): encrypted, opens with Face ID / Touch ID; **Lock Editing** (⌥⌘L) only makes a map read-only.
         """)])
 
@@ -315,7 +344,7 @@ enum FeaturesSample {
                             Node(text: "Sign the Mac app with the team", task: TaskInfo(priority: .high, dueDate: day(7))),
                             Node(text: "Pencil & keyboard on a real iPad", task: TaskInfo(priority: .medium, dueDate: day(14))),
                             Node(text: "Export PNG / PDF", task: TaskInfo(priority: .low, dueDate: day(21))),
-                            Node(text: "Search in a map", task: TaskInfo(priority: .low)),
+                                                        Node(text: "Search in a map", task: TaskInfo(isDone: true, completedAt: now)),
                             Node(text: "Copy / paste topics", task: TaskInfo(isDone: true, completedAt: now)),
                             Node(text: "Multi-line topics", task: TaskInfo(isDone: true, completedAt: now)),
                             Node(text: "Drag-reorder attachment icons", task: TaskInfo(isDone: true, completedAt: day(-1))),
@@ -327,11 +356,28 @@ enum FeaturesSample {
 
                         - iCloud Sync, and Mac ↔ iPad lock keys, need the Mac app signed with the developer team (an Apple ID in Xcode) and a real test on two devices.
                         - Apple Pencil (Scribble, hover, squeeze, double-tap), hardware keyboard and trackpad are checked by hand on a device.
-                        - Ideas for later: export to PNG / PDF, search, presentation mode.
+                        - Ideas for later: export to PNG / PDF, presentation mode.
                         """)])
 
+        let find = Node(text: "Find", link: .topic(hkFind.id), children: [
+            Node(text: "⌘F — find in topics and notes"),
+            Node(text: "Only matches and their parents stay"),
+            Node(text: "3 letters minimum"),
+            Node(text: "⌘G / ⇧⌘G — next / previous"),
+            Node(text: "Locked notes are never searched"),
+        ], attachments: [note("Find", """
+        # Find
+
+        **⌘F** (Edit ▸ Find…, or the magnifier button on iPad) opens the find bar over the canvas.
+
+        - Type at least **3 letters**; the phrase is matched in topic text and in Markdown notes, ignoring case and accents. **Locked notes are never searched.**
+        - While the bar is open the canvas shows only the matching topics and their parents; clear or close it and the full map is back. The map itself is not changed.
+        - The bar shows "n of m"; **⌘G** / **⇧⌘G** (or the arrows) step to the next / previous match, which is selected and scrolled into view. **Return** does the same, and opens the note when the match is in a note.
+        - **Esc** (or the close button) closes the bar.
+        """)])
+
         let root = Node(text: "MindMap", children: [
-            editing, layouts, hotkeys,
+            editing, layouts, hotkeys, find,
             look, links, attachments, documents, tasks, gaps, structure,
         ], attachments: [note("About", """
         # MindMap
@@ -474,8 +520,8 @@ struct SampleMapGeneratorTests {
 
         let map = try MindMapPackage.read(FileWrapper(url: featuresURL, options: .immediate))
         // Every feature is present.
-        #expect(map.root.children.count == 10)
-        #expect(map.allTasks.count == 8 && map.openTaskCount == 5)
+        #expect(map.root.children.count == 11)
+        #expect(map.allTasks.count == 8 && map.openTaskCount == 4)
         #expect(map.relationships.count == 3 && map.boundaries.count == 2 && map.floatingTopics.count == 1)
         let all = allNodes(map)
         #expect(Set(all.compactMap(\.layoutStyle)) == Set(LayoutStyle.allCases.filter { $0 != .balancedMap }))
