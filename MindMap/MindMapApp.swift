@@ -22,6 +22,10 @@ struct MindMapApp: App {
             MapLockGate(model: file.document.model, title: Self.title(of: file.fileURL), documentURL: file.fileURL) {
                 ContentView(model: file.document.model, documentURL: file.fileURL)
             }
+            // A revert (the file changed on another device, e.g. iCloud
+            // Drive) gives the window a new document and model: rebuild the
+            // editor for it instead of keeping the old one in its @State.
+            .id(ObjectIdentifier(file.document.model))
             .modifier(MapWindowHooks(url: file.fileURL))
         }
         .commands {
