@@ -7,12 +7,14 @@ struct LinkSummary: Equatable {
     }
 
     var kind: Kind
-    /// Topic link whose target was deleted (icon dimmed).
+    /// Topic link whose target was deleted, or map link whose file cannot
+    /// be found (icon dimmed).
     var isBroken: Bool
     /// macOS hover text: the URL, the target's path or the broken notice.
     var tooltip: String
 
     static let brokenMessage = "Target topic was deleted"
+    static let missingMapMessage = "Map file not found"
 
     init(kind: Kind, isBroken: Bool, tooltip: String) {
         self.kind = kind
@@ -21,7 +23,8 @@ struct LinkSummary: Equatable {
     }
 
     /// Summary of `id`'s link in `map` (nil without a link).
-    init?(of node: Node, in map: MindMap) {
+    /// `mapFileMissing`: a map link's file was not found (`MapLinkResolver`).
+    init?(of node: Node, in map: MindMap, mapFileMissing: Bool = false) {
         guard let resolved = map.resolvedLink(of: node.id) else { return nil }
         switch resolved {
         case let .web(url):
@@ -30,6 +33,9 @@ struct LinkSummary: Equatable {
             self.init(kind: .topic, isBroken: false, tooltip: map.breadcrumb(to: target) ?? "")
         case .brokenTopic:
             self.init(kind: .topic, isBroken: true, tooltip: LinkSummary.brokenMessage)
+        case let .map(reference) where mapFileMissing:
+            self.init(kind: .map, isBroken: true,
+                      tooltip: "\(LinkSummary.missingMapMessage): “\(reference.displayName)” — \(reference.pathDescription)")
         case let .map(reference):
             self.init(kind: .map, isBroken: false, tooltip: LinkSummary.mapTooltip(reference))
         }
@@ -45,7 +51,8 @@ struct LinkSummary: Equatable {
 
     /// Hover text of the link icon: the target + how to follow it.
     var iconHelp: String {
-        isBroken ? tooltip : "\(tooltip)\nClick to open"
+        guard isBroken else { return "\(tooltip)\nClick to open" }
+        return kind == .map ? "\(tooltip)\nClick to locate it" : tooltip
     }
 
     /// Hover text of a linked topic: ⌘-click selects, only the icon opens.

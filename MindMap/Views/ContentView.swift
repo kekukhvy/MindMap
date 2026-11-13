@@ -134,6 +134,18 @@ struct ContentView: View {
                 OpenDocumentRegistry.shared.register(model, undoManager: manager)
             }
             .onChange(of: model.map) { _, _ in editor.validateSelection() }
+            // Dimmed icon for map links whose file is gone (WP10 leftover).
+            .onChange(of: editor.mapLinkSignature, initial: true) { _, _ in editor.refreshMissingMapLinks() }
+            .onChange(of: editor.documentURL) { _, _ in editor.refreshMissingMapLinks() }
+            #if os(macOS)
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                editor.refreshMissingMapLinks()
+            }
+            #else
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                editor.refreshMissingMapLinks()
+            }
+            #endif
             .onReceive(UndoManager.changes(of: undoManager)) { _ in editor.refreshUndoState() }
     }
 }

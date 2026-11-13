@@ -217,10 +217,15 @@ struct MapLinkTests {
         #expect(editor.resolvedMapURL(of: topic).map(LaunchEnvironment.key) == LaunchEnvironment.key(url))
         // Name taken: "Q3 Plan 2".
         #expect(try MapFiles.createMap(named: "Q3 Plan", nextTo: documentURL).lastPathComponent == "Q3 Plan 2.mindmap")
-        // Undo removes the link, the file stays.
+        // Undo removes the link and puts the untouched new file away; redo
+        // brings both back (MapLinkFollowupTests: an edited file stays).
         undo.undo()
         #expect(model.map.link(of: topic) == nil)
-        #expect(FileManager.default.fileExists(atPath: url.path))
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        undo.redo()
+        #expect(model.map.link(of: topic)?.mapReference != nil)
+        #expect(try MapFiles.readMap(at: url).root.text == "Q3 Plan")
+        undo.undo()
         // Never saved: no folder to create it in (the UI shows a save panel).
         editor.documentURL = nil
         #expect(throws: (any Error).self) { try editor.createLinkedMap(for: topic) }

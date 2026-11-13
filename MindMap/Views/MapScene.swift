@@ -59,7 +59,8 @@ struct MapScene {
     ///   (a dragged Tasks panel), map coordinates.
     static func build(map: MindMap, measurer: NodeMeasurer, editing: (id: UUID, text: String)?,
                       now: Date = Date(), fixedObstacles: [CGRect] = [],
-                      hidesAttachment: (Attachment) -> Bool = { _ in false }) -> MapScene {
+                      hidesAttachment: (Attachment) -> Bool = { _ in false },
+                      missingMapLinks: Set<UUID> = []) -> MapScene {
         let colors = ColorResolver.effectiveColors(in: map)
         var infos: [UUID: NodeInfo] = [:]
         var order: [UUID] = []
@@ -73,7 +74,8 @@ struct MapScene {
                                       isTreeRoot: isTreeRoot, badgeEdge: .trailing,
                                       attachments: node.attachments.filter { !hidesAttachment($0) }
                                           .map(AttachmentSummary.init),
-                                      link: node.link == nil ? nil : LinkSummary(of: node, in: map),
+                                      link: node.link == nil ? nil
+                                          : LinkSummary(of: node, in: map, mapFileMissing: missingMapLinks.contains(node.id)),
                                       task: node.task.map {
                                           TaskSummary($0, now: now, measurer: measurer, fontSize: appearance.fontSize)
                                       })

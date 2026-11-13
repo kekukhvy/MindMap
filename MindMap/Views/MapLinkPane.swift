@@ -99,7 +99,7 @@ struct MapLinkPane: View {
                       contentType: .mindMap, defaultFilename: MapPaths.fileNameBase(forTopic: topicText)) { result in
             switch result {
             case let .success(url):
-                editor.linkMap(at: url, to: nodeID)
+                editor.linkCreatedMap(at: url, to: nodeID)
                 onLinkedNewMap()
             case let .failure(error):
                 newMapError = "The map could not be created (\(error.localizedDescription))."

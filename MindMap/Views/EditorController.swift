@@ -235,7 +235,7 @@ final class EditorController {
 
     @ObservationIgnored let measurer = NodeMeasurer()
     @ObservationIgnored private var cachedScene: (map: MindMap, editing: UUID?, draft: String, day: Date,
-                                                  panel: CGRect?, scene: MapScene)?
+                                                  panel: CGRect?, missing: Set<UUID>, scene: MapScene)?
     /// Current time (due chips, completion stamps); replaced by tests.
     @ObservationIgnored var now: () -> Date = Date.init
     @ObservationIgnored private var didPlaceViewport = false
@@ -269,6 +269,10 @@ final class EditorController {
     nonisolated(unsafe) static var debugInstances: [WeakEditor] = []
     #endif
 
+    /// Map-link topics whose map file cannot be found now (icon dimmed;
+    /// `refreshMissingMapLinks`).
+    var missingMapLinks: Set<UUID> = []
+
     /// Current scene; rebuilt only when the map or the edited draft changes.
     var scene: MapScene {
         let map = model.map
@@ -279,13 +283,15 @@ final class EditorController {
         let day = Calendar.current.startOfDay(for: now)
         // A dragged Tasks panel stays put: topics keep clear of it (WP17).
         let panel = fixedTaskPanelFrame
+        let missing = missingMapLinks
         if let cachedScene, cachedScene.editing == editing, cachedScene.draft == draft, cachedScene.day == day,
-           cachedScene.panel == panel, cachedScene.map == map {
+           cachedScene.panel == panel, cachedScene.missing == missing, cachedScene.map == map {
             return cachedScene.scene
         }
         let scene = MapScene.build(map: map, measurer: measurer, editing: editing.map { ($0, draft) }, now: now,
-                                   fixedObstacles: panel.map { [$0] } ?? [], hidesAttachment: hidesAttachmentIcon)
-        cachedScene = (map, editing, draft, day, panel, scene)
+                                   fixedObstacles: panel.map { [$0] } ?? [], hidesAttachment: hidesAttachmentIcon,
+                                   missingMapLinks: missing)
+        cachedScene = (map, editing, draft, day, panel, missing, scene)
         return scene
     }
 
