@@ -110,10 +110,8 @@ struct DrawingModelTests {
         #expect(HandwrittenNote.drawing(nil).strokes.isEmpty)
         #expect(HandwrittenNote.drawing(Data()).strokes.isEmpty)
         #expect(HandwrittenNote.drawing(Data("not a drawing".utf8)).strokes.isEmpty)
-        let sample = DebugDrawing.sample()
-        #expect(HandwrittenNote.pageHeight(for: PKDrawing(), minHeight: 500) == 500)
-        #expect(HandwrittenNote.pageHeight(for: sample, minHeight: 100)
-                == sample.bounds.maxY + HandwrittenNote.bottomMargin)
+        #expect(HandwrittenNote.inkBounds(PKDrawing()) == nil)
+        #expect(HandwrittenNote.inkBounds(DebugDrawing.sample()) == DebugDrawing.sample().bounds)
     }
 
     @Test func handwritingCommandAddsThenOpensFullScreen() throws {
@@ -245,6 +243,62 @@ struct DrawingStoreTests {
         let decoded = try JSONDecoder().decode(Attachment.self, from: Data(minimal.utf8))
         #expect(decoded.kind == .drawing)
         #expect(decoded.fileName == id.uuidString)
+    }
+}
+
+/// Endless canvas geometry (iPad and macOS share it). Strokes are never moved.
+struct EndlessCanvasGeometryTests {
+    private let viewport = CGSize(width: 1194, height: 834)
+    /// Ink well outside the original page: left of and above the origin, and taller than a screen.
+    static let wideInk = CGRect(x: -900, y: -600, width: 2600, height: 3100)
+
+    @Test func scrollableAreaKeepsAScreenOfRoomAroundPageInkAndView() {
+        let visible = CGRect(x: 0, y: 0, width: 1024, height: 700)
+        #expect(HandwrittenNote.contentRect(ink: nil, visible: visible) == CGRect(x: -1024, y: -700, width: 3072, height: 2100))
+        // Ink approaching (and past) the left/top edge pushes the area out by a screen.
+        let ink = CGRect(x: -1500, y: -900, width: 200, height: 200)
+        let rect = HandwrittenNote.contentRect(ink: ink, visible: visible)
+        #expect(rect.minX == ink.minX - visible.width)
+        #expect(rect.minY == ink.minY - visible.height)
+        #expect(rect.maxX == HandwrittenNote.pageWidth + visible.width)
+        // Scrolling away extends it again (the visible rect is always surrounded by room).
+        let far = visible.offsetBy(dx: 5000, dy: 4000)
+        let moved = HandwrittenNote.contentRect(ink: ink, visible: far)
+        #expect(moved.maxX == far.maxX + far.width)
+        #expect(moved.maxY == far.maxY + far.height)
+        #expect(moved.contains(ink) && moved.contains(far))
+    }
+
+    @Test func openingShowsThePageAsBeforeOrFitsAllTheInk() {
+        let page = HandwrittenNote.pageZoom(viewport: viewport)
+        // Empty note and a note within the page: the page width fitted from the origin, as before.
+        for ink in [nil, DebugDrawing.sample().bounds] {
+            let opening = HandwrittenNote.openingView(ink: ink, viewport: viewport)
+            #expect(opening.zoom == page)
+            #expect(opening.visible.origin == .zero)
+        }
+        // Ink beyond the page: zoomed out until all of it (plus padding) is visible, centred.
+        let ink = Self.wideInk
+        let opening = HandwrittenNote.openingView(ink: ink, viewport: viewport)
+        #expect(opening.zoom == HandwrittenNote.fitZoom(ink: ink, viewport: viewport))
+        #expect(opening.zoom < page)
+        #expect(opening.visible.contains(ink.insetBy(dx: -HandwrittenNote.fitPadding + 0.5,
+                                                     dy: -HandwrittenNote.fitPadding + 0.5)))
+        #expect(abs(opening.visible.midX - ink.midX) < 0.001 && abs(opening.visible.midY - ink.midY) < 0.001)
+        #expect(abs(opening.visible.width * opening.zoom - viewport.width) < 0.001)
+        // Small ink never opens zoomed in beyond the page fit.
+        let word = CGRect(x: 2000, y: 50, width: 60, height: 20)
+        #expect(HandwrittenNote.openingView(ink: word, viewport: viewport).zoom == page)
+    }
+
+    @Test func zoomGoesOutBeyondAllTheInkAndInGenerously() {
+        let page = HandwrittenNote.pageZoom(viewport: viewport)
+        #expect(HandwrittenNote.zoomLimits(ink: nil, viewport: viewport)
+                == page / HandwrittenNote.zoomOutRoom ... page * HandwrittenNote.maxZoomFactor)
+        let limits = HandwrittenNote.zoomLimits(ink: Self.wideInk, viewport: viewport)
+        let fit = HandwrittenNote.fitZoom(ink: Self.wideInk, viewport: viewport)
+        #expect(limits.lowerBound == fit / HandwrittenNote.zoomOutRoom)
+        #expect(limits.contains(HandwrittenNote.openingView(ink: Self.wideInk, viewport: viewport).zoom))
     }
 }
 
@@ -401,6 +455,93 @@ struct PencilNoteInteractionTests {
         settle()
     }
 
+    /// Fraction of dark pixels of `canvas` inside `rect` (view coordinates), as rendered on screen.
+    private func inkCoverage(of canvas: UIView, in rect: CGRect) -> Double {
+        let image = UIGraphicsImageRenderer(bounds: canvas.bounds).image { _ in
+            _ = canvas.drawHierarchy(in: canvas.bounds, afterScreenUpdates: true)
+        }
+        guard let cg = image.cgImage, let data = cg.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else { return 0 }
+        let scale = CGFloat(cg.width) / canvas.bounds.width
+        let pixels = CGRect(x: rect.minX * scale, y: rect.minY * scale, width: rect.width * scale,
+                            height: rect.height * scale).intersection(CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
+        var dark = 0, total = 0
+        for y in Int(pixels.minY)..<Int(pixels.maxY) {
+            for x in Int(pixels.minX)..<Int(pixels.maxX) {
+                let offset = y * cg.bytesPerRow + x * cg.bitsPerPixel / 8
+                total += 1
+                if Int(bytes[offset]) + Int(bytes[offset + 1]) + Int(bytes[offset + 2]) < 3 * 128 { dark += 1 }
+            }
+        }
+        return total == 0 ? 0 : Double(dark) / Double(total)
+    }
+
+    /// Endless canvas: an existing note opens with all its ink on screen; the
+    /// scrollable area grows left/up (and wherever the user writes) while the
+    /// stored strokes keep their coordinates.
+    @Test func noteOpensFittedToItsInkAndExtendsLeftAndUpWithoutMovingStrokes() throws {
+        let model = MindMapModel(map: MindMap(root: Node(text: "Central")))
+        let undo = makeUndo()
+        let ink = EndlessCanvasGeometryTests.wideInk
+        var sketch = PKDrawing()
+        sketch.strokes = [line(from: ink.origin, to: CGPoint(x: ink.maxX, y: ink.minY + 200)),
+                          line(from: CGPoint(x: ink.minX + 100, y: ink.maxY), to: CGPoint(x: ink.maxX, y: ink.maxY - 300)),
+                          line(from: CGPoint(x: 100, y: 100), to: CGPoint(x: 600, y: 140))]
+        let id = try #require(model.addDrawing(to: model.root.id, content: sketch.dataRepresentation(), undoManager: undo))
+        let cover = Cover()
+        let window = try makeWindow(CoverHost(model: model, id: id, undo: undo, cover: cover))
+        defer { window.isHidden = true }
+        cover.isPresented = true
+        settle()
+
+        let presented = try #require(window.rootViewController?.presentedViewController)
+        let canvas = try #require(views(in: presented.view).compactMap { $0 as? PencilCanvasView }.first)
+        let coordinator = try #require(canvas.delegate as? PencilCanvas.Coordinator)
+        // Opens with all the ink on screen, at the fit zoom.
+        let opening = HandwrittenNote.openingView(ink: sketch.bounds, viewport: canvas.bounds.size)
+        #expect(abs(canvas.zoomScale - opening.zoom) < 0.001)
+        #expect(coordinator.visibleRect.insetBy(dx: -1, dy: -1).contains(sketch.bounds))
+        #expect(canvas.minimumZoomScale < canvas.zoomScale)
+        #expect(canvas.drawing.strokes.allSatisfy { $0.transform == .identity })
+        #expect(signature(canvas.drawing) == signature(sketch))
+        // Ink left of / above the origin is drawn on screen.
+        let zoom = canvas.zoomScale
+        let topLeft = CGRect(x: ink.minX * zoom - canvas.contentOffset.x, y: ink.minY * zoom - canvas.contentOffset.y,
+                             width: 400 * zoom, height: 60 * zoom)
+        #expect(inkCoverage(of: canvas, in: topLeft) > 0.005)
+
+        // Zooming out keeps the visible rect inside the scrollable area.
+        canvas.setZoomScale(canvas.minimumZoomScale, animated: false)
+        let out = coordinator.visibleRect
+        #expect(-canvas.contentInset.left / canvas.zoomScale < out.minX && -canvas.contentInset.top / canvas.zoomScale < out.minY)
+        #expect(canvas.contentSize.width / canvas.zoomScale > out.maxX && canvas.contentSize.height / canvas.zoomScale > out.maxY)
+        canvas.setZoomScale(opening.zoom, animated: false)
+
+        // Panning to the top-left end of the scrollable area extends it; the view does not jump.
+        let before = canvas.contentInset
+        let corner = CGPoint(x: -before.left, y: -before.top)
+        canvas.contentOffset = corner
+        #expect(abs(canvas.contentOffset.x - corner.x) < 1 && abs(canvas.contentOffset.y - corner.y) < 1)
+        #expect(canvas.contentInset.left > before.left && canvas.contentInset.top > before.top)
+        let shown = coordinator.visibleRect
+        #expect(shown.maxX < ink.minX && shown.maxY < ink.minY)
+
+        // Writing there (far left of and above the origin) is stored with its coordinates as drawn.
+        let far = line(from: CGPoint(x: shown.minX + 100, y: shown.minY + 100),
+                       to: CGPoint(x: shown.minX + 700, y: shown.minY + 160))
+        canvas.drawing.strokes.append(far)
+        coordinator.flush()
+        let stored = HandwrittenNote.drawing(model.content(of: id))
+        #expect(signature(stored) == signature(sketch) + signature(PKDrawing(strokes: [far])))
+        #expect(stored.strokes.allSatisfy { $0.transform == .identity })
+        let farView = CGRect(x: (shown.minX + 100) * zoom - canvas.contentOffset.x,
+                             y: (shown.minY + 90) * zoom - canvas.contentOffset.y, width: 600 * zoom, height: 80 * zoom)
+        settle()
+        #expect(inkCoverage(of: canvas, in: farView) > 0.005)
+        #expect(abs(canvas.contentOffset.x - corner.x) < 1 && abs(canvas.contentOffset.y - corner.y) < 1)
+        cover.isPresented = false
+        settle()
+    }
+
     @Test func mapPencilInteractionIsOffWhileANoteIsPresented() throws {
         let model = MindMapModel(map: MindMap(root: Node(text: "Central")))
         let editor = EditorController(model: model)
@@ -416,6 +557,77 @@ struct PencilNoteInteractionTests {
         editor.presentedAttachment = nil
         settle()
         #expect(pencil.isEnabled)
+    }
+}
+#endif
+
+#if os(macOS)
+import AppKit
+
+/// macOS handwriting board on the endless canvas: same opening fit and
+/// extension as the iPad, strokes untouched.
+@MainActor
+struct MacDrawingBoardFitTests {
+    private static let windowSize = CGSize(width: 900, height: 700)
+    private static let settleTime: TimeInterval = 0.5
+
+    private func settle() { RunLoop.main.run(until: Date().addingTimeInterval(Self.settleTime)) }
+
+    /// Equal up to the clip view's floating-point scroll arithmetic.
+    private func isClose(_ a: CGPoint, _ b: CGPoint) -> Bool { abs(a.x - b.x) < 0.01 && abs(a.y - b.y) < 0.01 }
+
+    private func pageView(in view: NSView) -> DrawingPageView? {
+        if let page = view as? DrawingPageView { return page }
+        return view.subviews.lazy.compactMap { pageView(in: $0) }.first
+    }
+
+    @Test func boardOpensFittedToItsInkAndExtendsLeftAndUpWithoutMovingStrokes() throws {
+        let ink = EndlessCanvasGeometryTests.wideInk
+        var sketch = PKDrawing()
+        sketch.strokes = [line(from: ink.origin, to: CGPoint(x: ink.maxX, y: ink.minY + 200)),
+                          line(from: CGPoint(x: ink.minX + 100, y: ink.maxY), to: CGPoint(x: ink.maxX, y: ink.maxY - 300))]
+        var committed: [Data] = []
+        let board = MacDrawingBoard(data: sketch.dataRepresentation(), revision: 0, tool: .pen, inkColor: .black,
+                                    undoManager: nil, onCommit: { committed.append($0) })
+        let window = NSWindow(contentRect: CGRect(origin: .zero, size: Self.windowSize), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: board)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        settle()
+
+        let content = try #require(window.contentView)
+        let page = try #require(pageView(in: content))
+        let scroll = try #require(page.enclosingScrollView)
+        let opening = HandwrittenNote.openingView(ink: sketch.bounds, viewport: scroll.contentSize)
+        #expect(abs(scroll.magnification - opening.zoom) < 0.001)
+        #expect(scroll.documentVisibleRect.insetBy(dx: -1, dy: -1).contains(sketch.bounds))
+        #expect(scroll.minMagnification < scroll.magnification)
+        #expect(page.bounds.origin == page.frame.origin)
+        #expect(page.bounds.minX < ink.minX && page.bounds.minY < ink.minY)
+        #expect(signature(page.drawing) == signature(sketch))
+
+        // Scrolling to the top-left end extends the page; the visible part stays where it was put.
+        let corner = page.bounds.origin
+        scroll.contentView.scroll(to: corner)
+        scroll.reflectScrolledClipView(scroll.contentView)
+        #expect(isClose(scroll.documentVisibleRect.origin, corner))
+        #expect(page.bounds.minX < corner.x && page.bounds.minY < corner.y)
+
+        // A mouse stroke there keeps the coordinates it was drawn at.
+        let shown = scroll.documentVisibleRect
+        let start = CGPoint(x: shown.minX + 50, y: shown.minY + 50)
+        let far = try #require(DrawingPageView.stroke(from: [(start, 0), (CGPoint(x: start.x + 300, y: start.y + 20), 0.1)],
+                                                      color: .black, width: 3))
+        var updated = page.drawing
+        updated.strokes.append(far)
+        page.drawing = updated
+        #expect(isClose(scroll.documentVisibleRect.origin, corner))
+        page.onCommit?(updated)
+        let stored = HandwrittenNote.drawing(try #require(committed.last))
+        #expect(signature(stored) == signature(sketch) + signature(PKDrawing(strokes: [far])))
+        #expect(stored.strokes.allSatisfy { $0.transform == .identity })
     }
 }
 #endif

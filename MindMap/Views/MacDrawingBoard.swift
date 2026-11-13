@@ -10,7 +10,8 @@ enum MacDrawingTool: String, CaseIterable {
 
 /// macOS view of a handwritten note. PKCanvasView does not exist on macOS,
 /// so the drawing is rendered with `PKDrawing.image(from:scale:)` on a white
-/// page inside a magnifiable NSScrollView (pinch / ⌘-scroll to zoom). Basic
+/// endless page inside a magnifiable NSScrollView (pinch / ⌘-scroll to zoom;
+/// geometry shared with the iPad, see `HandwrittenNote`). Basic
 /// mouse drawing: the pen turns a mouse drag into a `PKStroke` (pen ink),
 /// the eraser removes whole strokes; each gesture is one `onCommit`.
 struct MacDrawingBoard: NSViewRepresentable {
@@ -40,11 +41,9 @@ struct MacDrawingBoard: NSViewRepresentable {
         scroll.hasHorizontalScroller = true
         scroll.autohidesScrollers = true
         scroll.allowsMagnification = true
-        scroll.minMagnification = 0.25
-        scroll.maxMagnification = 6
         scroll.backgroundColor = NSColor(white: 0.9, alpha: 1)
         scroll.drawsBackground = true
-        let page = DrawingPageView(frame: CGRect(x: 0, y: 0, width: HandwrittenNote.pageWidth, height: 800))
+        let page = DrawingPageView(frame: .zero)
         page.drawing = HandwrittenNote.drawing(data)
         page.loadedData = data
         scroll.documentView = page
@@ -54,7 +53,12 @@ struct MacDrawingBoard: NSViewRepresentable {
                                                name: NSView.frameDidChangeNotification, object: scroll)
         NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coordinator.magnified),
                                                name: NSScrollView.didEndLiveMagnifyNotification, object: scroll)
+        NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coordinator.userScrolled),
+                                               name: NSScrollView.willStartLiveScrollNotification, object: scroll)
+        NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coordinator.scrolled),
+                                               name: NSView.boundsDidChangeNotification, object: scroll.contentView)
         scroll.postsFrameChangedNotifications = true
+        scroll.contentView.postsBoundsChangedNotifications = true
         return scroll
     }
 
@@ -83,33 +87,40 @@ struct MacDrawingBoard: NSViewRepresentable {
 
     final class Coordinator: NSObject {
         weak var scroll: NSScrollView?
-        /// The user zoomed (pinch / ⌘-scroll): stop fitting the page width.
-        private var userZoomed = false
+        /// The user zoomed or scrolled: a window resize no longer re-fits the note.
+        private var userMoved = false
+        private var fittedSize: CGSize = .zero
 
         @objc func layoutChanged() { fit() }
+        @objc func userScrolled() { userMoved = true }
+        @objc func scrolled() { (scroll?.documentView as? DrawingPageView)?.updateContent() }
         @objc func magnified() {
-            userZoomed = true
+            userMoved = true
             (scroll?.documentView as? DrawingPageView)?.renderIfNeeded()
         }
 
-        /// Page width fits the window until the user zooms; the page height
-        /// always covers the viewport plus room below the writing.
+        /// Like the iPad: the note opens fitted to its ink (the page width
+        /// when it fits) and re-fits on resizes until the user zooms or
+        /// scrolls; the page keeps room around the ink and the visible rect.
         func fit() {
             guard let scroll, let page = scroll.documentView as? DrawingPageView,
-                  scroll.contentSize.width > 0 else { return }
-            if !userZoomed {
-                let fit = min(2, max(0.25, scroll.frame.width / HandwrittenNote.pageWidth))
-                if abs(scroll.magnification - fit) > 0.001 {
-                    // Keep the same top line visible (the magnification
-                    // setter zooms around the center: a resize would scroll).
-                    let top = scroll.documentVisibleRect.minY
-                    scroll.magnification = fit
-                    scroll.contentView.scroll(to: CGPoint(x: 0, y: max(0, top)))
-                    scroll.reflectScrolledClipView(scroll.contentView)
-                    page.renderIfNeeded()
-                }
+                  scroll.contentSize.width > 0, scroll.contentSize.height > 0 else { return }
+            let viewport = scroll.contentSize
+            let ink = HandwrittenNote.inkBounds(page.drawing)
+            let limits = HandwrittenNote.zoomLimits(ink: ink, viewport: viewport)
+            scroll.minMagnification = min(limits.lowerBound, scroll.magnification)
+            scroll.maxMagnification = limits.upperBound
+            if !userMoved, abs(viewport.width - fittedSize.width) > 0.5 || abs(viewport.height - fittedSize.height) > 0.5 {
+                fittedSize = viewport
+                let opening = HandwrittenNote.openingView(ink: ink, viewport: viewport)
+                page.updateContent(visible: opening.visible)
+                // The magnification setter zooms around the center: scroll afterwards.
+                scroll.magnification = opening.zoom
+                scroll.contentView.scroll(to: opening.visible.origin)
+                scroll.reflectScrolledClipView(scroll.contentView)
+                page.renderIfNeeded()
             }
-            page.updatePageSize(visibleHeight: scroll.contentSize.height / scroll.magnification)
+            page.updateContent()
         }
 
         deinit { NotificationCenter.default.removeObserver(self) }
@@ -122,7 +133,7 @@ final class DrawingPageView: NSView, NSMenuItemValidation {
     var drawing = PKDrawing() {
         didSet {
             image = nil
-            updatePageSize(visibleHeight: visibleHeight)
+            updateContent()
             needsDisplay = true
         }
     }
@@ -140,7 +151,7 @@ final class DrawingPageView: NSView, NSMenuItemValidation {
 
     private var image: NSImage?
     private var imageScale: CGFloat = 0
-    private var visibleHeight: CGFloat = 800
+    private var isUpdatingContent = false
     private var livePoints: [(point: CGPoint, time: TimeInterval)] = []
     private var erased = false
 
@@ -148,11 +159,20 @@ final class DrawingPageView: NSView, NSMenuItemValidation {
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    func updatePageSize(visibleHeight: CGFloat) {
-        self.visibleHeight = visibleHeight
-        let height = HandwrittenNote.pageHeight(for: drawing, minHeight: max(visibleHeight, 400))
-        let size = CGSize(width: HandwrittenNote.pageWidth, height: height)
-        if frame.size != size { setFrameSize(size) }
+    /// Endless page: frame and bounds are both the content rect (drawing
+    /// coordinates, see `HandwrittenNote.contentRect`), so the clip view
+    /// scrolls in drawing coordinates and growing to the left or up moves
+    /// neither the strokes nor the visible part.
+    func updateContent(visible: CGRect? = nil) {
+        guard let visible = visible ?? enclosingScrollView?.documentVisibleRect, !visible.isEmpty else { return }
+        let rect = HandwrittenNote.contentRect(ink: HandwrittenNote.inkBounds(drawing), visible: visible).integral
+        guard !isUpdatingContent, frame != rect || bounds.origin != rect.origin else { return }
+        // Moving the frame can make the clip view report a scroll: not a new visible rect.
+        isUpdatingContent = true
+        setFrameOrigin(rect.origin)
+        setFrameSize(rect.size)
+        setBoundsOrigin(rect.origin)
+        isUpdatingContent = false
     }
 
     // MARK: Rendering

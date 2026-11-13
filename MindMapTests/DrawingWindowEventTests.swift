@@ -85,8 +85,12 @@ struct DrawingWindowEventTests {
         let page = try #require(pageView(in: window.contentView))
         #expect(window.title == "Whiteboard")
         #expect(page.drawing.strokes.count == sample.strokes.count)
-        #expect(page.frame.width == HandwrittenNote.pageWidth)
-        #expect(page.frame.height >= sample.bounds.maxY + HandwrittenNote.bottomMargin - 1)
+        // The sample lies within the original page: it opens as before, the page width fitted from the origin.
+        let visible = try #require(page.enclosingScrollView).documentVisibleRect
+        #expect(abs(visible.minX) < 1 && abs(visible.minY) < 1)
+        #expect(abs(visible.width - HandwrittenNote.pageWidth) < 1)
+        #expect(visible.contains(sample.bounds))
+        #expect(page.bounds.contains(visible.insetBy(dx: -visible.width + 1, dy: -visible.height + 1)))
         // The ink is actually drawn (white page + strokes); PNG for a visual check.
         let coverage = try inkCoverage(try #require(window.contentView), writeTo: "drawing-window.png")
         #expect(coverage > 0.005)

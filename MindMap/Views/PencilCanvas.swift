@@ -73,8 +73,9 @@ final class DrawingUndoForwarder: UndoManager {
     }
 }
 
-/// PKCanvasView on a fixed-width page (`HandwrittenNote.pageWidth`, zoomed to
-/// fit the width), white paper in light ink colors even in Dark Mode.
+/// PKCanvasView on an endless canvas (see `HandwrittenNote`: opens fitted to
+/// the ink, extends as the user scrolls or writes), white paper in light ink
+/// colors even in Dark Mode.
 final class PencilCanvasView: PKCanvasView {
     let forwarder = DrawingUndoForwarder()
     var onLayout: (() -> Void)?
@@ -192,7 +193,6 @@ struct PencilCanvas: UIViewRepresentable {
         private(set) var pending: Date?
         private var timer: Timer?
         private var isReloading = false
-        private var fittedWidth: CGFloat = 0
         private var resignObserver: NSObjectProtocol?
 
         init(_ parent: PencilCanvas) {
@@ -250,31 +250,95 @@ struct PencilCanvas: UIViewRepresentable {
             updateContentSize()
         }
 
-        // MARK: Page geometry
+        // MARK: Endless canvas geometry
 
-        /// Fits the page width to the view (on first layout and size changes)
-        /// and keeps room below the writing.
-        func updateLayout() {
-            guard let canvas, canvas.bounds.width > 0 else { return }
-            let fit = canvas.bounds.width / HandwrittenNote.pageWidth
-            if abs(canvas.bounds.width - fittedWidth) > 0.5 {
-                let wasFitted = fittedWidth == 0 || canvas.zoomScale <= canvas.minimumZoomScale + 0.001
-                fittedWidth = canvas.bounds.width
-                canvas.minimumZoomScale = fit
-                canvas.maximumZoomScale = fit * 5
-                if wasFitted || canvas.zoomScale < fit { canvas.zoomScale = fit }
-            }
-            updateContentSize()
+        /// Content coordinates are drawing coordinates × zoom (PencilKit's
+        /// mapping), so the scrollable area is `content` (drawing coordinates)
+        /// expressed as `contentSize` up to its max corner plus a top/left
+        /// `contentInset` reaching its min corner. Growing it to the left or
+        /// up changes only the inset: strokes and the visible ink stay put.
+        private var content: CGRect = .null
+        private var laidOutSize: CGSize = .zero
+        /// The user scrolled or zoomed: a size change no longer re-fits the note.
+        private var userMoved = false
+        private var isAdjusting = false
+
+        /// Visible part of the drawing (drawing coordinates).
+        var visibleRect: CGRect {
+            guard let canvas, canvas.zoomScale > 0 else { return .null }
+            let zoom = canvas.zoomScale
+            return CGRect(x: canvas.contentOffset.x / zoom, y: canvas.contentOffset.y / zoom,
+                          width: canvas.bounds.width / zoom, height: canvas.bounds.height / zoom)
         }
 
+        /// First layout and size changes: open fitted to the ink (or the page
+        /// width when empty) until the user scrolls or zooms.
+        func updateLayout() {
+            guard let canvas, canvas.bounds.width > 0, canvas.bounds.height > 0 else { return }
+            let size = canvas.bounds.size
+            guard abs(size.width - laidOutSize.width) > 0.5 || abs(size.height - laidOutSize.height) > 0.5 else {
+                return
+            }
+            laidOutSize = size
+            let ink = HandwrittenNote.inkBounds(canvas.drawing)
+            let limits = HandwrittenNote.zoomLimits(ink: ink, viewport: size)
+            canvas.minimumZoomScale = limits.lowerBound
+            canvas.maximumZoomScale = limits.upperBound
+            if userMoved {
+                canvas.zoomScale = min(max(canvas.zoomScale, limits.lowerBound), limits.upperBound)
+                updateContentSize()
+                return
+            }
+            let opening = HandwrittenNote.openingView(ink: ink, viewport: size)
+            isAdjusting = true
+            canvas.zoomScale = opening.zoom
+            isAdjusting = false
+            apply(HandwrittenNote.contentRect(ink: ink, visible: opening.visible))
+            isAdjusting = true
+            canvas.contentOffset = CGPoint(x: opening.visible.minX * opening.zoom,
+                                           y: opening.visible.minY * opening.zoom)
+            isAdjusting = false
+        }
+
+        /// Keeps room around the ink and the visible rect; lowers the minimum
+        /// zoom when the ink grows (never above the current zoom: no jump).
         func updateContentSize() {
-            guard let canvas, canvas.bounds.height > 0 else { return }
+            guard let canvas, canvas.bounds.height > 0, !isAdjusting, !canvas.isZooming else { return }
+            let ink = HandwrittenNote.inkBounds(canvas.drawing)
+            let lower = HandwrittenNote.zoomLimits(ink: ink, viewport: canvas.bounds.size).lowerBound
+            if lower < canvas.minimumZoomScale { canvas.minimumZoomScale = lower }
+            apply(HandwrittenNote.contentRect(ink: ink, visible: visibleRect))
+        }
+
+        private func apply(_ rect: CGRect) {
+            guard let canvas, !rect.isNull else { return }
+            content = rect
             let zoom = canvas.zoomScale
-            let height = HandwrittenNote.pageHeight(for: canvas.drawing, minHeight: canvas.bounds.height / zoom)
-            let size = CGSize(width: HandwrittenNote.pageWidth * zoom, height: height * zoom)
+            let size = CGSize(width: rect.maxX * zoom, height: rect.maxY * zoom)
+            let inset = UIEdgeInsets(top: -rect.minY * zoom, left: -rect.minX * zoom, bottom: 0, right: 0)
+            isAdjusting = true
             if abs(canvas.contentSize.width - size.width) > 0.5 || abs(canvas.contentSize.height - size.height) > 0.5 {
                 canvas.contentSize = size
             }
+            if canvas.contentInset != inset { canvas.contentInset = inset }
+            isAdjusting = false
+        }
+
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) { userMoved = true }
+        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) { userMoved = true }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) { updateContentSize() }
+
+        /// While pinching UIKit scales `contentSize`; the inset is scaled to
+        /// match. A programmatic zoom recomputes the whole area.
+        func scrollViewDidZoom(_ scrollView: UIScrollView) {
+            guard let canvas, !content.isNull, !isAdjusting else { return }
+            guard canvas.isZooming else { return updateContentSize() }
+            let zoom = canvas.zoomScale
+            let inset = UIEdgeInsets(top: -content.minY * zoom, left: -content.minX * zoom, bottom: 0, right: 0)
+            isAdjusting = true
+            if canvas.contentInset != inset { canvas.contentInset = inset }
+            isAdjusting = false
         }
 
         func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
