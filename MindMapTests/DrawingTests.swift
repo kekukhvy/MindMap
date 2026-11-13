@@ -473,6 +473,52 @@ struct PencilNoteInteractionTests {
         settle()
     }
 
+    /// Owner's report: double-tapping the Pencil gave the haptic but no
+    /// eraser. The note's own Pencil interaction on the canvas switches the
+    /// tool picker (the canvas follows), and leaves a tap alone that
+    /// PencilKit's picker already switched.
+    @available(iOS 18.0, *)
+    @Test("BUG-eraser-3: a Pencil double-tap in an open note switches to the eraser and back")
+    func pencilDoubleTapSwitchesToTheEraserAndBack() throws {
+        let model = MindMapModel(map: MindMap(root: Node(text: "Central")))
+        let undo = makeUndo()
+        let id = try #require(model.addDrawing(to: model.root.id, undoManager: undo))
+        let cover = Cover()
+        let window = try makeWindow(CoverHost(model: model, id: id, undo: undo, cover: cover))
+        defer { window.isHidden = true }
+        cover.isPresented = true
+        settle()
+        let presented = try #require(window.rootViewController?.presentedViewController)
+        let canvas = try #require(views(in: presented.view).compactMap { $0 as? PencilCanvasView }.first)
+        let coordinator = try #require(canvas.delegate as? PencilCanvas.Coordinator)
+        let picker = try #require(coordinator.toolPicker)
+        let pencil = canvas.interactions.compactMap { $0 as? UIPencilInteraction }
+        #expect(pencil.contains { $0.delegate === coordinator && $0.isEnabled })
+
+        func tap(_ preference: PencilPreference = .switchEraser) {
+            coordinator.pencilTapped(preference: preference, at: ProcessInfo.processInfo.systemUptime)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        }
+        let marker = try #require(picker.toolItems.first { $0.identifier == PKInkingTool.InkType.marker.rawValue })
+        picker.selectedToolItemIdentifier = marker.identifier
+        tap()
+        #expect(canvas.tool is PKEraserTool)
+        #expect(picker.selectedToolItem is PKToolPickerEraserItem)
+        tap()
+        #expect((canvas.tool as? PKInkingTool)?.inkType == .marker)
+        // Settings that are not a tool switch leave the tool alone.
+        tap(.showContextualPalette)
+        #expect((canvas.tool as? PKInkingTool)?.inkType == .marker)
+        // PencilKit's picker switched for this tap already: not switched back.
+        coordinator.pencilTapped(preference: .switchEraser, at: ProcessInfo.processInfo.systemUptime)
+        let eraser = try #require(picker.toolItems.first { $0 is PKToolPickerEraserItem })
+        picker.selectedToolItemIdentifier = eraser.identifier
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        #expect(canvas.tool is PKEraserTool)
+        cover.isPresented = false
+        settle()
+    }
+
     /// Fraction of dark pixels of `canvas` inside `rect` (view coordinates), as rendered on screen.
     private func inkCoverage(of canvas: UIView, in rect: CGRect) -> Double {
         let image = UIGraphicsImageRenderer(bounds: canvas.bounds).image { _ in

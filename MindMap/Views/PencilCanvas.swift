@@ -236,6 +236,7 @@ struct PencilCanvas: UIViewRepresentable {
         picker.addObserver(canvas)
         picker.setVisible(!isReadOnly, forFirstResponder: canvas)
         coordinator.toolPicker = picker
+        coordinator.installPencilTap()
         apply(to: canvas)
         return canvas
     }
@@ -250,6 +251,7 @@ struct PencilCanvas: UIViewRepresentable {
         coordinator.flush()
         coordinator.toolPicker?.setVisible(false, forFirstResponder: canvas)
         coordinator.toolPicker?.removeObserver(canvas)
+        coordinator.toolPicker?.removeObserver(coordinator)
         canvas.resignFirstResponder()
     }
 
@@ -280,6 +282,12 @@ struct PencilCanvas: UIViewRepresentable {
         /// Strokes on the canvas when the current stroke was held: the stroke
         /// that comes next is snapped to its shape.
         private var heldStrokeCount: Int?
+        /// Tool picker selection (item identifiers) for the Pencil double-tap
+        /// (`PencilCanvas+PencilTap.swift`): the current tool, the one before
+        /// it, and when the selection last changed (system uptime).
+        var currentToolID: String?
+        var previousToolID: String?
+        var toolChangedAt: TimeInterval?
 
         init(_ parent: PencilCanvas) {
             self.parent = parent
