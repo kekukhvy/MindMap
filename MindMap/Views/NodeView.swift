@@ -16,6 +16,8 @@ struct NodeView: View {
     let nodeID: UUID
     /// Tap on an attachment icon.
     var onOpenAttachment: (UUID) -> Void = { _ in }
+    /// Attachment icon dragged sideways to another slot of the icon row.
+    var onMoveAttachment: (UUID, Int) -> Void = { _, _ in }
     /// Tap on the link icon (Go to).
     var onFollowLink: () -> Void = {}
     /// Tap on the task checkbox (toggle done).
@@ -72,7 +74,8 @@ struct NodeView: View {
             }
             if !info.attachments.isEmpty {
                 AttachmentIconsView(attachments: info.attachments, fontSize: appearance.fontSize, scale: scale,
-                                    color: textColor.opacity(0.75), onOpen: onOpenAttachment)
+                                    color: textColor.opacity(0.75), onOpen: onOpenAttachment,
+                                    onMove: onMoveAttachment)
             }
         }
     }

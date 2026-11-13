@@ -81,4 +81,14 @@ extension EditorController {
               let index = attachments(of: found.nodeID).firstIndex(where: { $0.id == attachmentID }) else { return }
         model.moveAttachment(attachmentID, to: index + offset, undoManager: undoManager)
     }
+
+    /// Icon dragged to visible `slot` of `nodeID`'s icon row (hidden empty
+    /// notes do not count): takes the place of the attachment shown there.
+    func moveAttachmentIcon(_ attachmentID: UUID, toSlot slot: Int, on nodeID: UUID) {
+        guard let shown = scene.nodes[nodeID]?.attachments, shown.indices.contains(slot),
+              shown[slot].id != attachmentID,
+              let index = attachments(of: nodeID).firstIndex(where: { $0.id == shown[slot].id }) else { return }
+        select(nodeID)
+        model.moveAttachment(attachmentID, to: index, undoManager: undoManager)
+    }
 }

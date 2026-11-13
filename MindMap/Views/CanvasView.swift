@@ -258,6 +258,10 @@ struct CanvasView: View {
                          editor.select(id)
                          editor.openAttachment(attachmentID)
                      },
+                     onMoveAttachment: { attachmentID, slot in
+                         editor.noteAccessoryTap(on: id)
+                         editor.moveAttachmentIcon(attachmentID, toSlot: slot, on: id)
+                     },
                      onFollowLink: {
                          editor.noteAccessoryTap(on: id)
                          editor.goToLink(of: id)

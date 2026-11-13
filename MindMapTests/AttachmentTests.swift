@@ -385,7 +385,7 @@ struct AttachmentEditorTests {
         #expect(blocks == [.heading(level: 1, text: "Title"), .blank, .paragraph("Text *em*"),
                            .bullet(text: "a", indent: 0), .bullet(text: "b", indent: 1),
                            .numbered(marker: "1.", text: "one", indent: 0), .task(done: true, text: "done", indent: 0),
-                           .quote("quote"), .rule, .code("code")])
+                           .quote("quote", level: 1), .rule, .code("code")])
     }
 
     @MainActor @Test func registryFindsLiveDocumentsOnly() {

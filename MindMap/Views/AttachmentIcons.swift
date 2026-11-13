@@ -76,6 +76,22 @@ enum AttachmentIconRow {
         }
     }
 
+    /// Distance between the centers of neighbouring icons.
+    static func stride(fontSize: CGFloat) -> CGFloat { iconSize(fontSize: fontSize) + spacing(fontSize: fontSize) }
+
+    /// Whether the icons can be reordered by dragging (one icon per
+    /// attachment, at least two).
+    static func isReorderable(_ attachments: [AttachmentSummary]) -> Bool {
+        attachments.count >= 2 && attachments.count <= maxIcons
+    }
+
+    /// Slot an icon dragged by `translation` (view points; `stride` at the
+    /// current zoom) from `slot` lands in, clamped to the row.
+    static func targetSlot(from slot: Int, translation: CGFloat, stride: CGFloat, count: Int) -> Int {
+        guard stride > 0, count > 0 else { return slot }
+        return min(max(slot + Int((translation / stride).rounded()), 0), count - 1)
+    }
+
     /// Total width added to the topic (0 without attachments).
     static func width(_ items: [Item], fontSize: CGFloat) -> CGFloat {
         guard !items.isEmpty else { return 0 }
@@ -91,17 +107,24 @@ struct AttachmentIconsView: View {
     let scale: CGFloat
     let color: Color
     let onOpen: (UUID) -> Void
+    /// Icon dragged to another slot (drag sideways; one icon per attachment).
+    var onMove: (UUID, Int) -> Void = { _, _ in }
+    @State private var dragged: (id: UUID, offset: CGFloat)?
 
     var body: some View {
         let items = AttachmentIconRow.items(attachments)
+        let reorderable = AttachmentIconRow.isReorderable(attachments)
         HStack(spacing: AttachmentIconRow.spacing(fontSize: fontSize) * scale) {
-            ForEach(items) { item in
+            ForEach(Array(items.enumerated()), id: \.element.id) { slot, item in
                 switch item {
                 case let .icon(kind, id):
                     Button { onOpen(id) } label: {
                         icon(kind, locked: attachments.contains { $0.id == id && $0.isLocked })
                     }
                     .buttonStyle(.plain)
+                    .offset(x: dragged?.id == id ? dragged!.offset : 0)
+                    .zIndex(dragged?.id == id ? 1 : 0)
+                    .gesture(reorderable ? reorderDrag(id, slot: slot, count: items.count) : nil)
                     .help(tooltip(kind, id: id, collapsed: attachments.count > AttachmentIconRow.maxIcons))
                     .accessibilityLabel("Open \(kind.displayName)")
                 case let .count(n):
@@ -128,6 +151,24 @@ struct AttachmentIconsView: View {
             }
         }
         .padding(.leading, AttachmentIconRow.leadingGap(fontSize: fontSize) * scale)
+    }
+
+    /// Sideways drag of an icon: follows the pointer within the row, drops
+    /// into the nearest slot (one "Move Attachment" undo step). Wins over
+    /// the topic's own drag when it starts on an icon.
+    private func reorderDrag(_ id: UUID, slot: Int, count: Int) -> some Gesture {
+        let stride = AttachmentIconRow.stride(fontSize: fontSize) * scale
+        return DragGesture(minimumDistance: 4, coordinateSpace: .local)
+            .onChanged { value in
+                let limit = (CGFloat(-slot) - 0.4) * stride ... (CGFloat(count - 1 - slot) + 0.4) * stride
+                dragged = (id, min(max(value.translation.width, limit.lowerBound), limit.upperBound))
+            }
+            .onEnded { value in
+                dragged = nil
+                let target = AttachmentIconRow.targetSlot(from: slot, translation: value.translation.width,
+                                                          stride: stride, count: count)
+                if target != slot { onMove(id, target) }
+            }
     }
 
     /// macOS hover text: the file name / note title; when the row is
