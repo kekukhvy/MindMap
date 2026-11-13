@@ -137,7 +137,7 @@ struct CanvasView: View {
             .contextMenu { CanvasBackgroundMenu(editor: editor) }
             #endif
             #if os(iOS)
-            .background(PencilBridge(editor: editor))
+            .background(PencilBridge(editor: editor, isMapFrontmost: editor.presentedAttachment == nil))
             // ⌘ / ⇧ on a hardware keyboard: taps multi-select, drags draw a marquee.
             .background(ModifierTouchBridge { editor.hardwareModifiers = $0 })
             .background(TabKeyBridge(isActive: isFocused || editor.editingID != nil) {

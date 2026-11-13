@@ -14,15 +14,22 @@ import UIKit
 /// note's PencilKit canvas handles the Pencil there).
 struct PencilBridge: UIViewRepresentable {
     let editor: EditorController
+    /// No attachment sheet / cover is up. A plain input (read in the caller's
+    /// body): SwiftUI does not re-run `updateUIView` for observable state read
+    /// only inside it, so the interaction stayed on above the drawing note and
+    /// competed with PencilKit's tool picker for double-tap / squeeze.
+    let isMapFrontmost: Bool
 
     func makeUIView(context: Context) -> BridgeView {
         let view = BridgeView()
         view.editor = editor
+        view.isMapFrontmost = isMapFrontmost
         return view
     }
 
     func updateUIView(_ uiView: BridgeView, context: Context) {
         uiView.editor = editor
+        uiView.isMapFrontmost = isMapFrontmost
         uiView.updateEnabled()
     }
 
@@ -35,6 +42,7 @@ struct PencilBridge: UIViewRepresentable {
         typealias ElementIdentifier = UUID
 
         weak var editor: EditorController?
+        var isMapFrontmost = true
         private var pencil: UIPencilInteraction?
         private var scribble: UIIndirectScribbleInteraction<BridgeView>?
         private var hover: UIHoverGestureRecognizer?
@@ -70,7 +78,7 @@ struct PencilBridge: UIViewRepresentable {
         }
 
         func updateEnabled() {
-            pencil?.isEnabled = editor?.presentedAttachment == nil
+            pencil?.isEnabled = isMapFrontmost
         }
 
         /// The map is what the user sees (no sheet / cover / alert above it).

@@ -318,4 +318,104 @@ struct DrawingUndoForwarderTests {
         #expect(await reopened.close())
     }
 }
+
+/// Apple Pencil in the full-screen handwritten note: the canvas owns the
+/// tool picker (selections, PencilKit's double-tap / squeeze), and the map's
+/// window-level Pencil interaction stays out of the way while the note is up.
+@MainActor
+struct PencilNoteInteractionTests {
+    /// Landscape iPad Pro 11-inch.
+    private static let windowSize = CGSize(width: 1194, height: 834)
+    private static let settleTime: TimeInterval = 1
+
+    @Observable final class Cover {
+        var isPresented = false
+    }
+
+    private struct CoverHost: View {
+        let model: MindMapModel
+        let id: UUID
+        let undo: UndoManager
+        @Bindable var cover: Cover
+
+        var body: some View {
+            Color.clear.fullScreenCover(isPresented: $cover.isPresented) {
+                NavigationStack {
+                    PencilCanvas(model: model, attachmentID: id, fileName: model.attachment(id)?.fileName ?? "",
+                                 revision: 0, undoManager: undo, fingerDrawing: false, flusher: DrawingFlusher())
+                }
+            }
+        }
+    }
+
+    private func makeWindow<Content: View>(_ content: Content) throws -> UIWindow {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(origin: .zero, size: Self.windowSize)
+        window.rootViewController = UIHostingController(rootView: content)
+        window.makeKeyAndVisible()
+        settle()
+        return window
+    }
+
+    private func settle() { RunLoop.main.run(until: Date().addingTimeInterval(Self.settleTime)) }
+
+    private func views(in view: UIView) -> [UIView] { [view] + view.subviews.flatMap { views(in: $0) } }
+
+    private func windows() -> [UIWindow] {
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+    }
+
+    @available(iOS 18.0, *)
+    @Test func openedNoteTakesFocusSoTheToolPickerDrivesTheCanvas() throws {
+        let model = MindMapModel(map: MindMap(root: Node(text: "Central")))
+        let undo = makeUndo()
+        let id = try #require(model.addDrawing(to: model.root.id, undoManager: undo))
+        let cover = Cover()
+        let window = try makeWindow(CoverHost(model: model, id: id, undo: undo, cover: cover))
+        defer { window.isHidden = true }
+        cover.isPresented = true
+        settle()
+
+        let presented = try #require(window.rootViewController?.presentedViewController)
+        let canvas = try #require(views(in: presented.view).compactMap { $0 as? PencilCanvasView }.first)
+        let picker = try #require((canvas.delegate as? PencilCanvas.Coordinator)?.toolPicker)
+        #expect(canvas.isFirstResponder)
+        #expect(picker.isVisible)
+        // PencilKit's own Pencil interaction (double-tap / squeeze) exists only for a visible picker.
+        let pencilKitInteractions = windows().flatMap { views(in: $0) }.flatMap(\.interactions)
+            .compactMap { $0 as? UIPencilInteraction }.filter { !($0.delegate is PencilBridge.BridgeView) }
+        #expect(!pencilKitInteractions.isEmpty)
+
+        let eraser = try #require(picker.toolItems.first { $0 is PKToolPickerEraserItem })
+        picker.selectedToolItemIdentifier = eraser.identifier
+        #expect(canvas.tool is PKEraserTool)
+        let pen = try #require(picker.toolItems.first { $0.identifier == PKInkingTool.InkType.pen.rawValue })
+        picker.selectedToolItemIdentifier = pen.identifier
+        let ink = try #require(canvas.tool as? PKInkingTool)
+        #expect(ink.inkType == .pen)
+
+        // Page geometry: the fixed-width page is zoomed to fit the view width.
+        #expect(abs(canvas.zoomScale - canvas.bounds.width / HandwrittenNote.pageWidth) < 0.001)
+        cover.isPresented = false
+        settle()
+    }
+
+    @Test func mapPencilInteractionIsOffWhileANoteIsPresented() throws {
+        let model = MindMapModel(map: MindMap(root: Node(text: "Central")))
+        let editor = EditorController(model: model)
+        let window = try makeWindow(CanvasView(editor: editor))
+        defer { window.isHidden = true }
+        let pencil = try #require(window.interactions.compactMap { $0 as? UIPencilInteraction }.first)
+        #expect(pencil.isEnabled)
+
+        editor.presentedAttachment = AttachmentRequest(attachmentID: UUID(), fullScreen: true)
+        settle()
+        #expect(!pencil.isEnabled)
+
+        editor.presentedAttachment = nil
+        settle()
+        #expect(pencil.isEnabled)
+    }
+}
 #endif

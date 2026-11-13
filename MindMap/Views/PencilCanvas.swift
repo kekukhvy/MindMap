@@ -78,8 +78,18 @@ final class DrawingUndoForwarder: UndoManager {
 final class PencilCanvasView: PKCanvasView {
     let forwarder = DrawingUndoForwarder()
     var onLayout: (() -> Void)?
+    /// Editable canvas: becomes first responder once it is in a window, so its
+    /// tool picker shows and PencilKit's Pencil double-tap / squeeze work.
+    /// (SwiftUI adds the view to the window after `makeUIView`, so an earlier
+    /// `becomeFirstResponder` fails.)
+    var takesFocusInWindow = false
 
     override var undoManager: UndoManager? { forwarder }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window != nil, takesFocusInWindow, !isFirstResponder { becomeFirstResponder() }
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -145,7 +155,6 @@ struct PencilCanvas: UIViewRepresentable {
         picker.setVisible(!isReadOnly, forFirstResponder: canvas)
         coordinator.toolPicker = picker
         apply(to: canvas)
-        if !isReadOnly { DispatchQueue.main.async { canvas.becomeFirstResponder() } }
         return canvas
     }
 
@@ -164,6 +173,7 @@ struct PencilCanvas: UIViewRepresentable {
 
     private func apply(to canvas: PencilCanvasView) {
         canvas.forwarder.target = undoManager
+        canvas.takesFocusInWindow = !isReadOnly
         let policy: PKCanvasViewDrawingPolicy = fingerDrawing ? .anyInput : .pencilOnly
         if canvas.drawingPolicy != policy { canvas.drawingPolicy = policy }
         if canvas.drawingGestureRecognizer.isEnabled == isReadOnly {
