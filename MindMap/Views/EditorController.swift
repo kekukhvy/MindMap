@@ -110,10 +110,16 @@ final class EditorController {
     /// iPad floating action palette (WP11, `EditorController+Touch`).
     var palette = ActionPaletteState()
     @ObservationIgnored var tapSequence = TapSequence()
-    /// Single tap on an expanded topic: its collapse after the double-tap
-    /// interval (WP16, `TopicTapPlan`).
-    @ObservationIgnored var pendingTapCollapse: PendingTapCollapse?
-    @ObservationIgnored var tapCollapseCounter = 0
+    /// Fold / unfold the last single tap committed; a double-tap reverts it
+    /// (WP16, `TopicTapPlan`).
+    @ObservationIgnored var recentTapFold: RecentTapFold?
+    @ObservationIgnored var tapFoldCounter = 0
+    /// Branch a tap just collapsed, still drawn while it fades out until the
+    /// double-tap interval has passed (`EditorController+TapFold`).
+    var foldEcho: FoldEcho?
+    /// The double-tap is undoing its first tap's fold: no replay anchoring
+    /// (the double-tap anchors the whole change itself).
+    @ObservationIgnored var isRevertingTapFold = false
     /// Last tap on a button inside a topic (checkbox / link / attachment
     /// icon), uptime: the topic's own tap recognizer ignores that tap.
     @ObservationIgnored var lastAccessoryTap: (id: UUID, time: TimeInterval)?
@@ -265,7 +271,7 @@ final class EditorController {
         model.sideSplitProvider = { [weak self] in self?.scene.layout.balanced }
         model.readOnlyRejectionHandler = { [weak self] _ in self?.showReadOnlyNotice() }
         model.replayAnchoring = { [weak self] toggled, apply in
-            guard let self else { return apply() }
+            guard let self, !self.isRevertingTapFold else { return apply() }
             self.keepingOnScreen(self.replayAnchor(for: toggled), apply)
         }
     }

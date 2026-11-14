@@ -8,19 +8,27 @@ import Foundation
 /// Pencil hover over "Launch" (highlight + "+" handle) next to the selected
 /// "Design"; `=help` opens the Gestures sheet; `=root` palette on the
 /// central topic; `=tapcollapse` taps "Research" (WP16: selected, its branch
-/// folds after the double-tap interval, then the palette); `=tapexpand` taps
-/// the collapsed "Research" again; `=doubletap` double-taps "Design" (new
-/// child inside, being named). Seeds a small map when the open one has no
+/// folds at once, palette after the double-tap interval); `=tapexpand` taps
+/// the collapsed "Research" again; `=doubletap` double-taps the expanded
+/// "Design" (the first tap folds it, the second unfolds it again and adds a
+/// child inside, being named). `MINDMAP_DEBUG_TOUCH_DELAY=<s>` waits that
+/// long before the tap(s) (screen recording). Seeds a small map when the open one has no
 /// such topics.
 /// (simctl: `SIMCTL_CHILD_MINDMAP_DEBUG_TOUCH=palette xcrun simctl launch ...`.)
 enum DebugTouchActions {
     nonisolated(unsafe) private static var didRun = false
+    /// Editor of the canvas that appeared last (a document opened after
+    /// launch / a re-created ContentView replaces a throwaway one).
+    nonisolated(unsafe) private static weak var latest: EditorController?
 
     static func run(_ editor: EditorController) {
-        guard !didRun, !LaunchEnvironment.isTesting,
+        guard !LaunchEnvironment.isTesting,
               let mode = ProcessInfo.processInfo.environment["MINDMAP_DEBUG_TOUCH"] else { return }
+        latest = editor
+        guard !didRun else { return }
         didRun = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { perform(mode, editor) }
+        let delay = ProcessInfo.processInfo.environment["MINDMAP_DEBUG_TOUCH_DELAY"].flatMap(Double.init) ?? 0.8
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { perform(mode, latest ?? editor) }
     }
 
     private static func perform(_ mode: String, _ editor: EditorController) {

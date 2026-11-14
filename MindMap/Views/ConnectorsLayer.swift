@@ -10,6 +10,7 @@ struct ConnectorsLayer: View {
             ForEach(connectors) { connector in
                 ConnectorView(geometry: connector.geometry.transformed(by: viewport),
                               color: Color(hex: connector.colorHex))
+                    .opacity(connector.isFading ? 0 : 1)
             }
         }
         .allowsHitTesting(false)

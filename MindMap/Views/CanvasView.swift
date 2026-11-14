@@ -23,7 +23,9 @@ struct CanvasView: View {
                 ZStack(alignment: .topLeading) {
                     BoundariesLayer(editor: editor, viewport: viewport)
                     ConnectorsLayer(connectors: editor.drawnConnectors, viewport: viewport)
-                    ForEach(scene.order, id: \.self) { id in
+                    // Includes a branch a tap just collapsed, fading out
+                    // (`FoldEcho`): same views, so a double-tap animates it back.
+                    ForEach(editor.drawnOrder, id: \.self) { id in
                         node(id, scene: scene, viewport: viewport)
                     }
                     ForEach(scene.order, id: \.self) { id in
@@ -255,8 +257,9 @@ struct CanvasView: View {
 
     @ViewBuilder
     private func node(_ id: UUID, scene: MapScene, viewport: Viewport) -> some View {
-        if let info = scene.nodes[id], let frame = scene.layout.frames[id] {
-            let screen = viewport.toScreen(frame)
+        if let drawn = editor.drawnNode(id, in: scene) {
+            let info = drawn.info, isFading = drawn.isFading
+            let screen = viewport.toScreen(drawn.frame)
             // Dragged topics (the whole selection) follow the pointer as ghosts.
             let drag = editor.drag.flatMap { $0.id == id || $0.ghostIDs.contains(id) ? $0 : nil }
             NodeView(info: info, scale: viewport.scale, isSelected: editor.isSelected(id),
@@ -288,7 +291,8 @@ struct CanvasView: View {
                      })
                 .frame(width: screen.width, height: screen.height)
                 .contentShape(Rectangle())
-                .opacity(drag == nil ? 1 : 0.75)
+                .opacity(isFading ? 0 : drag == nil ? 1 : 0.75)
+                .allowsHitTesting(!isFading)
                 .offset(drag?.translation ?? .zero)
                 .zIndex(drag == nil ? 0 : 1)
                 .position(x: screen.midX, y: screen.midY)

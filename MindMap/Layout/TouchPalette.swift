@@ -119,35 +119,46 @@ struct TapSequence {
 /// What a single tap does to the tapped topic's branch (iPad, WP16: tap =
 /// select + fold / unfold, double-tap = add a child inside).
 ///
-/// The first tap of a double-tap cannot know a second one follows, so the
-/// fold is split by direction to be instant *and* never wrong:
-/// - collapsed → expand **now**: a double-tap needs it expanded anyway (the
-///   new child goes inside), so the second tap never has to undo anything;
-/// - expanded → collapse **after** `TapSequence.maxInterval` unless the second
-///   tap arrives: collapsing at once and re-expanding on the double-tap would
-///   make the whole branch vanish and spring back while the child is added.
+/// The fold happens **at once** in both directions (no waiting for a
+/// possible second tap). The first tap of a double-tap cannot know a second
+/// one follows, so the second tap reverts the fold it made (`RecentTapFold`)
+/// and adds the child in the same transition; a collapsing branch stays
+/// drawn, fading, until the double-tap interval has passed
+/// (`EditorController.FoldEcho`), so the revert animates it back instead of
+/// making it vanish and reappear.
 /// A tap never collapses the central topic (that would hide the whole map);
 /// a collapsed central topic still expands.
 enum TopicTapPlan: Equatable {
     /// No children (or the expanded central topic): select only.
     case select
-    case expandNow
-    case collapseLater
+    case expand
+    case collapse
 
     static func plan(hasChildren: Bool, isCollapsed: Bool, isMainRoot: Bool) -> TopicTapPlan {
         guard hasChildren else { return .select }
-        if isCollapsed { return .expandNow }
-        return isMainRoot ? .select : .collapseLater
+        if isCollapsed { return .expand }
+        return isMainRoot ? .select : .collapse
     }
 }
 
-/// Collapse waiting for the double-tap interval to pass (`TopicTapPlan
-/// .collapseLater`); a newer tap / toggle / double-tap replaces or cancels it.
-struct PendingTapCollapse: Equatable {
+/// The fold / unfold a single tap just committed (one undo step). The
+/// second tap of a double-tap undoes exactly that step before adding the
+/// child, so the double-tap leaves one undo step (Add Topic); it is only
+/// undone while it is still the latest change (`canRevert`).
+struct RecentTapFold: Equatable {
     var id: UUID
-    var token: Int
-    /// Palette show of the same tap, released once the collapse has animated.
-    var paletteToken: Int
+    /// The tap collapsed the branch (false: expanded it).
+    var collapsed: Bool
+    /// Map right after the fold.
+    var mapAfter: MindMap
+
+    var actionName: String { collapsed ? "Collapse" : "Expand" }
+
+    /// - Parameters: the topic double-tapped, the map now and the undo
+    ///   manager's state.
+    func canRevert(on target: UUID, map: MindMap, canUndo: Bool, canRedo: Bool, undoActionName: String) -> Bool {
+        target == id && canUndo && !canRedo && undoActionName == actionName && map == mapAfter
+    }
 }
 
 /// A tap on a button inside a topic (task checkbox, link icon, attachment

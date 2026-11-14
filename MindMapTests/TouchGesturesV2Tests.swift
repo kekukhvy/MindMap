@@ -72,12 +72,28 @@ private func moved(_ editor: EditorController, _ id: UUID, from before: CGRect) 
 struct TopicTapPlanTests {
     @Test func planPerTopicState() {
         #expect(TopicTapPlan.plan(hasChildren: false, isCollapsed: false, isMainRoot: false) == .select)
-        #expect(TopicTapPlan.plan(hasChildren: true, isCollapsed: true, isMainRoot: false) == .expandNow)
-        #expect(TopicTapPlan.plan(hasChildren: true, isCollapsed: false, isMainRoot: false) == .collapseLater)
+        #expect(TopicTapPlan.plan(hasChildren: true, isCollapsed: true, isMainRoot: false) == .expand)
+        #expect(TopicTapPlan.plan(hasChildren: true, isCollapsed: false, isMainRoot: false) == .collapse)
         // The central topic never folds on a tap, but a folded one unfolds.
         #expect(TopicTapPlan.plan(hasChildren: true, isCollapsed: false, isMainRoot: true) == .select)
-        #expect(TopicTapPlan.plan(hasChildren: true, isCollapsed: true, isMainRoot: true) == .expandNow)
+        #expect(TopicTapPlan.plan(hasChildren: true, isCollapsed: true, isMainRoot: true) == .expand)
         #expect(TopicTapPlan.plan(hasChildren: false, isCollapsed: false, isMainRoot: true) == .select)
+    }
+
+    @Test func recentFoldRevertsOnlyWhileLatest() {
+        let a = UUID(), b = UUID()
+        let map = MindMap()
+        let fold = RecentTapFold(id: a, collapsed: true, mapAfter: map)
+        #expect(fold.actionName == "Collapse")
+        #expect(RecentTapFold(id: a, collapsed: false, mapAfter: map).actionName == "Expand")
+        #expect(fold.canRevert(on: a, map: map, canUndo: true, canRedo: false, undoActionName: "Collapse"))
+        #expect(!fold.canRevert(on: b, map: map, canUndo: true, canRedo: false, undoActionName: "Collapse"))
+        #expect(!fold.canRevert(on: a, map: map, canUndo: false, canRedo: false, undoActionName: "Collapse"))
+        #expect(!fold.canRevert(on: a, map: map, canUndo: true, canRedo: true, undoActionName: "Collapse"))
+        #expect(!fold.canRevert(on: a, map: map, canUndo: true, canRedo: false, undoActionName: "Add Topic"))
+        var changed = map
+        changed.root.text = "Other"
+        #expect(!fold.canRevert(on: a, map: changed, canUndo: true, canRedo: false, undoActionName: "Collapse"))
     }
 
     @Test func accessoryWindow() {
@@ -105,27 +121,46 @@ struct TopicTapPlanTests {
 // MARK: - Single tap folds / unfolds
 
 struct TapFoldTests {
-    @Test func tapCollapsesAfterDoubleTapIntervalAnchored() {
+    @Test func tapCollapsesImmediatelyAnchored() {
         let f = FoldFixture()
         let (editor, undo, deferred) = f.editor()
         let before = editor.model.map
         let frame = editor.screenFrame(of: f.research)!
-        #expect(editor.touchTapTopic(f.research, at: f.center(f.research, in: editor), time: 10) == .collapsing)
-        // Selected at once; the fold waits for a possible second tap.
-        #expect(editor.selectedIDs == [f.research] && !collapsed(editor, f.research))
-        #expect(editor.visiblePalette == nil && !undo.canUndo)
+        #expect(editor.touchTapTopic(f.research, at: f.center(f.research, in: editor), time: 10) == .collapsed)
+        // Selected and folded at once (no double-tap wait), one undo step.
+        #expect(editor.selectedIDs == [f.research] && collapsed(editor, f.research))
+        #expect(moved(editor, f.research, from: frame) < 1)
+        #expect(undo.undoActionName == "Collapse")
+        // Palette hidden while the fold animates, back after the double-tap
+        // interval (longer than the relayout).
+        #expect(editor.visiblePalette == nil)
         #expect(deferred.delays == [TapSequence.maxInterval])
         deferred.flush()
-        #expect(collapsed(editor, f.research))
-        #expect(moved(editor, f.research, from: frame) < 1)
-        // Palette only once the collapse has animated.
-        #expect(editor.visiblePalette == nil)
-        #expect(deferred.delays.last == EditorController.relayoutDuration)
-        deferred.flush()
         #expect(editor.visiblePalette == .selection && editor.selectedID == f.research)
-        #expect(undo.undoActionName == "Collapse")
         undo.undo()
         #expect(editor.model.map == before && !undo.canUndo)
+    }
+
+    @Test func collapsingBranchStaysDrawnFadingUntilTheIntervalPasses() {
+        let f = FoldFixture()
+        let (editor, _, deferred) = f.editor()
+        let interviews = editor.screenFrame(of: f.interviews)!
+        editor.touchTapTopic(f.research, at: f.center(f.research, in: editor), time: 10)
+        // Hidden in the scene, still drawn (fading) where it was on screen.
+        #expect(editor.scene.nodes[f.interviews] == nil)
+        #expect(editor.drawnOrder.contains(f.interviews) && editor.drawnOrder.contains(f.survey))
+        let drawn = editor.drawnNode(f.interviews, in: editor.scene)
+        #expect(drawn?.isFading == true)
+        if let drawn {
+            let screen = editor.viewport.toScreen(drawn.frame)
+            #expect(hypot(screen.midX - interviews.midX, screen.midY - interviews.midY) < 1)
+        }
+        #expect(Set(editor.fadingConnectors.map(\.childID)) == [f.interviews, f.survey])
+        #expect(editor.drawnConnectors.filter(\.isFading).count == 2)
+        #expect(Set(editor.drawnOrder).count == editor.drawnOrder.count)
+        deferred.flush()
+        #expect(editor.foldEcho == nil && !editor.drawnOrder.contains(f.interviews))
+        #expect(editor.fadingConnectors.isEmpty)
     }
 
     @Test func tapExpandsCollapsedTopicImmediatelyAnchored() {
@@ -148,15 +183,15 @@ struct TapFoldTests {
 
     @Test func secondSingleTapUnfoldsAgain() {
         let f = FoldFixture()
-        let (editor, _, deferred) = f.editor()
+        let (editor, undo, deferred) = f.editor()
         let point = f.center(f.research, in: editor)
         editor.touchTapTopic(f.research, at: point, time: 10)
-        deferred.flush()
         deferred.flush()
         // Slower than the double-tap interval: a new single tap.
         #expect(editor.touchTapTopic(f.research, at: point, time: 10 + TapSequence.maxInterval + 0.05) == .expanded)
         #expect(!collapsed(editor, f.research))
         #expect(editor.model.map.node(withID: f.research)?.children.count == 2) // no child added
+        #expect(undo.undoActionName == "Expand")
     }
 
     @Test func leafAndCentralTopicOnlySelect() {
@@ -169,7 +204,7 @@ struct TapFoldTests {
         #expect(editor.visiblePalette == .selection && editor.selectedID == f.rootID)
     }
 
-    @Test func tapOnAnotherTopicSettlesThePendingCollapse() {
+    @Test func tapOnAnotherTopicKeepsTheFold() {
         let f = FoldFixture()
         let (editor, _, deferred) = f.editor()
         editor.touchTapTopic(f.research, at: f.center(f.research, in: editor), time: 10)
@@ -177,50 +212,47 @@ struct TapFoldTests {
         #expect(editor.touchTapTopic(f.launch, at: f.center(f.launch, in: editor), time: 10.1) == .selected)
         #expect(collapsed(editor, f.research) && editor.selectedID == f.launch)
         deferred.flush()
-        deferred.flush()
         #expect(collapsed(editor, f.research) && editor.visiblePalette == .selection && editor.selectedID == f.launch)
-
-        // ...unless the new tap is inside that branch (the fold would hide it).
-        let (other, _, deferred2) = f.editor()
-        other.touchTapTopic(f.research, at: f.center(f.research, in: other), time: 10)
-        other.touchTapTopic(f.survey, at: f.center(f.survey, in: other), time: 10.1)
-        deferred2.flush()
-        deferred2.flush()
-        #expect(!collapsed(other, f.research) && other.selectedID == f.survey)
+        // The fading branch is not tappable / selectable meanwhile.
+        #expect(editor.recentTapFold == nil)
     }
 
-    @Test func pendingCollapseDropsWhenEditingOrPencilActs() {
+    @Test func foldStaysWhenEditingOrPencilActs() {
         let f = FoldFixture()
-        let (editor, _, deferred) = f.editor()
+        let (editor, undo, deferred) = f.editor()
         editor.touchTapTopic(f.research, at: f.center(f.research, in: editor), time: 10)
         editor.beginEditing(f.research) // Space / F2 within the interval
         deferred.flush()
-        #expect(!collapsed(editor, f.research) && editor.editingID == f.research)
+        #expect(collapsed(editor, f.research) && editor.editingID == f.research)
         editor.commitEditing()
+        #expect(undo.undoActionName == "Collapse")
 
         let (pencil, _, deferred2) = f.editor()
         pencil.touchTapTopic(f.research, at: f.center(f.research, in: pencil), time: 10)
-        pencil.pencilDoubleTap(preference: .switchEraser) // adds a child to the selection
-        deferred2.flush()
+        pencil.pencilDoubleTap(preference: .switchEraser) // adds a child to the selection (expands it)
         deferred2.flush()
         #expect(!collapsed(pencil, f.research) && pencil.editingID != nil)
         #expect(pencil.model.map.node(withID: f.research)?.children.count == 3)
     }
+
 }
 
 // MARK: - Double-tap adds a child
 
 struct DoubleTapAddChildTests {
-    @Test func doubleTapOnExpandedTopicNeverCollapsesIt() throws {
+    @Test func doubleTapOnExpandedTopicRestoresItAndAddsOneStep() throws {
         let f = FoldFixture()
         let (editor, undo, deferred) = f.editor()
         let before = editor.model.map
         let point = f.center(f.research, in: editor)
         let frame = editor.screenFrame(of: f.research)!
-        #expect(editor.touchTapTopic(f.research, at: point, time: 5) == .collapsing)
+        #expect(editor.touchTapTopic(f.research, at: point, time: 5) == .collapsed)
+        #expect(collapsed(editor, f.research) && editor.foldEcho != nil)
         #expect(editor.touchTapTopic(f.research, at: CGPoint(x: point.x + 4, y: point.y), time: 5.2) == .addedChild)
-        deferred.flush() // the first tap's collapse + palette are stale now
-        deferred.flush()
+        // Unfolded again in the same change: the fading branch is real again.
+        #expect(!collapsed(editor, f.research) && editor.foldEcho == nil)
+        #expect(editor.drawnNode(f.interviews, in: editor.scene)?.isFading == false)
+        deferred.flush() // the first tap's palette is stale now
         #expect(!collapsed(editor, f.research))
         let child = try #require(editor.editingID)
         #expect(editor.model.map.parentID(of: child) == f.research)
@@ -232,13 +264,14 @@ struct DoubleTapAddChildTests {
         editor.draftText = "Personas"
         editor.commitEditing()
         #expect(editor.model.map.node(withID: child)?.text == "Personas")
-        // Add + name = one undo step; nothing else was registered.
-        #expect(undo.canUndo)
+        // Exactly one undo step (Add Topic + name); the Collapse is gone.
+        #expect(undo.undoActionName == "Add Topic" && !undo.canRedo)
         undo.undo()
         #expect(editor.model.map == before && !undo.canUndo)
+        #expect(!collapsed(editor, f.research))
     }
 
-    @Test func doubleTapOnCollapsedTopicExpandsThenAdds() throws {
+    @Test func doubleTapOnCollapsedTopicExpandsAndAddsInOneStep() throws {
         let f = FoldFixture()
         let (editor, undo, deferred) = f.editor()
         let before = editor.model.map
@@ -252,29 +285,44 @@ struct DoubleTapAddChildTests {
         #expect(editor.model.map.node(withID: f.design)?.children.map(\.id) == [f.wireframes, child])
         #expect(moved(editor, f.design, from: frame) < 1)
         editor.commitEditing()
-        // Two steps: the first tap's Expand, then Add Topic.
+        // One step: the first tap's Expand was folded into Add Topic.
         #expect(undo.undoActionName == "Add Topic")
         undo.undo()
-        #expect(undo.undoActionName == "Expand")
+        #expect(editor.model.map == before && !undo.canUndo && collapsed(editor, f.design))
+    }
+
+    @Test func lateSecondTapAfterTheFadeStillOneStep() throws {
+        // Edge: the fading branch already left the canvas (timer fired just
+        // before a second tap still inside the interval): same result.
+        let f = FoldFixture()
+        let (editor, undo, deferred) = f.editor()
+        let before = editor.model.map
+        let point = f.center(f.research, in: editor)
+        editor.touchTapTopic(f.research, at: point, time: 5)
+        deferred.flush()
+        #expect(collapsed(editor, f.research) && editor.foldEcho == nil)
+        #expect(editor.touchTapTopic(f.research, at: point, time: 5.29) == .addedChild)
+        let child = try #require(editor.editingID)
+        #expect(!collapsed(editor, f.research) && editor.model.map.parentID(of: child) == f.research)
+        #expect(editor.visiblePalette == nil && editor.editingID == child)
+        editor.commitEditing()
         undo.undo()
         #expect(editor.model.map == before && !undo.canUndo)
     }
 
-    @Test func lateSecondTapAfterTheFoldStillEndsExpandedWithChild() throws {
-        // Edge: the deferred collapse ran just before a second tap that is
-        // still within the interval (its timer starts when the first tap is
-        // handled): the double-tap re-expands in its Add Topic step.
+    @Test func foldNotRevertedWhenSomethingElseChangedMeanwhile() throws {
         let f = FoldFixture()
-        let (editor, _, deferred) = f.editor()
+        let (editor, undo, _) = f.editor()
         let point = f.center(f.research, in: editor)
         editor.touchTapTopic(f.research, at: point, time: 5)
-        deferred.flush()
-        #expect(collapsed(editor, f.research))
-        #expect(editor.touchTapTopic(f.research, at: point, time: 5.29) == .addedChild)
-        let child = try #require(editor.editingID)
-        #expect(!collapsed(editor, f.research) && editor.model.map.parentID(of: child) == f.research)
-        deferred.flush()
-        #expect(editor.visiblePalette == nil && editor.editingID == child)
+        // E.g. a sync merge changed the map between the taps: no blind undo.
+        editor.recentTapFold?.mapAfter.root.text = "Changed elsewhere"
+        #expect(editor.touchTapTopic(f.research, at: point, time: 5.1) == .addedChild)
+        #expect(!collapsed(editor, f.research)) // addChild expands its parent
+        editor.commitEditing()
+        #expect(undo.undoActionName == "Add Topic")
+        undo.undo()
+        #expect(undo.undoActionName == "Collapse")
     }
 
     @Test func doubleTapOnLeafAndCentralTopic() throws {
@@ -300,12 +348,12 @@ struct DoubleTapAddChildTests {
         let (editor, _, deferred) = f.editor()
         let point = f.center(f.design, in: editor)
         #expect(editor.touchTapTopic(f.design, at: point, time: 5) == .expanded)
-        #expect(editor.touchTapTopic(f.design, at: point, time: 5 + TapSequence.maxInterval + 0.01) == .collapsing)
+        #expect(editor.touchTapTopic(f.design, at: point, time: 5 + TapSequence.maxInterval + 0.01) == .collapsed)
         deferred.flush()
         #expect(collapsed(editor, f.design) && editor.editingID == nil)
         let far = CGPoint(x: point.x + TapSequence.maxDistance + 5, y: point.y)
         #expect(editor.touchTapTopic(f.design, at: point, time: 10) == .expanded)
-        #expect(editor.touchTapTopic(f.design, at: far, time: 10.1) == .collapsing)
+        #expect(editor.touchTapTopic(f.design, at: far, time: 10.1) == .collapsed)
         #expect(editor.editingID == nil)
     }
 
@@ -344,24 +392,26 @@ struct DoubleTapAddChildTests {
 // MARK: - Toggle, palette, Select mode, accessories
 
 struct TapFoldInteractionTests {
-    @Test func collapseToggleTogglesOnceEvenWithPendingTap() {
+    @Test func collapseToggleIsItsOwnToggle() {
         let f = FoldFixture()
         let (editor, undo, deferred) = f.editor()
         let frame = editor.screenFrame(of: f.research)!
         editor.touchTapTopic(f.research, at: f.center(f.research, in: editor), time: 10)
-        // "−" tapped within the interval: one collapse, the tap's is dropped.
-        editor.tapCollapseToggle(f.research)
-        #expect(collapsed(editor, f.research) && moved(editor, f.research, from: frame) < 1)
-        deferred.flush()
-        deferred.flush()
         #expect(collapsed(editor, f.research))
+        // "+N" tapped within the interval: unfolds again (no double-tap child).
+        editor.tapCollapseToggle(f.research)
+        #expect(!collapsed(editor, f.research) && moved(editor, f.research, from: frame) < 1)
+        #expect(Set(editor.drawnOrder).count == editor.drawnOrder.count)
+        deferred.flush()
+        #expect(!collapsed(editor, f.research) && editor.editingID == nil)
         #expect(editor.visiblePalette == .selection && editor.selectedID == f.research)
+        undo.undo()
         undo.undo()
         #expect(!collapsed(editor, f.research) && !undo.canUndo)
         // "+N" expands; a following topic tap is not a double-tap.
         editor.tapCollapseToggle(f.design)
         #expect(!collapsed(editor, f.design))
-        #expect(editor.touchTapTopic(f.design, at: f.center(f.design, in: editor), time: 10.1) == .collapsing)
+        #expect(editor.touchTapTopic(f.design, at: f.center(f.design, in: editor), time: 10.1) == .collapsed)
     }
 
     @Test func paletteHiddenWhileFoldAnimatesThenOnTopic() {
@@ -373,8 +423,6 @@ struct TapFoldInteractionTests {
         #expect(editor.visiblePalette == .selection)
         // Tap a parent: the palette goes away during the fold, never moves with it.
         editor.touchTapTopic(f.research, at: point, time: 5)
-        #expect(editor.visiblePalette == nil)
-        deferred.flush()
         #expect(collapsed(editor, f.research) && editor.visiblePalette == nil)
         deferred.flush()
         #expect(editor.visiblePalette == .selection && editor.selectedID == f.research)
@@ -388,7 +436,6 @@ struct TapFoldInteractionTests {
         editor.touchTapTopic(f.research, at: point, time: 20)
         editor.touchTapBackground()
         editor.select(nil)
-        deferred.flush()
         deferred.flush()
         #expect(collapsed(editor, f.research) && editor.visiblePalette == nil)
     }
@@ -432,8 +479,9 @@ struct TapFoldInteractionTests {
         deferred.flush()
         #expect(!collapsed(editor, f.research) && !undo.canUndo && editor.editingID == nil)
         // A real tap afterwards is a fresh single tap (not the 2nd of a double).
-        #expect(editor.touchTapTopic(f.research, at: point, time: 11) == .collapsing)
+        #expect(editor.touchTapTopic(f.research, at: point, time: 11) == .collapsed)
         #expect(editor.touchTapTopic(f.research, at: point, time: 11.1) == .addedChild)
+        #expect(!collapsed(editor, f.research) && undo.undoActionName == "Add Topic")
     }
 
     @Test func picksAndLongPressStillWin() {
@@ -442,10 +490,12 @@ struct TapFoldInteractionTests {
         editor.beginRelationship(from: f.launch)
         #expect(editor.touchTapTopic(f.research, at: f.center(f.research, in: editor), time: 1) == .picked)
         #expect(!collapsed(editor, f.research) && editor.model.map.relationships.count == 1)
-        editor.touchTapTopic(f.research, at: f.center(f.research, in: editor), time: 5)
-        editor.touchLongPress(f.research) // context menu: no fold under it
+        editor.touchTapTopic(f.design, at: f.center(f.design, in: editor), time: 5)
+        editor.touchLongPress(f.design) // context menu: palette gone, no double-tap after it
         deferred.flush()
-        #expect(!collapsed(editor, f.research) && editor.visiblePalette == nil)
+        #expect(!collapsed(editor, f.design) && editor.visiblePalette == nil)
+        #expect(editor.recentTapFold == nil)
+        #expect(editor.touchTapTopic(f.design, at: f.center(f.design, in: editor), time: 5.1) == .collapsed)
     }
 
     @Test func gestureHelpDescribesV2() {

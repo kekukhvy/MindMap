@@ -16,9 +16,9 @@ enum TouchTapOutcome: Equatable {
     case hidPalette
     /// Selected and its collapsed branch expanded at once.
     case expanded
-    /// Selected; its branch collapses after the double-tap interval unless
-    /// a second tap makes it a double-tap.
-    case collapsing
+    /// Selected and its branch collapsed at once (a second tap reverts it
+    /// and makes it a double-tap).
+    case collapsed
     /// The tap landed on a checkbox / link / attachment button of the topic,
     /// which handled it.
     case accessory
@@ -131,7 +131,7 @@ extension EditorController {
         }
         let kind = tapSequence.classify(target: id, location: location, time: time)
         if kind == .double { return doubleTapAddChild(id) }
-        settlePendingTapCollapse(before: id)
+        forgetTapFold()
         let wasShowing = visiblePalette == .selection && selectedIDs == [id]
         clickTopic(id)
         guard let info = scene.nodes[id] else { return .selected }
@@ -144,84 +144,42 @@ extension EditorController {
             }
             scheduleSelectionPalette()
             return .selected
-        case .expandNow:
-            // Palette hidden now, back after the expand has animated
-            // (`TapSequence.maxInterval` > `relayoutDuration`).
-            scheduleSelectionPalette()
-            toggleCollapse(id)
-            return .expanded
-        case .collapseLater:
-            let paletteToken = palette.schedule()
-            tapCollapseCounter += 1
-            let token = tapCollapseCounter
-            pendingTapCollapse = PendingTapCollapse(id: id, token: token, paletteToken: paletteToken)
-            paletteScheduler(TapSequence.maxInterval) { [weak self] in self?.firePendingTapCollapse(token) }
-            return .collapsing
+        case .expand, .collapse:
+            // Folds now; the palette is hidden during the relayout and back
+            // after the double-tap interval (> `relayoutDuration`).
+            let collapsing = !info.isCollapsed
+            foldByTap(id, paletteToken: palette.schedule())
+            return collapsing ? .collapsed : .expanded
         }
     }
 
-    /// Second tap of a double-tap: the first tap's collapse never happens,
-    /// the topic is expanded (it already is when the first tap expanded it)
-    /// and gets a new child being named, keyboard / Scribble ready. The
-    /// tapped topic stays where it is on screen.
+    /// Second tap of a double-tap: the first tap's fold / unfold is undone
+    /// and the topic (expanded) gets a new child being named, keyboard /
+    /// Scribble ready — one animated change with the tapped topic still on
+    /// screen, one undo step (Add Topic).
     private func doubleTapAddChild(_ id: UUID) -> TouchTapOutcome {
-        cancelPendingTapCollapse()
         palette.dismiss()
-        // Read-only map (WP15): no child; the notice says why.
-        guard requireEditable() else { return .refused }
+        // Read-only map (WP15): the fold is restored, no child; the notice says why.
+        guard canEdit else {
+            keepingOnScreen(id) { revertTapFold(on: id) }
+            _ = requireEditable()
+            return .refused
+        }
         if selectedIDs != [id] || selectedID != id { select(id) }
-        // `addChild` expands a collapsed parent in the same undo step.
-        keepingOnScreen(id) { addChild() }
+        // `addChild` expands a collapsed parent in its own step.
+        keepingOnScreen(id) {
+            revertTapFold(on: id)
+            addChild()
+        }
         if let child = editingID { reveal(child) }
         return .addedChild
     }
 
-    /// The deferred collapse of a single tap (`TopicTapPlan.collapseLater`):
-    /// runs unless a double-tap / toggle cancelled it or the topic changed
-    /// meanwhile; the palette follows once the map has settled.
-    func firePendingTapCollapse(_ token: Int) {
-        guard let pending = pendingTapCollapse, pending.token == token else { return }
-        pendingTapCollapse = nil
-        collapseFromTap(pending)
-    }
-
-    private func collapseFromTap(_ pending: PendingTapCollapse) {
-        guard editingID == nil, drag == nil, let info = scene.nodes[pending.id], info.hasChildren,
-              !info.isCollapsed else {
-            palette.fire(pending.paletteToken)
-            return
-        }
-        toggleCollapse(pending.id)
-        validateSelection()
-        let paletteToken = pending.paletteToken
-        paletteScheduler(Self.relayoutDuration) { [weak self] in self?.palette.fire(paletteToken) }
-    }
-
-    /// A tap on another topic confirms the pending one was a single tap:
-    /// its collapse runs now (unless the new tap is inside that branch,
-    /// which the collapse would hide).
-    private func settlePendingTapCollapse(before id: UUID) {
-        guard let pending = pendingTapCollapse, pending.id != id else { return }
-        pendingTapCollapse = nil
-        if model.map.node(withID: pending.id)?.contains(id) == true { return }
-        collapseFromTap(pending)
-    }
-
-    func cancelPendingTapCollapse() {
-        pendingTapCollapse = nil
-    }
-
-    /// The "+N" / "−" toggle beside a topic (iPad): one toggle, also when a
-    /// tap on the topic just scheduled its collapse.
+    /// The "+N" / "−" toggle beside a topic (iPad): one toggle of its own.
     func tapCollapseToggle(_ id: UUID) {
         tapSequence.reset()
-        let pending = pendingTapCollapse
-        cancelPendingTapCollapse()
+        forgetTapFold()
         toggleCollapse(id)
-        // The topic tap's palette still comes, after the relayout.
-        if let token = pending?.paletteToken {
-            paletteScheduler(Self.relayoutDuration) { [weak self] in self?.palette.fire(token) }
-        }
     }
 
     /// A button inside topic `id` was tapped (task checkbox, link icon,
@@ -239,7 +197,7 @@ extension EditorController {
     /// Long press on a topic: its context menu replaces the palette.
     func touchLongPress(_ id: UUID) {
         tapSequence.reset()
-        cancelPendingTapCollapse()
+        forgetTapFold()
         palette.dismiss()
         if !isSelected(id), editingID != id { select(id) }
     }
@@ -252,7 +210,7 @@ extension EditorController {
     /// "+" handle: add a child to `id` and name it.
     func tapAddChildHandle(_ id: UUID) {
         tapSequence.reset()
-        cancelPendingTapCollapse()
+        forgetTapFold()
         guard scene.nodes[id] != nil else { return }
         if selectedIDs != [id] { select(id) }
         addChild()
@@ -398,7 +356,7 @@ extension EditorController {
     /// - Parameter toggles: showing the palette that is already shown hides it.
     func apply(_ action: PencilMapAction, toggles: Bool = false) {
         tapSequence.reset()
-        cancelPendingTapCollapse()
+        forgetTapFold()
         switch action {
         case let .addChild(id):
             if selectedIDs != [id] { select(id) }
@@ -449,7 +407,7 @@ extension EditorController {
     func beginScribble(on id: UUID) {
         guard scene.nodes[id] != nil, requireEditable() else { return }
         tapSequence.reset()
-        cancelPendingTapCollapse()
+        forgetTapFold()
         if editingID != id { beginEditing(id) }
     }
 }

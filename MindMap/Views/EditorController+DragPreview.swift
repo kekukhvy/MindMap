@@ -59,7 +59,7 @@ extension EditorController {
     /// Branch lines to draw: the dragged topics' own lines are replaced by
     /// `dragConnectors` while they move.
     var drawnConnectors: [MapScene.StyledConnector] {
-        guard let drag, drag.translation != .zero else { return scene.connectors }
+        guard let drag, drag.translation != .zero else { return scene.connectors + fadingConnectors }
         let moving = Set(drag.movingIDs + [drag.id])
         return scene.connectors.filter { !moving.contains($0.childID) }
     }

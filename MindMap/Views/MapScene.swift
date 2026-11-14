@@ -33,6 +33,8 @@ struct MapScene {
         var childID: UUID
         var geometry: ConnectorGeometry
         var colorHex: String
+        /// Line of a branch a tap just collapsed, fading out (`FoldEcho`).
+        var isFading = false
     }
 
     var nodes: [UUID: NodeInfo] = [:]
