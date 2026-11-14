@@ -138,8 +138,41 @@ struct NoteImageTests {
         let url = tempURL()
         defer { try? FileManager.default.removeItem(at: url) }
         try save(model, to: url)
-        #expect(attachmentNames(url).contains(name))
+        #expect(attachmentNames(url).contains(name + ".enc"))
         #expect(attachmentNames(url).count == 2)
+    }
+
+    // AC-imgfix-1
+    @Test func lockNoteSealsItsImagesAndRemoveLockRestoresThem() async throws {
+        let (model, note, _) = try makeModel()
+        model.lock.services = LockServices(keyStore: InMemoryKeyStore(), authenticator: MockAuthenticator())
+        let png = Self.samplePNG()
+        let (_, name) = try paste(png, into: note, of: model)
+        try model.lockNote(note, keepUnlocked: true, undoManager: nil)
+
+        // Saved package: sealed image only, no plaintext image bytes in any file.
+        let url = tempURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try save(model, to: url)
+        #expect(attachmentNames(url).contains(name + ".enc") && !attachmentNames(url).contains(name))
+        for file in attachmentNames(url) {
+            let bytes = try Data(contentsOf: url.appendingPathComponent("attachments/\(file)"))
+            #expect(bytes.range(of: png.prefix(64)) == nil)
+        }
+        // Unlocked in the session: Preview resolves the image; locked: it does not.
+        #expect(model.noteImageData(name, noteID: note) == png)
+        let keyID = try #require(model.attachment(note)?.lockKeyID)
+        model.lock.relockNote(note, keyID: keyID)
+        #expect(model.noteImageData(name, noteID: note) == nil)
+
+        // Remove lock: the plain file is back, bytes equal.
+        #expect(await model.removeNoteLock(note, reason: "t", undoManager: nil) == .success)
+        let reopened = tempURL()
+        defer { try? FileManager.default.removeItem(at: reopened) }
+        try save(model, to: reopened, previous: url)
+        #expect(attachmentNames(reopened).contains(name) && !attachmentNames(reopened).contains(name + ".enc"))
+        #expect(try Data(contentsOf: reopened.appendingPathComponent("attachments/\(name)")) == png)
+        #expect(model.noteImageData(name, noteID: note) == png)
     }
 
     // AC-img-5

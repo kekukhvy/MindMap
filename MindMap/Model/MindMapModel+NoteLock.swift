@@ -59,6 +59,7 @@ extension MindMapModel {
         let sealed = try LockCrypto.seal(plain, key: key, context: LockCrypto.noteContext(attachmentID))
         let sealedName = Self.lockedFileName(for: attachment)
         attachmentStore.markSensitive(attachment.fileName)
+        if attachment.kind == .markdown { try sealNoteImages(of: attachmentID, key: key) }
         guard swapFile(of: attachmentID, toName: sealedName, data: sealed, lockKeyID: keyID,
                        actionName: Self.lockActionName(for: attachment.kind), undoManager: undoManager) else {
             throw LockError.notLockable
@@ -103,6 +104,7 @@ extension MindMapModel {
             let sealed = attachmentStore.data(for: attachment.fileName) ?? Data()
             let plain = sealed.isEmpty ? Data()
                 : try LockCrypto.open(sealed, key: key, context: LockCrypto.noteContext(attachmentID))
+            if attachment.kind == .markdown { try openNoteImages(of: attachmentID, key: key) }
             guard let current = self.attachment(attachmentID), current.lockKeyID == keyID,
                   swapFile(of: attachmentID, toName: Self.unlockedFileName(for: current), data: plain, lockKeyID: nil,
                            actionName: Self.removeLockActionName(for: current.kind), undoManager: undoManager) else {

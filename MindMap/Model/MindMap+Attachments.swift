@@ -23,9 +23,12 @@ extension MindMap {
 
     /// The names among `fileNames` that are images of a Markdown note of this
     /// map (`NoteImage`): files to keep although no attachment lists them.
+    /// A locked note keeps only its sealed images (`.enc`), any other only its plain ones.
     func noteImageNames<Names: Sequence>(in fileNames: Names) -> Set<String> where Names.Element == String {
-        let prefixes = allAttachments.filter { $0.kind == .markdown }.map { NoteImage.ownerPrefix(of: $0.id) }
-        return Set(fileNames.filter { name in prefixes.contains { name.hasPrefix($0) } })
+        let notes = allAttachments.filter { $0.kind == .markdown }
+        return Set(fileNames.filter { name in
+            notes.contains { name.hasPrefix(NoteImage.ownerPrefix(of: $0.id)) && NoteImage.isSealed(name) == $0.isLocked }
+        })
     }
 
     func attachmentListEdits(for nodeID: UUID, _ change: (inout [Attachment]) throws -> Void) throws -> [MapEdit] {

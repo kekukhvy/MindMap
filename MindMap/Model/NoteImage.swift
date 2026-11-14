@@ -24,6 +24,9 @@ enum NoteImage {
 
     static func ownerPrefix(of noteID: UUID) -> String { noteID.uuidString + nameMarker }
 
+    /// Image files of a locked note are stored sealed, under their name plus this suffix.
+    static func isSealed(_ fileName: String) -> Bool { fileName.hasSuffix(LockedPackage.sealedSuffix) }
+
     static func link(for fileName: String) -> String { "![](\(linkFolder)\(fileName))" }
 
     /// The file name a link target points at, nil if it is not under `attachments/`.

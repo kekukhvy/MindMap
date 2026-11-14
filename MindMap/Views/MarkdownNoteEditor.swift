@@ -55,7 +55,7 @@ struct MarkdownNoteEditor: View {
                 .padding(.vertical, 10)
             Divider()
             if isPreview {
-                MarkdownPreview(text: text, imageData: { store.data(for: $0) })
+                MarkdownPreview(text: text, imageData: { model.noteImageData($0, noteID: attachment.id) })
             } else {
                 MarkdownTextView(text: $text, monospaced: monospaced, undoManager: undoManager, focusOnAppear: !locked,
                                  isEditable: !locked, onEdit: save,
