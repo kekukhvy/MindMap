@@ -55,15 +55,16 @@ struct WelcomeTourView: View {
     /// Fixed when the tour opens: "checking" counts as not available.
     @State private var hasStorageChoice: Bool
 
-    init(service: LibraryService = .shared, isFirstLaunch: Bool, onFinish: @escaping (StorageMode?) -> Void,
+    @MainActor
+    init(service: LibraryService? = nil, isFirstLaunch: Bool, onFinish: @escaping (StorageMode?) -> Void,
          filesFolder: URL? = nil, chooseFilesFolder: ((URL) -> Void)? = nil, initialPage: Int = 0) {
-        self.service = service
+        self.service = service ?? .shared
         self.isFirstLaunch = isFirstLaunch
         self.onFinish = onFinish
         self.filesFolder = filesFolder
         self.chooseFilesFolder = chooseFilesFolder
         self.initialPage = initialPage
-        _hasStorageChoice = State(initialValue: service.availability.isAvailable)
+        _hasStorageChoice = State(initialValue: self.service.availability.isAvailable)
     }
 
     static func pageCount(hasStorageChoice: Bool) -> Int { TourPage.all.count + (hasStorageChoice ? 1 : 0) }

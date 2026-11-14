@@ -687,7 +687,8 @@ struct MacDrawingBoardFitTests {
         page.drawing = updated
         #expect(isClose(scroll.documentVisibleRect.origin, corner))
         page.onCommit?(updated)
-        let stored = HandwrittenNote.drawing(try #require(committed.last))
+        #expect(!committed.isEmpty)
+        let stored = HandwrittenNote.drawing(committed.last ?? Data())
         #expect(signature(stored) == signature(sketch) + signature(PKDrawing(strokes: [far])))
         #expect(stored.strokes.allSatisfy { $0.transform == .identity })
     }

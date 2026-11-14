@@ -167,7 +167,7 @@ final class LibraryService {
         let name = UIApplication.didBecomeActiveNotification
         #endif
         observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.appDidBecomeActive() }
+            _ = MainActor.assumeIsolated { self?.appDidBecomeActive() }
         })
     }
 
