@@ -379,6 +379,37 @@ enum StorageFixtures {
             """)
     }
 
+    // AC-imgfix-2
+    @Test func mirrorCopiesNoteImagesToTheLinkedPathAndRemovesThemWithTheNote() throws {
+        var note = StorageFixtures.note("Pic")
+        note.fileName = "\(note.id.uuidString).md"
+        let imageName = NoteImage.fileName(noteID: note.id, fileExtension: NoteImage.pngExtension)
+        let lockedNote = StorageFixtures.note("Hidden", locked: true)
+        let lockedImage = NoteImage.fileName(noteID: lockedNote.id, fileExtension: NoteImage.pngExtension)
+        let png = NoteImageTests.samplePNG(width: 20, height: 10)
+        let folder = StorageFixtures.temporaryFolder()
+        let file = try StorageFixtures.writeFile(
+            MindMap(root: Node(text: "Central", children: [Node(text: "Topic", attachments: [note, lockedNote])])),
+            files: [note.fileName: Data(NoteImage.link(for: imageName).utf8), imageName: png,
+                    lockedImage + ".enc": Data("sealed".utf8)],
+            to: folder.appendingPathComponent("Pics.mindmap"))
+        let mirror = StorageFixtures.temporaryFolder("Mirror")
+        let source = LibraryMirrorWriter.Source(title: "Pics", packageURL: file, isLocked: false)
+        let linked = mirror.appendingPathComponent(NoteImage.linkFolder + imageName)
+
+        let report = try LibraryMirrorWriter.write([source], to: mirror, includeMapCopies: false)
+        #expect(try Data(contentsOf: linked) == png)
+        #expect(report.written.contains(NoteImage.linkFolder + imageName))
+        #expect(!FileManager.default.fileExists(atPath: mirror.appendingPathComponent(NoteImage.linkFolder + lockedImage + ".enc").path))
+        #expect(!FileManager.default.fileExists(atPath: mirror.appendingPathComponent(NoteImage.linkFolder + lockedImage).path))
+        let markdown = try String(contentsOf: mirror.appendingPathComponent("Pics.md"), encoding: .utf8)
+        #expect(markdown.contains(NoteImage.link(for: imageName)))
+
+        let removed = try LibraryMirrorWriter.write([], to: mirror, includeMapCopies: false)
+        #expect(removed.removed.contains(NoteImage.linkFolder + imageName))
+        #expect(!FileManager.default.fileExists(atPath: linked.path))
+    }
+
     @Test func mirrorWritesPlainMarkdownButNeverLockedContent() async throws {
         let service = await StorageFixtures.service()
         let key = LockCrypto.newKey()

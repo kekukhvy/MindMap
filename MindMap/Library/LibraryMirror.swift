@@ -185,6 +185,7 @@ enum LibraryMirrorWriter {
                     report.written.append(name)
                 }
                 new.files.append(name)
+                try copyNoteImages(of: map, from: source.packageURL, to: folder, manifest: &new, report: &report)
             }
             if includeMapCopies {
                 let name = base + "." + MapPaths.fileExtension
@@ -211,6 +212,30 @@ enum LibraryMirrorWriter {
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(new).write(to: manifestURL, options: .atomic)
         return report
+    }
+
+    /// The images of the map's plain notes (`NoteImage`), copied to the same
+    /// `attachments/<file>` path their links use; listed in the manifest.
+    private static func copyNoteImages(of map: MindMap, from packageURL: URL, to folder: URL,
+                                       manifest: inout Manifest, report: inout Report) throws {
+        let fm = FileManager.default
+        let source = packageURL.appendingPathComponent(MindMapPackage.attachmentsFolderName)
+        let names = (try? fm.contentsOfDirectory(atPath: source.path)) ?? []
+        let notes = map.allAttachments.filter { $0.kind == .markdown && !$0.isLocked }
+        for name in names where !NoteImage.isSealed(name)
+            && notes.contains(where: { name.hasPrefix(NoteImage.ownerPrefix(of: $0.id)) }) {
+            let relative = NoteImage.linkFolder + name
+            let target = folder.appendingPathComponent(relative)
+            let data = try Data(contentsOf: source.appendingPathComponent(name))
+            if (try? Data(contentsOf: target)) == data {
+                report.unchanged.append(relative)
+            } else {
+                try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try data.write(to: target, options: .atomic)
+                report.written.append(relative)
+            }
+            manifest.files.append(relative)
+        }
     }
 
     /// Plain Markdown note text; nil for locked notes (never decrypted here).
