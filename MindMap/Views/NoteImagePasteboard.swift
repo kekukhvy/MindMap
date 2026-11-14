@@ -41,5 +41,12 @@ enum NoteImagePasteboard {
         }
         return pasteboard.image?.pngData()
     }
+
+    /// The provider's image bytes, loaded under its first registered image type
+    /// (the abstract `public.image` fails for providers that register only PNG, JPEG, ...).
+    static func loadImageData(from provider: NSItemProvider, completion: @escaping (Data?) -> Void) {
+        guard let type = provider.registeredContentTypes(conformingTo: .image).first else { return completion(nil) }
+        provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, _ in completion(data) }
+    }
 }
 #endif

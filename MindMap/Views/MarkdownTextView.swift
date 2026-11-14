@@ -62,20 +62,20 @@ final class NoteTextView: NSTextView {
     var imageLink: ((Data) -> String?)?
 
     /// Puts the image's link on its own line at `range` (the selection by default).
-    func insertImage(_ data: Data, at range: NSRange? = nil) {
-        guard isEditable, let link = imageLink?(data) else { return }
+    /// False when the image was refused (locked note, not an image).
+    @discardableResult
+    func insertImage(_ data: Data, at range: NSRange? = nil) -> Bool {
+        guard isEditable, let link = imageLink?(data) else { return false }
         let result = NoteImage.inserting(link, into: string, selection: range ?? selectedRange())
         string = result.text
         setSelectedRange(NSRange(location: result.caret, length: 0))
         didChangeText()
+        return true
     }
 
     override func paste(_ sender: Any?) {
-        if isEditable, let data = NoteImagePasteboard.imageData(.general) {
-            insertImage(data)
-        } else {
-            super.paste(sender)
-        }
+        if isEditable, let data = NoteImagePasteboard.imageData(.general), insertImage(data) { return }
+        super.paste(sender)
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
@@ -207,20 +207,20 @@ final class NoteUITextView: UITextView, UIDropInteractionDelegate {
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Puts the image's link on its own line at `range` (the selection by default).
-    func insertImage(_ data: Data, at range: NSRange? = nil) {
-        guard isEditable, let link = imageLink?(data) else { return }
+    /// False when the image was refused (locked note, not an image).
+    @discardableResult
+    func insertImage(_ data: Data, at range: NSRange? = nil) -> Bool {
+        guard isEditable, let link = imageLink?(data) else { return false }
         let result = NoteImage.inserting(link, into: text, selection: range ?? selectedRange)
         text = result.text
         selectedRange = NSRange(location: result.caret, length: 0)
         delegate?.textViewDidChange?(self)
+        return true
     }
 
     override func paste(_ sender: Any?) {
-        if isEditable, let data = NoteImagePasteboard.imageData {
-            insertImage(data)
-        } else {
-            super.paste(sender)
-        }
+        if isEditable, let data = NoteImagePasteboard.imageData, insertImage(data) { return }
+        super.paste(sender)
     }
 
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
@@ -241,7 +241,7 @@ final class NoteUITextView: UITextView, UIDropInteractionDelegate {
             $0.itemProvider.hasItemConformingToTypeIdentifier(UTType.image.identifier)
         })?.itemProvider else { return }
         let point = session.location(in: self)
-        provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+        NoteImagePasteboard.loadImageData(from: provider) { data in
             guard let data else { return }
             DispatchQueue.main.async {
                 let position = self.closestPosition(to: point) ?? self.endOfDocument

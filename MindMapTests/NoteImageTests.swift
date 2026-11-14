@@ -1,3 +1,6 @@
+#if os(macOS)
+import AppKit
+#endif
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -216,4 +219,36 @@ struct NoteImageTests {
         // The original is untouched.
         #expect(MarkdownNote.text(source.content(of: note)).contains(name))
     }
+
+    #if os(macOS)
+    // AC-imgfix-4
+    @MainActor @Test func aRefusedImageFallsBackToPastingTheText() throws {
+        let (model, note, _) = try makeModel()
+        let broken = FileManager.default.temporaryDirectory.appendingPathComponent("broken-\(UUID().uuidString).png")
+        try Data("not an image".utf8).write(to: broken)
+        defer { try? FileManager.default.removeItem(at: broken) }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects([broken as NSURL])
+        pasteboard.addTypes([.string], owner: nil)
+        pasteboard.setString("pasted words", forType: .string)
+
+        let textView = NoteTextView(frame: NSRect(x: 0, y: 0, width: 200, height: 100))
+        textView.isEditable = true
+        textView.imageLink = { model.addNoteImage($0, to: note) }
+        textView.paste(nil)
+        #expect(textView.string == "pasted words")
+        #expect(model.attachmentStore.noteImages(of: note).isEmpty)
+    }
+    #else
+    // AC-imgfix-3
+    @Test func dropLoadsAnImageFromAProviderThatRegistersOnlyPNG() async throws {
+        let png = Self.samplePNG(width: 30, height: 20)
+        let provider = NSItemProvider(item: png as NSData, typeIdentifier: UTType.png.identifier)
+        let loaded = await withCheckedContinuation { continuation in
+            NoteImagePasteboard.loadImageData(from: provider) { continuation.resume(returning: $0) }
+        }
+        #expect(loaded == png)
+    }
+    #endif
 }
